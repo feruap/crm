@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/admin/ai/myalice/apps/server/src/*.ts /c/Users/admin/ai/myalice/apps/web/app/*.tsx /c/Users/admin/ai/myalice/apps/web/app/*/*.tsx)"
+    ]
+  }
+}
