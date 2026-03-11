@@ -1,19 +1,56 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
+
 import { db } from './db';
+import { initSocket } from './socket';
+import { runAlertsCron } from './routes/alerts';
+import { requireAuth } from './middleware/auth';
+
+import authRouter from './routes/auth';
 import conversationsRouter from './routes/conversations';
 import campaignsRouter from './routes/campaigns';
 import attributionsRouter from './routes/attributions';
 import webhooksRouter from './routes/webhooks';
+import agentsRouter from './routes/agents';
+import customersRouter from './routes/customers';
+import productsRouter from './routes/products';
+import alertsRouter from './routes/alerts';
+import botRouter from './routes/bot';
+import teamsRouter from './routes/teams';
+import channelsRouter from './routes/channels';
+import flowsRouter from './routes/flows';
+import businessHoursRouter from './routes/business-hours';
+import quickRepliesRouter from './routes/quickReplies';
+import scheduledMsgsRouter from './routes/scheduledMessages';
+import eventsRouter from './routes/events';
+import analyticsRouter from './routes/analytics';
+import aiRouter from './routes/ai';
+import assignmentRulesRouter from './routes/assignmentRules';
+import bulkCampaignsRouter from './routes/bulkCampaigns';
+import widgetConfigRouter from './routes/widgetConfig';
+import simulatorRouter from './routes/simulator';
+import pipelinesRouter from './routes/pipelines';
+import automationsRouter from './routes/automations';
+import agentGroupsRouter from './routes/agent-groups';
+import './workers/bulkSender'; // Start worker
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const httpServer = http.createServer(app);
 
-// ─── Health ───────────────────────────────────
+// ─── Middleware ───────────────────────────────────────────────────────────────
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000' }));
+app.use(express.json());
+app.use(express.static('public'));
+
+// ─── Socket.io ───────────────────────────────────────────────────────────────
+initSocket(httpServer, process.env.CORS_ORIGIN || 'http://localhost:3000');
+
+// ─── Health ──────────────────────────────────────────────────────────────────
 app.get('/health', async (_req, res) => {
     try {
         await db.query('SELECT 1');
@@ -23,40 +60,253 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-// ─── Routes ───────────────────────────────────
-app.use('/api/conversations', conversationsRouter);
-app.use('/api/campaigns', campaignsRouter);
-app.use('/api/attributions', attributionsRouter);
+// ─── Public routes ───────────────────────────────────────────────────────────
+app.use('/api/auth', authRouter);
 app.use('/api/webhooks', webhooksRouter);
 
-// ─── AI Settings (persists to DB) ─────────────
-app.post('/api/settings/ai', async (req, res) => {
-    const { provider, apiKey, model, systemPrompt, temperature } = req.body;
+// ─── Protected routes ────────────────────────────────────────────────────────
+app.use('/api/conversations', requireAuth, conversationsRouter);
+app.use('/api/campaigns', (req, res, next) => {
+    // OAuth callbacks must be public — Facebook/Google redirect here without an auth token
+    if (req.method === 'GET' && (req.path === '/meta-oauth/callback' || req.path === '/google-oauth/callback')) return next();
+    return requireAuth(req, res, next);
+}, campaignsRouter);
 
-    await db.query(
-        `UPDATE ai_settings SET is_default = FALSE WHERE is_default = TRUE`
-    );
+// Attributions: la mayoría requiere auth, pero /woocommerce-sync y /salesking-sync
+// son webhooks públicos llamados por WooCommerce/SalesKing sin token
+app.use('/api/attributions', (req, res, next) => {
+    const publicPaths = ['/woocommerce-sync', '/salesking-sync'];
+    if (publicPaths.includes(req.path) && req.method === 'POST') {
+        return next(); // skip requireAuth
+    }
+    return requireAuth(req, res, next);
+}, attributionsRouter);
+app.use('/api/agents', requireAuth, agentsRouter);
+app.use('/api/customers', requireAuth, customersRouter);
+app.use('/api/products', requireAuth, productsRouter);
+app.use('/api/alerts', requireAuth, alertsRouter);
+app.use('/api/bot/knowledge', requireAuth, botRouter);
+app.use('/api/teams', requireAuth, teamsRouter);
+app.use('/api/channels', requireAuth, channelsRouter);
+app.use('/api/flows', requireAuth, flowsRouter);
+app.use('/api/settings/business-hours', requireAuth, businessHoursRouter);
+app.use('/api/quick-replies', requireAuth, quickRepliesRouter);
+app.use('/api/scheduled-messages', requireAuth, scheduledMsgsRouter);
+app.use('/api/events', requireAuth, eventsRouter);
+app.use('/api/analytics', requireAuth, analyticsRouter);
+app.use('/api/ai', requireAuth, aiRouter);
+app.use('/api/assignment-rules', requireAuth, assignmentRulesRouter);
+app.use('/api/bulk-campaigns', requireAuth, bulkCampaignsRouter);
+app.use('/api/widget-config', widgetConfigRouter);
+app.use('/api/simulator', requireAuth, simulatorRouter);
+app.use('/api/pipelines', requireAuth, pipelinesRouter);
+app.use('/api/automations', requireAuth, automationsRouter);
+app.use('/api/agent-groups', requireAuth, agentGroupsRouter);
 
-    await db.query(
-        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default)
-         VALUES ($1, $2, $3, $4, $5, TRUE)
-         ON CONFLICT DO NOTHING`,
-        [provider, apiKey, model, systemPrompt, temperature ?? 0.7]
-    );
-
-    res.json({ ok: true, provider });
-});
-
-app.get('/api/settings/ai', async (_req, res) => {
+// ─── AI Settings ─────────────────────────────────────────────────────────────
+app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
-        `SELECT provider, model_name, system_prompt, temperature, is_default
-         FROM ai_settings ORDER BY is_default DESC`
+        `SELECT provider, model_name, system_prompt, temperature, is_default, excluded_categories FROM ai_settings ORDER BY is_default DESC`
     );
     res.json(result.rows);
 });
 
-// ─── Start ────────────────────────────────────
+app.post('/api/settings/ai', requireAuth, async (req, res) => {
+    const { provider, apiKey, model, systemPrompt, temperature, excludedCategories } = req.body;
+
+    // If no new API key provided, keep the existing one from the current default config
+    let resolvedApiKey = apiKey;
+    if (!resolvedApiKey) {
+        const existing = await db.query(
+            `SELECT api_key_encrypted FROM ai_settings WHERE is_default = TRUE LIMIT 1`
+        );
+        resolvedApiKey = existing.rows[0]?.api_key_encrypted ?? null;
+    }
+
+    await db.query(`UPDATE ai_settings SET is_default = FALSE WHERE is_default = TRUE`);
+
+    // PG maps js arrays to postgres arrays naturally when passed via pg parameter
+    const categories = excludedCategories && Array.isArray(excludedCategories) ? excludedCategories : [];
+
+    await db.query(
+        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default, excluded_categories)
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6)`,
+        [provider, resolvedApiKey, model, systemPrompt, temperature ?? 0.7, categories]
+    );
+    res.json({ ok: true, provider });
+});
+
+// ─── Cron: alerts every 5 min ────────────────────────────────────────────────
+cron.schedule('*/5 * * * *', () => {
+    runAlertsCron().catch(console.error);
+});
+
+// ─── Cron: scheduled messages every minute ────────────────────────────────────
+cron.schedule('* * * * *', async () => {
+    try {
+        const now = new Date();
+        const pendingResult = await db.query(
+            `SELECT * FROM scheduled_messages WHERE status = 'pending' AND scheduled_at <= $1`,
+            [now]
+        );
+
+        for (const msg of pendingResult.rows) {
+            try {
+                // In a real app, we would call the channel provider API (WhatsApp, Meta)
+                // For this clone, we just insert into messages table and Socket.io will update the UI
+                const { conversation_id, channel_id, agent_id, content, media_url } = msg;
+
+                // Get customer_id from conversation
+                const conv = await db.query('SELECT customer_id FROM conversations WHERE id = $1', [conversation_id]);
+                const customer_id = conv.rows[0]?.customer_id;
+
+                await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, media_url, message_type, handled_by)
+                     VALUES ($1, $2, $3, 'outbound', $4, $5, $6, 'human')`,
+                    [conversation_id, channel_id, customer_id, content, media_url, media_url ? 'image' : 'text']
+                );
+
+                await db.query(`UPDATE scheduled_messages SET status = 'sent', sent_at = NOW() WHERE id = $1`, [msg.id]);
+                console.log(`✅ Scheduled message ${msg.id} sent successfully.`);
+            } catch (err) {
+                console.error(`❌ Failed to send scheduled message ${msg.id}:`, err);
+                await db.query(`UPDATE scheduled_messages SET status = 'failed', error_message = $1 WHERE id = $2`, [String(err), msg.id]);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error in scheduled messages cron:', err);
+    }
+});
+
+// ─── Lead Stagnant Tracker Cron (Every hour) ──────────────────────────────────
+cron.schedule('0 * * * *', async () => {
+    try {
+        await db.query(`
+            UPDATE conversations
+            SET is_stagnant = TRUE
+            WHERE is_stagnant = FALSE
+              AND status = 'open'
+              AND last_stage_change + (stagnant_threshold_days * interval '1 day') < NOW()
+        `);
+    } catch (err) {
+        console.error('❌ Error in stagnant leads cron:', err);
+    }
+});
+
+// ─── Auto-Migration (Fase 7) ─────────────────────────────────────────────────
+async function runMigrations() {
+    try {
+        // Check if migration already applied by looking for one of the new tables
+        // Always ensure settings table exists (added in 7.5)
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+
+        const check = await db.query(`
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'agent_groups'
+            ) AS migrated
+        `);
+        if (check.rows[0].migrated) {
+            console.log('✅ Fase 7 migration already applied, skipping.');
+            return;
+        }
+
+        console.log('📦 Running Fase 7 migration...');
+
+        // 7.1 Mark simulated conversations
+        await db.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_simulated BOOLEAN DEFAULT FALSE`);
+
+        // 7.2 Simulator session persistence
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS simulator_sessions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+                channel_id UUID REFERENCES channels(id),
+                customer_name TEXT,
+                customer_phone TEXT,
+                campaign_id UUID,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                UNIQUE(agent_id)
+            )
+        `);
+
+        // 7.3 Agent Groups
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS agent_groups (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT NOT NULL,
+                channel_id UUID REFERENCES channels(id),
+                strategy TEXT NOT NULL DEFAULT 'round_robin'
+                    CHECK (strategy IN ('round_robin', 'least_busy', 'random')),
+                current_index INT DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS agent_group_members (
+                group_id UUID REFERENCES agent_groups(id) ON DELETE CASCADE,
+                agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+                PRIMARY KEY (group_id, agent_id)
+            )
+        `);
+
+        // 7.4 Visual flow support
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS flow_type TEXT DEFAULT 'simple'`);
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS nodes JSONB`);
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS edges JSONB`);
+
+        // 7.5 Settings key-value store
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+
+        console.log('✅ Fase 7 migration completed successfully!');
+    } catch (err) {
+        console.error('❌ Fase 7 migration error:', err);
+        // Don't crash the server — tables might partially exist
+    }
+}
+
+// ─── Startup Initialization ──────────────────────────────────────────────────
+async function init() {
+    try {
+        console.log('Running startup initialization...');
+
+        // Run pending migrations first
+        await runMigrations();
+
+        const count = await db.query('SELECT COUNT(*) FROM agents');
+        if (parseInt(count.rows[0].count) === 0) {
+            const bcrypt = await import('bcryptjs');
+            const hash = await bcrypt.hash('admin123', 12);
+            await db.query(
+                `INSERT INTO agents (name, email, password_hash, role) VALUES ($1, $2, $3, $4)`,
+                ['Admin', 'admin@myalice.ai', hash, 'admin']
+            );
+            console.log('✅ Default admin user seeded: admin@myalice.ai / admin123');
+        } else {
+            console.log('System already has agents, skipping seed.');
+        }
+    } catch (err) {
+        console.error('❌ Initialization failed:', err);
+    }
+}
+
+// ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+httpServer.listen(PORT, async () => {
+    console.log(`Server + Socket.io running on port ${PORT}`);
+    await init();
 });

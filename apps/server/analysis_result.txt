@@ -1,0 +1,9 @@
+Of the last 50 convs: Bot: 0, Human: 1, Mixed: 0
+
+=== Conversaciones human-only que podrían automatizarse ===
+Cliente: Hola me interesa un producto
+Humano:  Te comparto nuestro producto: *Kit Monitoreo Diabetes* Precio: $890.00  Puedes ver más detalles o co
+
+Cliente: Hola, me interesa un producto 👋
+Humano:  Te comparto nuestro producto: *Kit Monitoreo Diabetes* Precio: $890.00  Puedes ver más detalles o co
+

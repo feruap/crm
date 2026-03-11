@@ -1,0 +1,21 @@
+{
+  "name": "webhooks-worker",
+  "version": "1.0.0",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js",
+    "dev": "ts-node-dev worker.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.0.0",
+    "dotenv": "^17.3.1",
+    "ioredis": "^5.3.2",
+    "pg": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "@types/pg": "^8.16.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}

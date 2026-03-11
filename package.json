@@ -6,8 +6,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "node dev.js",
     "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspaces --if-present"
+  },
+  "overrides": {
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0"
   }
 }

@@ -1,0 +1,54 @@
+[
+  {
+    "column_name": "spend_last_synced_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "column_name": "platform",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "column_name": "is_active",
+    "data_type": "boolean"
+  },
+  {
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "column_name": "daily_budget",
+    "data_type": "numeric"
+  },
+  {
+    "column_name": "total_spend",
+    "data_type": "numeric"
+  },
+  {
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "column_name": "metadata",
+    "data_type": "jsonb"
+  },
+  {
+    "column_name": "platform_campaign_id",
+    "data_type": "text"
+  },
+  {
+    "column_name": "platform_ad_set_id",
+    "data_type": "text"
+  },
+  {
+    "column_name": "platform_ad_id",
+    "data_type": "text"
+  },
+  {
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "column_name": "spend_currency",
+    "data_type": "character"
+  }
+]

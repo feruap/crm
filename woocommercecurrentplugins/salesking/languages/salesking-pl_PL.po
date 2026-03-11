@@ -1,0 +1,3751 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: SalesKing\n"
+"POT-Creation-Date: 2022-04-28 18:12+0300\n"
+"PO-Revision-Date: 2023-10-29 13:50+0000\n"
+"Last-Translator: \n"
+"Language-Team: Polski\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10 >= 2 && n%10<=4 "
+"&&(n%100<10||n%100 >= 20)? 1 : 2);\n"
+"X-Generator: Loco https://localise.biz/\n"
+"X-Poedit-Basepath: ..\n"
+"X-Poedit-Flags-xgettext: --add-comments=translators:\n"
+"X-Poedit-WPHeader: salesking.php\n"
+"X-Poedit-SourceCharset: UTF-8\n"
+"X-Poedit-KeywordsList: __;_e;_n:1,2;_x:1,2c;_ex:1,2c;_nx:4c,1,2;esc_attr__;"
+"esc_attr_e;esc_attr_x:1,2c;esc_html__;esc_html_e;esc_html_x:1,2c;_n_noop:1,2;"
+"_nx_noop:3c,1,2;__ngettext_noop:1,2\n"
+"X-Poedit-SearchPath-0: .\n"
+"X-Poedit-SearchPathExcluded-0: *.min.js\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: pl_PL\n"
+"X-Loco-Version: 2.6.6; wp-6.3.2"
+
+#: admin/class-salesking-admin.php:1509
+#, fuzzy
+msgid " (New message!)"
+msgstr "(Nowa wiadomość!)"
+
+#: admin/class-salesking-admin.php:3307 admin/class-salesking-admin.php:3412
+#: admin/class-salesking-admin.php:3553 public/dashboard/earnings.php:546
+#: public/dashboard/earnings.php:731
+#, fuzzy
+msgid " (pending)"
+msgstr "(w trakcie )"
+
+#: public/dashboard/dashboard-content.php:19
+#, fuzzy
+msgid " Here's everything at a glance..."
+msgstr " Podsumowanie w jednym miejscu..."
+
+#: public/dashboard/templates/sidebar.php:25
+#: public/dashboard/templates/sidebar.php:51
+msgid " New"
+msgstr "Nowy"
+
+#: public/dashboard/cart-sharing.php:92
+msgid " Those products will be displayed on this page."
+msgstr "Produkty te będą wyświetlane na tej stronie."
+
+#: public/dashboard/announcements.php:11
+#, fuzzy
+msgid " unread announcements."
+msgstr " nieprzeczytanych ogłoszeń."
+
+#: public/dashboard/orders.php:163
+#, fuzzy
+msgid "(guest user)"
+msgstr "(gość)"
+
+#: admin/class-salesking-admin.php:1086 admin/class-salesking-admin.php:1120
+msgid "- Choose Agent -"
+msgstr "Wybierz agenta -"
+
+#: admin/class-salesking-admin.php:348 admin/class-salesking-admin.php:545
+#: admin/class-salesking-admin.php:617 admin/class-salesking-admin.php:2102
+msgid "- None -"
+msgstr "Żadne -"
+
+#: admin/class-salesking-admin.php:2072
+msgid "- Not an agent -"
+msgstr "- nie jest agentem -"
+
+#: includes/class-salesking-pending-gateway.php:66
+msgid "Accept for virtual orders"
+msgstr "Akceptuj zamówienia wirtualne"
+
+#: includes/class-salesking-pending-gateway.php:67
+msgid "Accept invoice if the order is virtual"
+msgstr "Przyjmuj fakturę, jeśli zamówienie jest wirtualne"
+
+#: public/dashboard/salesking-dashboard-login.php:258
+#, fuzzy
+msgid "Access your sales agent dashboard and data."
+msgstr "Uzyskaj dostęp do pulpitu nawigacyjnego i danych agenta sprzedaży."
+
+#: public/dashboard/templates/profile-sidebar.php:17
+#, fuzzy
+msgid "Account Balance"
+msgstr "Bilans konta"
+
+#: admin/class-salesking-admin.php:2841 admin/class-salesking-admin.php:2899
+msgid "Account Type"
+msgstr "Rodzaj konta"
+
+#: admin/class-salesking-admin.php:2932 admin/class-salesking-admin.php:3096
+#: admin/class-salesking-admin.php:3923 admin/class-salesking-admin.php:3989
+#: public/dashboard/customers.php:92 public/dashboard/earnings.php:384
+#: public/dashboard/orders.php:47
+msgid "Actions"
+msgstr "Działania"
+
+#: public/dashboard/earnings.php:412 public/dashboard/orders.php:66
+#, fuzzy
+msgid "actions"
+msgstr "działania"
+
+#: public/dashboard/messages.php:33
+#, fuzzy
+msgid "Active"
+msgstr "Aktywne"
+
+#: public/dashboard/customers.php:35 public/dashboard/teams.php:31
+msgid "Add"
+msgstr "Dodaj"
+
+#: admin/class-salesking-admin.php:1870
+msgid "Add agent"
+msgstr "Dodaj agenta"
+
+#: public/dashboard/customers.php:553
+#, fuzzy
+msgid "Add Customer"
+msgstr "Dodaj klienta"
+
+#: admin/class-salesking-admin.php:1114
+#, fuzzy
+msgid "Add New Commission"
+msgstr "Dodaj Nową Prowizję"
+
+#: admin/class-salesking-admin.php:1080
+#, fuzzy
+msgid "Add New Parent Agent Commission"
+msgstr "Dodaj nową prowizję dla agenta nadrzędnego"
+
+#: public/dashboard/cart-sharing.php:91
+#, fuzzy
+msgid "add products to cart from the storefront."
+msgstr " dodaj produkty do koszyka ze sklepu. "
+
+#: admin/class-salesking-settings.php:101
+msgid "Add Sales Agent ID to WooCommerce Registration"
+msgstr "Dodaj ID agenta sprzedaży do rejestracji Woocommerce"
+
+#: public/dashboard/teams.php:203
+#, fuzzy
+msgid "Add Subagent"
+msgstr "Dodaj Subagenta"
+
+#: admin/class-salesking-admin.php:1379
+#, fuzzy
+msgctxt "Admin menu name"
+msgid "Messages"
+msgstr "Wiadomości"
+
+#: public/dashboard/affiliate-links.php:13
+#: public/dashboard/templates/sidebar.php:82
+msgid "Affiliate Links"
+msgstr "Linki Afiliacyjne"
+
+#: admin/class-salesking-admin.php:1481 public/dashboard/teams.php:42
+msgid "Agent"
+msgstr "Agent"
+
+#: admin/class-salesking-admin.php:1051
+#, fuzzy
+msgid "Agent (parent):"
+msgstr "Agent ( nadrzędny) :"
+
+#: admin/class-salesking-settings.php:566
+msgid "Agent and customer registration"
+msgstr "Rejestracja agenta i klienta"
+
+#: admin/class-salesking-admin.php:1449
+#, fuzzy
+msgid "Agent Assigned"
+msgstr "Agent przydzielony"
+
+#: admin/class-salesking-admin.php:2096
+#, fuzzy
+msgid "Agent assigned to this customer"
+msgstr "Przedstawiciel przyznany do klienta"
+
+#: admin/class-salesking-admin.php:611
+#, fuzzy
+msgid "Agent assigned to this group"
+msgstr "Agent przyznany do tej grupy"
+
+#: admin/class-salesking-admin.php:3861
+#, fuzzy
+msgid "Agent Balance History & Manual Adjustments"
+msgstr "Historia Salda Agenta i Korekty Ręczne"
+
+#: admin/class-salesking-settings.php:489
+#: admin/class-salesking-settings.php:584
+#, fuzzy
+msgid "Agent Capabilities"
+msgstr "Możliwości Agenta"
+
+#: includes/class-salesking-activator.php:16
+#: public/dashboard/salesking-dashboard-login.php:12
+#, fuzzy
+msgid "Agent Dashboard"
+msgstr "Pulpit Agenta"
+
+#: admin/class-salesking-admin.php:3188
+#, fuzzy
+msgid "Agent direct earnings"
+msgstr "Bezpośrednie zarobki Agenta"
+
+#: admin/class-salesking-admin.php:3124 admin/class-salesking-admin.php:3203
+#: admin/class-salesking-admin.php:3457
+#, fuzzy
+msgid "Agent Earnings"
+msgstr "Zarobki Agenta"
+
+#: admin/class-salesking-admin.php:681
+#, fuzzy
+msgid "Agent earnings"
+msgstr "Zarobki Agenta"
+
+#: admin/class-salesking-admin.php:1909 admin/class-salesking-admin.php:2067
+#: admin/class-salesking-admin.php:2840 admin/class-salesking-admin.php:2898
+#: admin/class-salesking-admin.php:2923 admin/class-salesking-admin.php:3087
+#: admin/class-salesking-admin.php:3917 admin/class-salesking-admin.php:3983
+#, fuzzy
+msgid "Agent Group"
+msgstr "Grupa Agenta"
+
+#: admin/class-salesking-admin.php:1883 admin/class-salesking-admin.php:1885
+#: admin/class-salesking-admin.php:1886 admin/class-salesking-admin.php:2074
+#: admin/class-salesking-admin.php:4463 admin/class-salesking-admin.php:4484
+#: admin/class-salesking-admin.php:4509 admin/class-salesking-admin.php:4628
+#: admin/class-salesking-admin.php:4927
+msgid "Agent Groups"
+msgstr "Grupy agentów"
+
+#: admin/class-salesking-admin.php:5351
+#, fuzzy
+msgid ""
+"Agent groups help you organize and manage your sales agents. Create, edit, "
+"or delete groups based on your store's needs. To add a user to a group, go "
+"to the user's profile and scroll down to 'Agent Settings'."
+msgstr ""
+"Grupy agentów pomagają organizować agentów sprzedaży i zarządzać nimi. Twórz,"
+" edytuj lub usuwaj grupy w zależności od potrzeb Twojego sklepu. Aby dodać "
+"użytkownika do grupy, przejdź do profilu użytkownika i przewiń w dół do "
+"„Ustawienia agenta”."
+
+#: public/dashboard/templates/header-bar.php:204
+#: public/dashboard/templates/profile-sidebar.php:10
+#, fuzzy
+msgid "Agent ID:"
+msgstr "Agent ID:"
+
+#: admin/class-salesking-admin.php:2922 admin/class-salesking-admin.php:3086
+#: admin/class-salesking-admin.php:3916 admin/class-salesking-admin.php:3982
+msgid "Agent Name"
+msgstr "Nazwa agenta"
+
+#: admin/class-salesking-admin.php:3126
+msgid "Agent Orders"
+msgstr "Zamówienia agenta"
+
+#: admin/class-salesking-admin.php:601 admin/class-salesking-admin.php:2058
+msgid "Agent Settings"
+msgstr "Ustawienia agenta"
+
+#: admin/class-salesking-settings.php:490
+msgid "Agent settings"
+msgstr "Ustawienia agenta"
+
+#: admin/class-salesking-admin.php:2038
+#, fuzzy
+msgid "Agent Settings (SalesKing)"
+msgstr "Ustawienia Agentów (Salesking)"
+
+#: public/dashboard/teams.php:43
+#, fuzzy
+msgid "Agent Total Earnings"
+msgstr "Całkowite zarobki agenta"
+
+#: admin/class-salesking-admin.php:1844
+#, fuzzy
+msgid "Agent Visibility"
+msgstr "Widoczność Agenta"
+
+#: admin/class-salesking-admin.php:1022
+#, fuzzy
+msgid "Agent:"
+msgstr "Agent :"
+
+#: admin/class-salesking-admin.php:1258 admin/class-salesking-admin.php:1282
+#, fuzzy
+msgid "Agent: "
+msgstr "Agent :"
+
+#: admin/class-salesking-admin.php:356 admin/class-salesking-admin.php:553
+#: admin/class-salesking-admin.php:625 admin/class-salesking-admin.php:1094
+#: admin/class-salesking-admin.php:1128 admin/class-salesking-admin.php:2110
+#: admin/class-salesking-admin.php:2672 admin/class-salesking-settings.php:686
+msgid "Agents"
+msgstr "agenci"
+
+#: admin/class-salesking-admin.php:4637 admin/class-salesking-admin.php:4942
+#, fuzzy
+msgid "Agents (individual)"
+msgstr "Agenci( indywidualnie)"
+
+#: admin/class-salesking-settings.php:331
+msgid "Agents are notified via email when an order has been assigned to them."
+msgstr ""
+"Przedstawiciele są powiadomieni za pośrednictwem poczty e-mail, gdy "
+"zamówienie zostało im przyznane."
+
+#: admin/class-salesking-settings.php:313
+msgid "Agents can edit customer profiles."
+msgstr "Agenci mogą edytować profile klientów."
+
+#: admin/class-salesking-settings.php:138
+#, fuzzy
+msgid "Agents can edit prices to increase price"
+msgstr "Agenci mogą edytować ceny, aby podnieść ceny"
+
+#: admin/class-salesking-settings.php:134
+msgid "Agents can edit prices to offer discounts"
+msgstr "Agenci mogą edytować ceny, aby zaoferować zniżki"
+
+#: admin/class-salesking-settings.php:322
+#, fuzzy
+msgid "Agents can manage, change status, and edit orders assigned to them."
+msgstr ""
+"Agenci mogą zarządzać, zmieniać status i edytować zamówienia przyznane im."
+
+#: admin/class-salesking-settings.php:29
+#, fuzzy
+msgid "Agents Dashboard Logo"
+msgstr "Logo Panelu Agenta"
+
+#: admin/class-salesking-settings.php:25
+#, fuzzy
+msgid "Agents Dashboard Page"
+msgstr "Strona Panelu Agenta"
+
+#: admin/class-salesking-admin.php:1944
+#, fuzzy
+msgid "Agents in this group"
+msgstr "Agenci tej grupy"
+
+#: admin/class-salesking-settings.php:117
+#, fuzzy
+msgid "Agents receive new order emails"
+msgstr "Agenci otrzymują e-maile z nowymi zamówieniami"
+
+#: admin/class-salesking-admin.php:1851
+#, fuzzy
+msgid "Agents who can see this announcement (comma-separated)"
+msgstr "Agents who can see this announcement (comma-separated)"
+
+#: admin/class-salesking-admin.php:5257
+msgid "All accounts have been set"
+msgstr "Wszystkie konta zostały ustawione"
+
+#: admin/class-salesking-admin.php:4625
+msgid "All agents"
+msgstr "Wszyscy agenci"
+
+#: admin/class-salesking-admin.php:2671
+#, fuzzy
+msgid "All Agents (Store)"
+msgstr "Wszyscy agenci (Sklep)"
+
+#: admin/class-salesking-settings.php:142
+#, fuzzy
+msgid "All agents can manage / shop for all customers"
+msgstr "Wszyscy agenci mogą zarządzać / robić zakupy dla wszystkich klientów"
+
+#: admin/class-salesking-settings.php:227
+#, fuzzy
+msgid ""
+"All agents will see all customers and be able to manage them / place order "
+"for them."
+msgstr ""
+"Wszyscy agenci będą widzieć wszystkich klientów i będą mogli nimi zarządzać "
+"/ składać dla nich zamówienia."
+
+#: admin/class-salesking-admin.php:4748
+#, fuzzy
+msgid "All earnings of subagent"
+msgstr "Wszystkie zarobki subagenta"
+
+#: admin/class-salesking-admin.php:4669 admin/class-salesking-admin.php:4851
+msgid "All logged in B2B users"
+msgstr "Wszyscy zarejestrowani w B2B użytkownicy"
+
+#: admin/class-salesking-admin.php:4670 admin/class-salesking-admin.php:4852
+msgid "All logged in B2C users"
+msgstr "Wszyscy zarejestrowani w B2C użytkownicy"
+
+#: admin/class-salesking-admin.php:4665 admin/class-salesking-admin.php:4848
+#, fuzzy
+msgid "All logged in users"
+msgstr "Wszyscy zalogowani użytkownicy"
+
+#: admin/class-salesking-admin.php:4674 admin/class-salesking-admin.php:4856
+#, fuzzy
+msgid "All logged out users"
+msgstr "Wszyscy wylogowani użytkownicy"
+
+#: admin/class-salesking-admin.php:4733
+msgid "All Orders"
+msgstr "Wszystkie zamówienia"
+
+#: admin/class-salesking-admin.php:4734
+msgid "All orders"
+msgstr "Wszystkie zamówienia"
+
+#: admin/class-salesking-admin.php:4735
+msgid "All orders in the first X days after customer registration"
+msgstr "Wszystkie zamówienia w ciągu pierwszych X dni od rejestracji klienta"
+
+#: admin/class-salesking-admin.php:4739
+msgid "All orders placed by the agent"
+msgstr "Wszystkie zamówienia złożone przez agenta"
+
+#: admin/class-salesking-admin.php:4740
+msgid ""
+"All orders placed by the agent in the first X days after customer "
+"registration"
+msgstr ""
+"Wszystkie zamówienia złożone przez agenta w ciągu pierwszych X dni od "
+"rejestracji klienta"
+
+#: admin/class-salesking-admin.php:4744
+msgid ""
+"All orders placed by the customer in the first X days after customer "
+"registration"
+msgstr ""
+"Wszystkie zamówienia złożone przez Klienta w ciągu pierwszych X dni od "
+"rejestracji Klienta"
+
+#: admin/class-salesking-admin.php:4578
+msgid "All products"
+msgstr "Wszystkie produkty"
+
+#: admin/class-salesking-admin.php:4664 admin/class-salesking-admin.php:4847
+msgid "All users"
+msgstr "Wszyscy użytkownicy"
+
+#: admin/class-salesking-admin.php:642
+msgid ""
+"All users in this group will be assigned to this agent, unless differently "
+"assigned in their user profiile page."
+msgstr ""
+"Wszyscy użytkownicy w tej grupie zostaną przypisani tym agentom, chyba że "
+"inaczej przypisane na ich stronie profilu użytkownika."
+
+#: admin/class-salesking-settings.php:109
+msgid "Allow agents to edit customer profiles"
+msgstr "Pozwól agentom edytować profile klientów"
+
+#: admin/class-salesking-settings.php:113
+#, fuzzy
+msgid "Allow agents to manage their assigned orders"
+msgstr "Pozwól agentom zarządzać przydzielonymi im zamówieniami"
+
+#: includes/class-salesking-pending-gateway.php:15
+#, fuzzy
+msgid ""
+"Allows sales agents to place \"pending payment\" orders, that customers will "
+"pay later."
+msgstr ""
+"Umożliwia agentom sprzedaży składanie zamówień oczekujących na płatność, za "
+"które klienci zapłacą później."
+
+#: admin/class-salesking-admin.php:3815 includes/class-salesking.php:417
+#: public/dashboard/dashboard-content.php:436
+#: public/dashboard/dashboard-content.php:564 public/dashboard/payouts.php:70
+#, fuzzy
+msgid "Amount"
+msgstr "Kwota"
+
+#: includes/emails/templates/new-payout-email-template.php:14
+#: includes/emails/templates/plain-new-payout-email-template.php:11
+msgid "Amount: "
+msgstr "W sumie :"
+
+#. translators: %s: Order number
+#: includes/emails/templates/new-order-pending-email-template.php:15
+#, php-format
+msgid ""
+"An agent has placed order #%s on your behalf. The order is now awaiting your "
+"payment. "
+msgstr ""
+"Agent umieścił zamówienie #% s w Twoim imieniu. Zamówienie czeka na Twoją "
+"płatność."
+
+#. translators: %s: Order number
+#: includes/emails/templates/plain-new-order-pending-email-template.php:12
+#, php-format
+msgid ""
+"An agent has placed order #%s on your behalf. The order is now awaiting your "
+"payment:"
+msgstr ""
+"Agent umieścił zamówienie #% s w Twoim imieniu. Zamówienie czeka na Twoją "
+"płatność:"
+
+#: admin/class-salesking-admin.php:1545 admin/class-salesking-admin.php:1570
+msgid "Announcement"
+msgstr "Ogłoszenia"
+
+#: admin/class-salesking-admin.php:1559
+msgid "Announcement image"
+msgstr "Zdjęcie ogłoszenia"
+
+#: admin/class-salesking-admin.php:1566
+#, fuzzy
+msgid "Announcement navigation"
+msgstr "Nawigacja w ogłoszeniu"
+
+#: admin/class-salesking-admin.php:1602
+#, fuzzy
+msgid "Announcement Visibility"
+msgstr "Widoczność ogłoszenia"
+
+#: admin/class-salesking-admin.php:1544 admin/class-salesking-admin.php:1546
+#: admin/class-salesking-admin.php:1547 public/dashboard/announcements.php:9
+#: public/dashboard/dashboard-content.php:346
+#: public/dashboard/templates/sidebar.php:23
+msgid "Announcements"
+msgstr "Ogłoszenia"
+
+#: admin/class-salesking-admin.php:5385
+#, fuzzy
+msgid ""
+"Announcements are notifications that are broadcast to your agents and show "
+"up in each agent's dashboard and in email notifications. Agents cannot reply "
+"to announcements."
+msgstr ""
+"Ogłoszenia to powiadomienia wysyłane do agentów i wyświetlane na pulpicie "
+"nawigacyjnym każdego agenta oraz w powiadomieniach e-mail. Agenci nie mogą "
+"odpowiadać na ogłoszenia."
+
+#: admin/class-salesking-admin.php:1567
+msgid "Announcements list"
+msgstr "Lista ogłoszeń"
+
+#: admin/class-salesking-admin.php:4563
+msgid "Applies for products:"
+msgstr "Dotyczy to produktów:"
+
+#: admin/class-salesking-admin.php:5256
+#, fuzzy
+msgid "Are you sure you want assign this agent for all customers?"
+msgstr "Czy na pewno chcesz przypisać tego agenta wszystkim klientom?"
+
+#: public/class-salesking-public.php:2060
+msgid "Are you sure you want to add this customer?"
+msgstr "Czy jesteś pewien, że chcesz dodać tego klienta?"
+
+#: public/class-salesking-public.php:2061
+#, fuzzy
+msgid "Are you sure you want to add this subagent?"
+msgstr "Czy jesteś pewien, że chcesz dodać tego Subagenta?"
+
+#: public/class-salesking-public.php:2059
+msgid "Are you sure you want to delete this cart?"
+msgstr "Czy jesteś pewien, że chcesz usunąć ten koszyk?"
+
+#: public/class-salesking-public.php:2057
+msgid "Are you sure you want to delete this coupon?"
+msgstr "Czy jesteś pewien, że chcesz usunąć ten kupon?"
+
+#: admin/class-salesking-admin.php:5255
+msgid ""
+"Are you sure you want to make these users no longer be subagents? (they will "
+"become main / top level agents )"
+msgstr ""
+"Czy jesteś pewien, że chcesz, aby ci użytkownicy nie byli już Subagentami? "
+"(Będą one głównymi / najwyższymi agentami)"
+
+#: admin/class-salesking-admin.php:5251
+msgid "Are you sure you want to make this manual adjustment?"
+msgstr "Czy jesteś pewien, że chcesz dokonać tej ręcznej korekty?"
+
+#: public/class-salesking-public.php:2062
+#, fuzzy
+msgid "Are you sure you want to save the payout info?"
+msgstr "Czy jesteś pewien, że chcesz zapisać informację o wypłacie?"
+
+#: public/class-salesking-public.php:2058
+#, fuzzy
+msgid "Are you sure you want to save this cart?"
+msgstr "Czy jesteś pewien, że chcesz zachować ten koszyk?"
+
+#: admin/class-salesking-admin.php:5250
+#, fuzzy
+msgid "Are you sure you want to save this payment?"
+msgstr "Czy jesteś pewien, że chcesz zachować tę płatność?"
+
+#: admin/class-salesking-admin.php:5254
+#, fuzzy
+msgid ""
+"Are you sure you want to set these users as subagents of the parent agent? "
+"They will become a part of the main agent's team and they will be assigned "
+"to the Agent Group of the parent account."
+msgstr ""
+"Czy na pewno chcesz ustawić tych użytkowników jako subagentów agenta "
+"nadrzędnego? Staną się częścią zespołu głównego agenta i zostaną "
+"przydzieleni do Grupy Agentów konta nadrzędnego."
+
+#: admin/class-salesking-settings.php:105
+#, fuzzy
+msgid "Assign Agent Automatically at Registration"
+msgstr "Przypisz agenta automatycznie podczas rejestracji"
+
+#: admin/class-salesking-admin.php:539
+msgid "Assign sales agent"
+msgstr "Przypisz agenta sprzedaży"
+
+#: admin/class-salesking-admin.php:584
+#, fuzzy
+msgid ""
+"Assign this group to a sales agent (optional, is overwritten by agent "
+"assigned in user profile)"
+msgstr ""
+"Przypisz tę grupę do agenta sprzedaży (opcjonalne, jest nadpisywane przez "
+"agenta przypisanego w profilu użytkownika)"
+
+#: public/dashboard/payouts.php:24
+#, fuzzy
+msgid "Available for Payout"
+msgstr "Dostępne do wyplaty"
+
+#: includes/class-salesking-pending-gateway.php:79
+msgid "Awaiting customer payment."
+msgstr "W oczekiwaniu na płatność klienta."
+
+#: public/dashboard/customers.php:427 public/dashboard/customers.php:511
+msgid "B2B Group"
+msgstr "Grupa B2B"
+
+#: admin/class-salesking-admin.php:4681 admin/class-salesking-admin.php:4861
+msgid "B2B Groups"
+msgstr "Grupy B2B"
+
+#: public/dashboard/customers.php:430 public/dashboard/customers.php:514
+msgid "B2C Users"
+msgstr "Użytkownicy B2C"
+
+#: public/dashboard/announcement.php:22
+msgid "Back"
+msgstr "Powrót"
+
+#: public/dashboard/dashboard-content.php:36 public/dashboard/earnings.php:189
+#, fuzzy
+msgid "Balance available"
+msgstr "Saldo dostępne"
+
+#: admin/class-salesking-admin.php:3706 public/dashboard/payouts.php:274
+msgid "Bank Account Holder Name"
+msgstr "Nazwa posiadacza konta bankowego"
+
+#: admin/class-salesking-admin.php:3710 public/dashboard/payouts.php:284
+#, fuzzy
+msgid "Bank Account Number/IBAN"
+msgstr "Numer konta bankowego/IBAN"
+
+#: admin/class-salesking-admin.php:3714 public/dashboard/payouts.php:294
+#, fuzzy
+msgid "Bank Branch City"
+msgstr "Miasto oddział banku"
+
+#: admin/class-salesking-admin.php:3718 public/dashboard/payouts.php:304
+#, fuzzy
+msgid "Bank Branch Country"
+msgstr "Kraj oddziału banku"
+
+#: public/dashboard/payouts.php:162
+msgid "Bank Transfer"
+msgstr "Transfer bankowy"
+
+#: admin/class-salesking-admin.php:3682 public/dashboard/payouts.php:210
+msgid "Billing Address Line 1"
+msgstr "Adres rachunkowy 1"
+
+#: admin/class-salesking-admin.php:3686 public/dashboard/payouts.php:222
+msgid "Billing Address Line 2"
+msgstr "Adres rachunkowy 2"
+
+#: admin/class-salesking-admin.php:3783
+#, fuzzy
+msgid "Bonus / Extra Payment (is not deducted from outstanding balance)"
+msgstr "Premia / Dodatkowa płatność (nie jest odejmowana od salda zadłużenia)"
+
+#: public/dashboard/customers.php:13
+#, fuzzy
+msgid ""
+"By choosing the \"pending payment\" option at checkout, customers will be "
+"sent a payment link by email."
+msgstr ""
+"Wybierając opcję „oczekująca płatność” przy kasie, klienci otrzymają link do "
+"płatności e-mailem."
+
+#: public/dashboard/profile.php:108
+msgid "Cancel"
+msgstr "Anuluj"
+
+#: public/class-salesking-public.php:2076
+#: public/dashboard/dashboard-content.php:211 public/dashboard/orders.php:128
+#, fuzzy
+msgid "Cancelled"
+msgstr "Anulowane"
+
+#: public/dashboard/cart-sharing.php:35
+#, fuzzy
+msgid "Cart Name"
+msgstr "Nazwa koszyka"
+
+#: public/dashboard/cart-sharing.php:13
+#: public/dashboard/templates/sidebar.php:72
+#, fuzzy
+msgid "Cart Sharing"
+msgstr "Udostępnianie koszyka"
+
+#: public/class-salesking-public.php:1964
+#, fuzzy
+msgid "Cart updated."
+msgstr "Koszyk zaktualizowany."
+
+#: admin/class-salesking-settings.php:33
+msgid "Change Color Scheme (beta)"
+msgstr "Zmiana schematu koloru (beta)"
+
+#: admin/class-salesking-admin.php:4296 admin/class-salesking-admin.php:4422
+msgid "Change group"
+msgstr "Zmiana grupy"
+
+#: public/dashboard/coupons.php:111
+#, fuzzy
+msgid ""
+"Check this box if the coupon should not apply to items on sale. Coupons will "
+"only work if there are items in the cart that are not on sale."
+msgstr ""
+"Zaznacz to pole, jeśli kupon nie ma dotyczyć artykułów przecenionych. Kupony "
+"będą działać tylko wtedy, gdy w koszyku znajdują się produkty, które nie są "
+"przecenione."
+
+#: admin/class-salesking-admin.php:567
+msgid "Choose group"
+msgstr "Wybierz grupę"
+
+#: public/dashboard/profile-settings.php:23
+msgid "Choose which email notifications you would like to receive."
+msgstr "Wybierz, które powiadomienia e-mail chcesz otrzymać."
+
+#: includes/emails/class-salesking-new-announcement-email.php:121
+#: includes/emails/class-salesking-new-message-email.php:128
+#: includes/emails/class-salesking-new-payout-email.php:116
+msgid "Choose which format of email to send."
+msgstr "Wybierz format e-maila do wysłania."
+
+#: admin/class-salesking-admin.php:3627
+msgid "Chosen payout method"
+msgstr "Wybrane metody płatności"
+
+#: admin/class-salesking-admin.php:3690 public/dashboard/payouts.php:234
+msgid "City"
+msgstr "Miasto"
+
+#: admin/class-salesking-admin.php:301
+#, fuzzy
+msgid "Click to RETURN to the Sales Agent Dashboard"
+msgstr "Kliknij, aby wrócić do Panelu Agenta "
+
+#: public/dashboard/messages.php:34 public/dashboard/messages.php:253
+msgid "Closed"
+msgstr "Zamknięte"
+
+#: admin/class-salesking-admin.php:1221 admin/class-salesking-admin.php:2663
+#: admin/class-salesking-admin.php:2772
+#, fuzzy
+msgid "Commission"
+msgstr "Prowizja"
+
+#: admin/class-salesking-settings.php:604
+#, fuzzy
+msgid "Commission Calculation"
+msgstr "Obliczanie Prowizji"
+
+#: admin/class-salesking-settings.php:499
+#, fuzzy
+msgid "Commission calculation"
+msgstr "Obliczanie Prowizji"
+
+#: admin/class-salesking-settings.php:150
+#, fuzzy
+msgid "Commission calculation includes tax"
+msgstr "Kalkulacja prowizji uwzględnia podatek"
+
+#: admin/class-salesking-settings.php:189
+#, fuzzy
+msgid "Commission calculation is based on price including tax."
+msgstr "Kalkulacja prowizji opiera się na cenie zawierającej podatek."
+
+#: admin/class-salesking-settings.php:208
+#, fuzzy
+msgid ""
+"Commission calculation is based on profit (cost of products has to be "
+"entered for each product /variation)"
+msgstr ""
+"Kalkulacja prowizji opiera się na zysku (koszt produktów należy wpisać dla "
+"każdego produktu/odmiany<wariacji>)"
+
+#: admin/class-salesking-admin.php:4340 admin/class-salesking-admin.php:4342
+#: admin/class-salesking-admin.php:4343 admin/class-salesking-admin.php:4366
+#: admin/class-salesking-admin.php:4552
+#, fuzzy
+msgid "Commission Rules"
+msgstr "Reguły prowizji"
+
+#: admin/class-salesking-admin.php:4025 admin/class-salesking-admin.php:4363
+#, fuzzy
+msgid "Commission rules list"
+msgstr "Lista zasad prowizji"
+
+#: admin/class-salesking-settings.php:162
+#, fuzzy
+msgid "Commission rules: hide individual users"
+msgstr "Zasady prowizji: ukryj poszczególnych użytkowników"
+
+#: admin/class-salesking-settings.php:500
+#, fuzzy
+msgid "Commission settings"
+msgstr "Ustawienia prowizji"
+
+#: admin/class-salesking-admin.php:1032 admin/class-salesking-admin.php:1062
+#, fuzzy
+msgid "Commission:"
+msgstr "Prowizja:"
+
+#: public/dashboard/customers.php:53
+#, fuzzy
+msgid "Company"
+msgstr "Firma"
+
+#: public/dashboard/customers.php:325
+msgid "Company name"
+msgstr "Nazwa firmy"
+
+#: admin/class-salesking-admin.php:3252 admin/class-salesking-admin.php:3357
+#: admin/class-salesking-admin.php:3509 public/class-salesking-public.php:2074
+#: public/dashboard/dashboard-content.php:199
+#: public/dashboard/dashboard-content.php:507
+#: public/dashboard/dashboard-content.php:633 public/dashboard/earnings.php:470
+#: public/dashboard/earnings.php:680 public/dashboard/orders.php:122
+#, fuzzy
+msgid "Completed"
+msgstr "Zakończone"
+
+#: public/dashboard/messages.php:35
+#, fuzzy
+msgid "Compose"
+msgstr "Napisz"
+
+#: public/dashboard/messages.php:349
+#, fuzzy
+msgid "Compose Message"
+msgstr "Napisz wiadomości"
+
+#: admin/class-salesking-admin.php:4281
+#, fuzzy
+msgid "Condition"
+msgstr "Warunki"
+
+#: admin/class-salesking-admin.php:4427
+#, fuzzy
+msgid "Condition:"
+msgstr "Warunki :"
+
+#: public/dashboard/payouts.php:55
+msgid "Configure"
+msgstr "Konfiguracja"
+
+#: admin/class-salesking-settings.php:129
+#, fuzzy
+msgid "Configure Custom Method for payouts"
+msgstr "Skonfiguruj niestandardową metodę wypłat"
+
+#: admin/class-salesking-settings.php:536
+msgid "Configure SalesKing"
+msgstr "Konfiguracja SalesKing"
+
+#: includes/emails/templates/new-announcement-email-template.php:15
+#: includes/emails/templates/new-message-email-template.php:17
+#: includes/emails/templates/plain-new-announcement-email-template.php:11
+#: includes/emails/templates/plain-new-message-email-template.php:11
+#, fuzzy
+msgid "Content: "
+msgstr "Content:"
+
+#: admin/class-salesking-settings.php:626
+#, fuzzy
+msgid "Control available payout options"
+msgstr "Kontrola dostępnych opcji wypłat"
+
+#: admin/class-salesking-settings.php:606
+#, fuzzy
+msgid "Control how agent commission is calculated"
+msgstr "Sprawdź, w jaki sposób oblicza się prowizję agentów"
+
+#: admin/class-salesking-settings.php:586
+#, fuzzy
+msgid "Control what abilities agents have"
+msgstr "Sprawdź, jakie możliwości mają agenci"
+
+#: public/class-salesking-public.php:2065
+msgid "Copied"
+msgstr "Kopiowane"
+
+#: public/class-salesking-public.php:2067
+#: public/dashboard/affiliate-links.php:44
+#: public/dashboard/affiliate-links.php:60 public/dashboard/cart-sharing.php:37
+#, fuzzy
+msgid "Copy"
+msgstr "Kopiuj"
+
+#: public/dashboard/affiliate-links.php:76
+msgid "Copy & paste a product link here..."
+msgstr "Kopiuj i wklej link do produktu TUTAJ ..."
+
+#: public/dashboard/cart-sharing.php:65
+msgid "Copy Link"
+msgstr "Kopiuj link"
+
+#: public/dashboard/affiliate-links.php:44
+#: public/dashboard/affiliate-links.php:60
+#, fuzzy
+msgid "Copy to clipboard"
+msgstr "Skopiuj do schowka"
+
+#: admin/class-salesking-admin.php:3702 public/dashboard/customers.php:331
+#: public/dashboard/payouts.php:264
+msgid "Country"
+msgstr "Kraje"
+
+#: public/dashboard/coupons.php:85 public/dashboard/coupons.php:149
+msgid "Coupon Code"
+msgstr "Kod kuponowy"
+
+#: public/dashboard/coupons.php:93
+msgid "Coupon Expiry Date (optional)"
+msgstr "Data wygaśnięcia kuponu (opcjonalnie)"
+
+#: public/dashboard/templates/sidebar.php:62
+msgid "Coupons"
+msgstr "Kupony"
+
+#: public/dashboard/cart-sharing.php:109
+#, fuzzy
+msgid "Create"
+msgstr "Stwórz"
+
+#: public/dashboard/coupons.php:38
+msgid "Create a coupon"
+msgstr "Stwórz kupon"
+
+#: public/dashboard/salesking-dashboard-login.php:290
+#, fuzzy
+msgid "Create an account"
+msgstr "Stwórz konto"
+
+#: public/dashboard/cart-sharing.php:15
+#, fuzzy
+msgid ""
+"Create and share cart links with your customers, allowing them to easily "
+"place orders with the exact products they need. "
+msgstr ""
+"Twórz i udostępniaj linki do koszyków swoim klientom, umożliwiając im łatwe "
+"składanie zamówień zawierających dokładnie te produkty, których potrzebują. "
+
+#: public/dashboard/coupons.php:26
+#, fuzzy
+msgid ""
+"Create and share coupons, and earn a commission each time your coupon codes "
+"are used!"
+msgstr ""
+"Twórz i udostępniaj kupony oraz zarabiaj prowizję za każde wykorzystanie "
+"kodów kuponów!"
+
+#: public/dashboard/cart-sharing.php:88
+msgid "Create Cart"
+msgstr "Tworzenie koszyka"
+
+#: admin/class-salesking-admin.php:659
+msgid "Create new customer earning"
+msgstr "Tworzenie nowych zysków klientów"
+
+#: admin/class-salesking-admin.php:1888
+msgid "Create new customer group"
+msgstr "Tworzenie nowej grupy klientów"
+
+#: admin/class-salesking-admin.php:658
+msgid "Create new earning"
+msgstr "Tworzenie nowych zysków"
+
+#: admin/class-salesking-admin.php:1887
+msgid "Create new group"
+msgstr "Tworzenie nowej grupy"
+
+#: admin/class-salesking-admin.php:4006 admin/class-salesking-admin.php:4007
+#: admin/class-salesking-admin.php:4344 admin/class-salesking-admin.php:4345
+msgid "Create new rule"
+msgstr "Stwórz nowe zasady"
+
+#: admin/class-salesking-admin.php:3172 admin/class-salesking-admin.php:3799
+#: admin/class-salesking-admin.php:3865
+#, fuzzy
+msgid "Current oustanding balance (unpaid earnings)"
+msgstr "Bieżące saldo należności (niewypłacone zarobki)"
+
+#: admin/class-salesking-admin.php:3623
+#, fuzzy
+msgid "Current User Payout Information"
+msgstr "Aktualne informacje o wypłatach użytkownika"
+
+#: public/dashboard/earnings.php:202
+#, fuzzy
+msgid "currently available for payouts"
+msgstr "aktualnie dostępne do wypłaty"
+
+#: public/dashboard/payouts.php:54
+msgid "currently selected"
+msgstr "Aktualnie wybrane"
+
+#: admin/class-salesking-admin.php:2049 admin/class-salesking-admin.php:3197
+#: public/dashboard/customers.php:49 public/dashboard/dashboard-content.php:431
+#: public/dashboard/dashboard-content.php:559 public/dashboard/earnings.php:371
+#: public/dashboard/orders.php:41
+msgid "Customer"
+msgstr "Klient"
+
+#: public/dashboard/earnings.php:400 public/dashboard/orders.php:60
+msgid "customer"
+msgstr "Klient"
+
+#: public/dashboard/customers.php:305
+msgid "Customer Info"
+msgstr "Informacje klientów"
+
+#: public/dashboard/customers.php:11 public/dashboard/dashboard-content.php:288
+msgid "Customers"
+msgstr "Klienci"
+
+#: public/dashboard/affiliate-links.php:37
+msgid "Customers that register with this link are assigned to you."
+msgstr ""
+"Klienci, którzy zarejestrują się za pomocą tego linku są przypisywani do "
+"Ciebie."
+
+#: admin/class-salesking-settings.php:541
+#: public/dashboard/dashboard-content.php:8
+#: public/dashboard/templates/sidebar.php:37
+#, fuzzy
+msgid "Dashboard"
+msgstr "Pulpit Agenta"
+
+#: admin/class-salesking-settings.php:45
+#, fuzzy
+msgid "Dashboard Color"
+msgstr "Kolor Panelu Agenta"
+
+#: admin/class-salesking-settings.php:57
+#, fuzzy
+msgid "Dashboard Color Hover"
+msgstr "Kolor Panelu Agenta po najechaniu kursorem"
+
+#: admin/class-salesking-admin.php:3195 admin/class-salesking-admin.php:3450
+#: admin/class-salesking-admin.php:3814 includes/class-salesking.php:417
+#: public/dashboard/dashboard-content.php:435
+#: public/dashboard/dashboard-content.php:563 public/dashboard/earnings.php:366
+#: public/dashboard/earnings.php:609 public/dashboard/orders.php:39
+msgid "Date"
+msgstr "Data"
+
+#: public/dashboard/earnings.php:395 public/dashboard/earnings.php:621
+#: public/dashboard/orders.php:58
+#, fuzzy
+msgid "date"
+msgstr "data"
+
+#: admin/class-salesking-admin.php:1482
+msgid "Date of last reply"
+msgstr "Data ostatniej odpowiedzi"
+
+#: public/dashboard/payouts.php:72
+msgid "Date Processed"
+msgstr "Data przetwarzania"
+
+#: public/dashboard/announcements.php:40
+msgid "Date published"
+msgstr "Data opublikowana"
+
+#: public/dashboard/cart-sharing.php:38 public/dashboard/coupons.php:215
+#, fuzzy
+msgid "Delete"
+msgstr "Usuń"
+
+#: public/dashboard/cart-sharing.php:68
+#, fuzzy
+msgid "Delete Cart"
+msgstr "Usuń koszyk"
+
+#: includes/class-salesking-pending-gateway.php:45
+msgid "Description"
+msgstr "Opis"
+
+#: admin/class-salesking-admin.php:3661
+msgid "Details"
+msgstr "Szczegóły"
+
+#: admin/class-salesking-settings.php:158
+#, fuzzy
+msgid "Different commission when agent increases price"
+msgstr "Inna prowizja, gdy agent podnosi cenę"
+
+#: admin/class-salesking-settings.php:421
+#, fuzzy
+msgid "Disable this if you want to manage payouts separate of SalesKing."
+msgstr ""
+"Wyłącz tę opcję, jeśli chcesz zarządzać wypłatami niezależnie od SalesKing."
+
+#: public/dashboard/coupons.php:152
+#, fuzzy
+msgid "Discount"
+msgstr "Zniżki"
+
+#: public/dashboard/coupons.php:24
+msgid "Discount Coupons"
+msgstr "Kupony rabatowe"
+
+#: public/dashboard/coupons.php:55
+#, fuzzy
+msgid "Discount Percentage (%)"
+msgstr "Procent rabatu (%)"
+
+#: public/dashboard/coupons.php:55
+msgid "Discount percentage that the customer benefits from."
+msgstr "Odsetek rabatowy, z którego korzysta klient."
+
+#: public/dashboard/profile.php:46 public/dashboard/profile.php:91
+#, fuzzy
+msgid "Display Name"
+msgstr "Nazwa wyświetlana"
+
+#: admin/class-salesking-admin.php:3891
+#, fuzzy
+msgid "Download Agent Balance History"
+msgstr "Pobierz historię salda agenta"
+
+#: admin/class-salesking-admin.php:654 admin/class-salesking-admin.php:655
+#: admin/class-salesking-admin.php:680 admin/class-salesking-admin.php:916
+#: public/class-salesking-public.php:487
+msgid "Earning"
+msgstr "Zarobki"
+
+#: admin/class-salesking-admin.php:669
+#, fuzzy
+msgid "Earning image"
+msgstr "Earning image"
+
+#: admin/class-salesking-admin.php:656 admin/class-salesking-admin.php:657
+#: admin/class-salesking-admin.php:2270 admin/class-salesking-admin.php:2271
+#: public/dashboard/earnings.php:11 public/dashboard/templates/sidebar.php:124
+#, fuzzy
+msgid "Earnings"
+msgstr "Zyski"
+
+#: public/dashboard/earnings.php:224
+#, fuzzy
+msgid "Earnings during "
+msgstr "Zarobki w trakcie"
+
+#: public/dashboard/earnings.php:584
+#, fuzzy
+msgid "Earnings from your subagents"
+msgstr "Zysk od Twoich subagentów"
+
+#: admin/class-salesking-admin.php:3160
+msgid "Earnings History"
+msgstr "Historia zysków"
+
+#: admin/class-salesking-admin.php:4751
+#, fuzzy
+msgid "Earnings in the first x days after subagent is recruited"
+msgstr "Zarobki w ciągu pierwszych x dni po zatrudnieniu subagenta"
+
+#: public/dashboard/dashboard-content.php:108
+#, fuzzy
+msgid "earnings in the last 30 days"
+msgstr "zysk w ciągu ostatnich 30 dni"
+
+#: public/dashboard/earnings.php:112
+msgid "Earnings in the past 30 days"
+msgstr "Zysk w ciągu ostatnich 30 dni"
+
+#: admin/class-salesking-admin.php:677
+msgid "Earnings list"
+msgstr "Lista zysków"
+
+#: admin/class-salesking-admin.php:676
+#, fuzzy
+msgid "Earnings navigation"
+msgstr "Earnings navigation"
+
+#: admin/class-salesking-admin.php:3142
+msgid "Earnings of"
+msgstr "zyski z"
+
+#: admin/class-salesking-admin.php:3440
+#, fuzzy
+msgid "Earnings of subagents"
+msgstr "Zyski subagentów"
+
+#: public/dashboard/earnings.php:223
+msgid "Earnings Overview"
+msgstr "Przegląd zysku"
+
+#: public/dashboard/earnings.php:367 public/dashboard/earnings.php:610
+msgid "Earnings Status"
+msgstr "Status zysku"
+
+#: public/dashboard/earnings.php:396 public/dashboard/earnings.php:622
+msgid "earnings status"
+msgstr "Status zysku"
+
+#: public/dashboard/earnings.php:35
+msgid "Earnings this month"
+msgstr "Zarobki w tym miesiącu"
+
+#: public/dashboard/dashboard-content.php:111
+msgid "Earnings this month so far"
+msgstr "Zysków w tym miesiącu do tej pory"
+
+#: admin/class-salesking-admin.php:660 admin/class-salesking-admin.php:716
+#: admin/class-salesking-admin.php:1550 admin/class-salesking-admin.php:1889
+#: admin/class-salesking-admin.php:4008 admin/class-salesking-admin.php:4346
+#: public/dashboard/customers.php:282
+msgid "Edit"
+msgstr "Edycja"
+
+#: admin/class-salesking-admin.php:1551
+#, fuzzy
+msgid "Edit announcement"
+msgstr "Edytuj ogłoszenie"
+
+#: public/class-salesking-public.php:2073
+#, fuzzy
+msgid "Edit Columns"
+msgstr "Edytuj kolumny"
+
+#: admin/class-salesking-admin.php:661
+#, fuzzy
+msgid "Edit earning"
+msgstr "Edytuj zarobki"
+
+#: admin/class-salesking-admin.php:1890
+#, fuzzy
+msgid "Edit group"
+msgstr "Edytuj grupę"
+
+#: admin/class-salesking-admin.php:717
+msgid "Edit message"
+msgstr "Edycja wiadomości"
+
+#: admin/class-salesking-admin.php:4009 admin/class-salesking-admin.php:4347
+#, fuzzy
+msgid "Edit rule"
+msgstr "Edycja zasady"
+
+#: public/dashboard/customers.php:78 public/dashboard/profile.php:53
+#: public/dashboard/profile.php:97 public/dashboard/teams.php:46
+msgid "Email"
+msgstr "e-mail"
+
+#: public/dashboard/customers.php:540 public/dashboard/teams.php:190
+msgid "Email address"
+msgstr "adres e-mail"
+
+#: includes/emails/class-salesking-new-announcement-email.php:112
+#: includes/emails/class-salesking-new-message-email.php:119
+#: includes/emails/class-salesking-new-payout-email.php:107
+#, fuzzy
+msgid "Email Heading"
+msgstr "Nagłówek e-maila"
+
+#: public/dashboard/profile-settings.php:49
+msgid "Email me when I receive a new message."
+msgstr "Skontaktuj się ze mną, gdy otrzymam nową wiadomość."
+
+#: public/dashboard/profile-settings.php:43
+msgid "Email me when new announcements are published."
+msgstr "Skontaktuj się ze mną, gdy zostaną opublikowane nowe informacje."
+
+#: public/dashboard/salesking-dashboard-login.php:266
+#, fuzzy
+msgid "Email or Username"
+msgstr "E-mail lub nazwa użytkownika"
+
+#: public/dashboard/profile-settings.php:22
+msgid "Email Settings"
+msgstr "E-mail ustawienia"
+
+#: includes/emails/class-salesking-new-announcement-email.php:119
+#: includes/emails/class-salesking-new-message-email.php:126
+#: includes/emails/class-salesking-new-payout-email.php:114
+msgid "Email type"
+msgstr "Typ e-maila"
+
+#: admin/class-salesking-settings.php:80
+#, fuzzy
+msgid "Enable Affiliate Links"
+msgstr "Włącz linki afiliacyjne"
+
+#: admin/class-salesking-settings.php:68
+#, fuzzy
+msgid "Enable Announcements"
+msgstr "Włącz ogłoszenia"
+
+#: admin/class-salesking-settings.php:125
+#, fuzzy
+msgid "Enable Bank Payments for payouts"
+msgstr "Włącz płatności bankowe do wypłat"
+
+#: admin/class-salesking-settings.php:84
+#, fuzzy
+msgid "Enable Cart Sharing"
+msgstr "Włącz dzielenie się koszykiem"
+
+#: admin/class-salesking-settings.php:76
+#, fuzzy
+msgid "Enable Coupons"
+msgstr "Włącz kupony"
+
+#: admin/class-salesking-settings.php:92
+#, fuzzy
+msgid "Enable Earnings"
+msgstr "Włącz wypłaty"
+
+#: includes/class-salesking-pending-gateway.php:53
+#, fuzzy
+msgid "Enable for shipping methods"
+msgstr "Włącz dla metod wysyłki"
+
+#: admin/class-salesking-settings.php:72
+msgid "Enable Messages"
+msgstr "Włącz wiadomości"
+
+#: includes/class-salesking-pending-gateway.php:32
+#, fuzzy
+msgid "Enable orders as pending payment for sales agents"
+msgstr "Włącz zamówienia jako oczekujące płatności dla agentów sprzedaży"
+
+#: admin/class-salesking-settings.php:96
+#, fuzzy
+msgid "Enable Payouts"
+msgstr "Włącz wypłaty"
+
+#: admin/class-salesking-settings.php:121
+#, fuzzy
+msgid "Enable PayPal for payouts"
+msgstr "Włącz PayPal dla wypłat"
+
+#: admin/class-salesking-settings.php:88
+#, fuzzy
+msgid "Enable Teams"
+msgstr "Włącz zespoły"
+
+#: includes/emails/class-salesking-new-announcement-email.php:101
+#: includes/emails/class-salesking-new-message-email.php:108
+#: includes/emails/class-salesking-new-payout-email.php:96
+msgid "Enable this email notification"
+msgstr "Włącz to powiadomienie e-mail"
+
+#: includes/class-salesking-pending-gateway.php:31
+#: includes/emails/class-salesking-new-announcement-email.php:99
+#: includes/emails/class-salesking-new-message-email.php:106
+#: includes/emails/class-salesking-new-payout-email.php:94
+#, fuzzy
+msgid "Enable/Disable"
+msgstr "Włącz/Wyłącz"
+
+#: public/dashboard/affiliate-links.php:70
+msgid "Enter a product link here, and get your affiliate link."
+msgstr "Wprowadź tutaj link do produktu i uzyskaj link partnerski."
+
+#: public/dashboard/cart-sharing.php:98
+#, fuzzy
+msgid "Enter Cart Name:"
+msgstr "Wpisz nazwę koszyka:"
+
+#: admin/class-salesking-settings.php:250
+#, fuzzy
+msgid "Enter commission percentage..."
+msgstr "Podaj procent prowizji..."
+
+#: admin/class-salesking-admin.php:1107 admin/class-salesking-admin.php:1138
+#, fuzzy
+msgid "Enter commission value..."
+msgstr "Podaj wartość prowizji..."
+
+#: admin/class-salesking-admin.php:1976 admin/class-salesking-admin.php:2150
+#, fuzzy
+msgid "Enter discount percentage..."
+msgstr "Podaj procent rabatu..."
+
+#: admin/class-salesking-settings.php:412
+#, fuzzy
+msgid "Enter how many levels of agents can have subagents. 0 = unlimited"
+msgstr "Enter how many levels of agents can have subagents. 0 = unlimited"
+
+#: admin/class-salesking-settings.php:265
+#, fuzzy
+msgid "Enter method description / instructions here..."
+msgstr "Enter method description / instructions here..."
+
+#: admin/class-salesking-settings.php:264
+msgid "Enter method title here..."
+msgstr "Wpisz tutaj tytuł metody..."
+
+#: admin/class-salesking-admin.php:3779
+msgid "Enter note / details here..."
+msgstr "Wpisz notatkę / szczegóły tutaj ..."
+
+#: admin/class-salesking-admin.php:3886
+msgid "Enter note / explanation here..."
+msgstr "Wpisz notatkę / wyjaśnienie tutaj ..."
+
+#: admin/class-salesking-settings.php:658
+#, fuzzy
+msgid "Enter parent agent account id (example: 23)"
+msgstr "Wprowadź identyfikator konta agenta nadrzędnego (przykład: 23)"
+
+#: admin/class-salesking-admin.php:3773
+msgid "Enter payment method used here..."
+msgstr "Wprowadź metodę płatności stosowaną tutaj ..."
+
+#: admin/class-salesking-admin.php:3880
+#, fuzzy
+msgid ""
+"Enter the adjustment amount (you can enter a positive / negative value to "
+"increase / reduce balance)."
+msgstr ""
+"Wprowadź kwotę korekty (możesz wprowadzić wartość dodatnią/ujemną, aby "
+"zwiększyć/zmniejszyć saldo)."
+
+#: admin/class-salesking-admin.php:3767
+msgid "Enter the amount that has been sent..."
+msgstr "Wpisz kwotę, która została wysłana..."
+
+#: public/dashboard/cart-sharing.php:105
+#, fuzzy
+msgid "Enter the cart name here..."
+msgstr "Wpisz nazwę koszyka tutaj..."
+
+#: admin/class-salesking-settings.php:657
+#: admin/class-salesking-settings.php:671
+#, fuzzy
+msgid "Enter user ids, comma-separated (example: 12,15,19)"
+msgstr ""
+"Wprowadź identyfikatory użytkowników, oddzielając je przecinkami (przykład: "
+"12,15,19)"
+
+#: public/dashboard/profile.php:92
+#, fuzzy
+msgid "Enter your display name..."
+msgstr "Wpisz swoją nazwę wyświetlaną..."
+
+#: public/dashboard/salesking-dashboard-login.php:268
+msgid "Enter your email address or username"
+msgstr "Wprowadź swój adres e-mail lub nazwę użytkownika"
+
+#: public/dashboard/profile.php:98
+msgid "Enter your email..."
+msgstr "Wpisz swój e-mail..."
+
+#: public/dashboard/profile.php:80
+msgid "Enter your first name..."
+msgstr "Wpisz swoje pierwsze imię..."
+
+#: public/dashboard/profile.php:86
+#, fuzzy
+msgid "Enter your last name..."
+msgstr "Wpisz swoje nazwisko..."
+
+#: admin/class-salesking-admin.php:1292 admin/class-salesking-admin.php:1339
+#: public/dashboard/messages.php:321 public/dashboard/messages.php:373
+msgid "Enter your message here..."
+msgstr "Wpisz swoją wiadomość tutaj..."
+
+#: public/dashboard/salesking-dashboard-login.php:280
+msgid "Enter your password"
+msgstr "Wprowadź swoje hasło"
+
+#: public/dashboard/payouts.php:188
+msgid "Enter your PayPal email address here..."
+msgstr "Wpisz swój adres e-mail Paypal tutaj."
+
+#: public/class-salesking-public.php:1707
+#, fuzzy
+msgid "Enter your sales rep ID..."
+msgstr "Wprowadź identyfikator przedstawiciela handlowego..."
+
+#: admin/class-salesking-admin.php:4663 admin/class-salesking-admin.php:4826
+msgid "Everyone"
+msgstr "Każdy"
+
+#: public/dashboard/coupons.php:111
+#, fuzzy
+msgid "Exclude Sale Items"
+msgstr "Wyklucz przedmioty objęte wyprzedażą/Exclude Sale Items"
+
+#: public/dashboard/coupons.php:163
+msgid "Expiry Date"
+msgstr "Data wygaśnięcia"
+
+#: public/dashboard/orders.php:134
+msgid "Failed"
+msgstr "Niepowodzenie"
+
+#: admin/class-salesking-admin.php:1565
+msgid "Filter announcements"
+msgstr "Filtry ogłoszenia"
+
+#: admin/class-salesking-admin.php:183
+#, fuzzy
+msgid "Filter by agent"
+msgstr "Filtruj przez: Agent"
+
+#: admin/class-salesking-admin.php:281
+#, fuzzy
+msgid "Filter by agent..."
+msgstr "Filtruj przez: Agent"
+
+#: admin/class-salesking-admin.php:675
+#, fuzzy
+msgid "Filter earnings"
+msgstr "Filtruj zarobki"
+
+#: admin/class-salesking-admin.php:1904
+#, fuzzy
+msgid "Filter groups"
+msgstr "Filtruj grupy"
+
+#: admin/class-salesking-admin.php:731
+#, fuzzy
+msgid "Filter messages"
+msgstr "Filtruj wiadomości"
+
+#: admin/class-salesking-admin.php:4023 admin/class-salesking-admin.php:4361
+msgid "Filter rules"
+msgstr "Filtruj zasady"
+
+#: public/dashboard/profile.php:32 public/dashboard/profile.php:79
+msgid "First Name"
+msgstr "Pierwsze imię"
+
+#: public/dashboard/customers.php:313 public/dashboard/teams.php:166
+msgid "First name"
+msgstr "Pierwsze imię"
+
+#: admin/class-salesking-admin.php:4736
+#, fuzzy
+msgid "First X orders after customer registration"
+msgstr "Pierwsze X zamówień po rejestracji klienta"
+
+#: admin/class-salesking-admin.php:4741
+#, fuzzy
+msgid "First X orders placed by the agent after customer registration"
+msgstr "Pierwsze X zamówień złożone przez agenta po rejestracji klienta"
+
+#: admin/class-salesking-admin.php:4745
+#, fuzzy
+msgid "First X orders placed by the customer after customer registration"
+msgstr "Pierwsze X zamówień złożonych przez Klienta po rejestracji Klienta"
+
+#: admin/class-salesking-admin.php:4750
+#, fuzzy
+msgid "First x transactions (earnings) of the subagent"
+msgstr "Pierwsze x transakcji (zarobki) subagenta"
+
+#: admin/class-salesking-admin.php:4553
+msgid "Fixed amount"
+msgstr "Stała kwota"
+
+#: admin/class-salesking-admin.php:4614
+msgid "For agents:"
+msgstr "Dla agentów:"
+
+#: admin/class-salesking-admin.php:4654
+msgid "For customers:"
+msgstr "Dla klientów:"
+
+#: admin/class-salesking-settings.php:178
+#, fuzzy
+msgid "For large numbers of users, this prevents crashes."
+msgstr "W przypadku dużej liczby użytkowników zapobiega to awariom."
+
+#: admin/class-salesking-admin.php:4724
+#, fuzzy
+msgid "For orders:"
+msgstr "Dla zamówień:"
+
+#: admin/class-salesking-admin.php:4451
+msgid "For who:"
+msgstr "Dla kogo:"
+
+#: public/dashboard/salesking-dashboard-login.php:273
+msgid "Forgot password?"
+msgstr "Zapomniałeś hasło?"
+
+#: admin/class-salesking-admin.php:2692
+msgid "From:"
+msgstr "od :"
+
+#: admin/class-salesking-admin.php:3678 public/dashboard/payouts.php:197
+#, fuzzy
+msgid "Full Name"
+msgstr "Pełna nazwa (imię, nazwisko)"
+
+#: public/dashboard/affiliate-links.php:77
+#, fuzzy
+msgid "Get Link"
+msgstr "Uzyskaj link"
+
+#: public/dashboard/affiliate-links.php:77
+#, fuzzy
+msgid "Get link and copy to clipboard"
+msgstr "Pobierz link i skopiuj do schowka"
+
+#: includes/emails/templates/new-order-pending-email-template.php:19
+msgid "Go to payment page &rarr;"
+msgstr "Przejdź do strony płatności"
+
+#: public/class-salesking-public.php:135
+#, fuzzy
+msgid "Go to Sales Agent Dashboard"
+msgstr "Przejdź pulpitu agenta (Dashboard)"
+
+#: admin/class-salesking-admin.php:1884
+msgid "Group"
+msgstr "Grupa"
+
+#: admin/class-salesking-admin.php:1898
+msgid "Group image"
+msgstr "Zdjęcie grupy"
+
+#: admin/class-salesking-admin.php:1179
+msgid "Group name"
+msgstr "Nazwa grupy"
+
+#: admin/class-salesking-admin.php:4002 admin/class-salesking-admin.php:4004
+#: admin/class-salesking-admin.php:4005 admin/class-salesking-admin.php:4028
+msgid "Group Rules"
+msgstr "Reguły grupy"
+
+#: admin/class-salesking-admin.php:1953
+#, fuzzy
+msgid "Group Settings"
+msgstr "Ustawienia grupy"
+
+#: admin/class-salesking-admin.php:1803
+#, fuzzy
+msgid "Group Visibility"
+msgstr "Widoczność Grupy"
+
+#: admin/class-salesking-admin.php:1906
+msgid "Groups list"
+msgstr "Lista grup"
+
+#: admin/class-salesking-admin.php:1905
+#, fuzzy
+msgid "Groups navigation"
+msgstr "Groups navigation"
+
+#: admin/class-salesking-admin.php:1810
+msgid "Groups who can see this announcement"
+msgstr "Grupy, które mogą oglądać ogłoszenie"
+
+#: admin/class-salesking-admin.php:1784
+msgid "Groups: "
+msgstr "Grupy :"
+
+#: admin/class-salesking-admin.php:2131
+msgid "Here you can assign this customer to a specific agent"
+msgstr "Tutaj możesz przypisać tego klienta do określonego agenta"
+
+#: public/dashboard/teams.php:13
+#, fuzzy
+msgid ""
+"Here you can create subagent accounts that will be part of your team. You "
+"receive commissions based on their earnings"
+msgstr ""
+"Tutaj możesz utworzyć konta subagentów, które będą częścią Twojego zespołu. "
+"Otrzymujesz prowizję na podstawie ich zarobków"
+
+#: admin/class-salesking-admin.php:5334
+#, fuzzy
+msgid ""
+"Here you can set up a complex commission structure for your sales agents. "
+"You can combine multiple types of rules for agent commission, as well as set "
+"up subagents (teams) commissions."
+msgstr ""
+"Tutaj możesz skonfigurować złożoną strukturę prowizji dla swoich agentów "
+"sprzedaży. Możesz łączyć wiele typów reguł dotyczących prowizji agentów, a "
+"także konfigurować prowizje subagentów (zespołów)."
+
+#: public/dashboard/earnings.php:13
+msgid "Here you can view and keep track of your earnings."
+msgstr "Tutaj możesz zobaczyć i śledzić swoje zyski."
+
+#: public/dashboard/orders.php:13
+msgid "Here you can view and manage all orders assigned to you."
+msgstr ""
+"Tutaj możesz wyświetlić i zarządzać wszystkimi zamówieniami przypisanymi do "
+"Ciebie."
+
+#: public/dashboard/customers.php:13
+msgid ""
+"Here you can view and manage your customers. Through the \"Shop as "
+"Customer\" button, you can place orders on behalf of customers."
+msgstr ""
+"Tutaj możesz zobaczyć i zarządzać swoimi klientami. Za pośrednictwem "
+"przycisku „sprzedaż jako klient” można zamówić zamówienia w imieniu klientów."
+
+#: admin/class-salesking-admin.php:2139
+msgid "Here you must assign the agent to a group."
+msgstr "Tutaj musisz przypisać agenta do grupy."
+
+#. translators: %s: Customer first name
+#: includes/emails/templates/new-order-pending-email-template.php:13
+#: includes/emails/templates/plain-new-order-pending-email-template.php:10
+#, fuzzy, php-format
+msgid "Hi %s,"
+msgstr "Cześć %s,"
+
+#: public/dashboard/coupons.php:44
+#, fuzzy
+msgid "How many times this coupon can be used before it is void."
+msgstr "Ile razy można wykorzystać ten kupon, zanim utraci ważność."
+
+#: admin/class-salesking-admin.php:4447 admin/class-salesking-admin.php:4559
+#, fuzzy
+msgid "How much:"
+msgstr "Ile:"
+
+#: admin/class-salesking-settings.php:340
+msgid ""
+"If no agent is chosen at registration, assign the user automatically to an "
+"agent."
+msgstr ""
+"W przypadku, gdy w rejestracji nie zostanie wybrany żaden agent, użytkownik "
+"zostanie automatycznie przydzielony agentowi."
+
+#: public/dashboard/coupons.php:85
+#, fuzzy
+msgid ""
+"If the desired coupon code already exists, a close alternative will be used."
+msgstr ""
+"Jeśli żądany kod kuponu już istnieje, zostanie zastosowana bliska "
+"alternatywa."
+
+#: includes/class-salesking-pending-gateway.php:58
+#, fuzzy
+msgid ""
+"If this is only available for certain methods, set it up here. Leave blank "
+"to enable for all methods."
+msgstr ""
+"Jeśli jest to dostępne tylko dla niektórych metod, skonfiguruj je tutaj. "
+"Pozostaw puste, aby włączyć dla wszystkich metod."
+
+#: admin/class-salesking-admin.php:1563
+#, fuzzy
+msgid "Insert into announcement"
+msgstr "Wstaw do ogłoszenia"
+
+#: admin/class-salesking-admin.php:673
+#, fuzzy
+msgid "Insert into earning"
+msgstr "Wstaw do zysku"
+
+#: admin/class-salesking-admin.php:1902
+#, fuzzy
+msgid "Insert into group"
+msgstr "Wstaw do grupy"
+
+#: admin/class-salesking-admin.php:729
+#, fuzzy
+msgid "Insert into message"
+msgstr "Wstaw do wiadomości"
+
+#: admin/class-salesking-admin.php:4021 admin/class-salesking-admin.php:4359
+#, fuzzy
+msgid "Insert into rule"
+msgstr "Wstaw do reguły"
+
+#: admin/class-salesking-admin.php:3722 public/dashboard/payouts.php:314
+#, fuzzy
+msgid "Intermediary Bank - Bank Code"
+msgstr "Bank Pośredniczący - Kod Banku"
+
+#: admin/class-salesking-admin.php:3730 public/dashboard/payouts.php:334
+#, fuzzy
+msgid "Intermediary Bank - City"
+msgstr "Bank Pośredniczący - Miasto"
+
+#: admin/class-salesking-admin.php:3734 public/dashboard/payouts.php:344
+#, fuzzy
+msgid "Intermediary Bank - Country"
+msgstr "Bank Pośredniczący - Kraj"
+
+#: admin/class-salesking-admin.php:3726 public/dashboard/payouts.php:324
+#, fuzzy
+msgid "Intermediary Bank - Name"
+msgstr "Bank Pośredniczący - Nazwa"
+
+#: public/dashboard/salesking-dashboard-login.php:178
+msgid "Invalid Account"
+msgstr "Mamy tu problem"
+
+#: admin/class-salesking-admin.php:3280 admin/class-salesking-admin.php:3385
+#: public/dashboard/earnings.php:518 public/dashboard/orders.php:177
+msgid "Items"
+msgstr "Przedmioty"
+
+#: admin/class-salesking-admin.php:2703
+#, fuzzy
+msgid "Last Month"
+msgstr "Zeszły miesiąc"
+
+#: public/dashboard/profile.php:39 public/dashboard/profile.php:85
+#, fuzzy
+msgid "Last Name"
+msgstr "Nazwisko"
+
+#: public/dashboard/customers.php:319 public/dashboard/teams.php:172
+#, fuzzy
+msgid "Last name"
+msgstr "Nazwisko"
+
+#: admin/class-salesking-admin.php:3918 admin/class-salesking-admin.php:3984
+msgid "Last Payment"
+msgstr "Ostatnie płatności"
+
+#: admin/class-salesking-admin.php:2705
+#, fuzzy
+msgid "Last Year"
+msgstr "Ostatni rok"
+
+#: public/class-salesking-public.php:2064
+#, fuzzy
+msgid "Link copied"
+msgstr "Link skopiowany"
+
+#: public/dashboard/salesking-dashboard-login.php:184
+msgid "Log out"
+msgstr "Wyloguj"
+
+#: public/dashboard/salesking-dashboard-login.php:249
+#, fuzzy
+msgid "Login failed"
+msgstr "Logowanie nie powiodło się"
+
+#: admin/class-salesking-admin.php:2863
+msgid "Main agent account"
+msgstr "Konto głównego agenta"
+
+#: includes/class-salesking-activator.php:38
+msgid "Main Agents"
+msgstr "Główni agenci"
+
+#: admin/class-salesking-settings.php:478
+#: admin/class-salesking-settings.php:534
+#, fuzzy
+msgid "Main Settings"
+msgstr "Ustawienia główne"
+
+#: public/dashboard/earnings.php:559 public/dashboard/orders.php:197
+#, fuzzy
+msgid "Manage Order"
+msgstr "Zarządzanie zamówieniem"
+
+#: admin/class-salesking-admin.php:3761
+msgid "Manage Payments"
+msgstr "Zarządzanie płatnościami"
+
+#: public/dashboard/templates/header-bar.php:210
+msgid "Manage Profile"
+msgstr "Zarządzanie profilem"
+
+#: admin/class-salesking-admin.php:3878
+#, fuzzy
+msgid "Manual Adjustment Amount"
+msgstr "Ręczne Dostosowanie Kwot"
+
+#: public/dashboard/announcements.php:25
+#, fuzzy
+msgid "Mark all as read"
+msgstr "Zaznacz wszystko jako przeczytane"
+
+#: public/dashboard/messages.php:242
+#, fuzzy
+msgid "Mark as Active"
+msgstr "Oznacz jako aktywny"
+
+#: public/dashboard/messages.php:246
+#, fuzzy
+msgid "Mark as Closed"
+msgstr "Oznacz jako zamknięty"
+
+#: public/dashboard/messages.php:238
+#, fuzzy
+msgid "Mark as Read"
+msgstr "Oznacz jako przeczytany"
+
+#: public/dashboard/announcement.php:36
+#, fuzzy
+msgid "Mark as read"
+msgstr "Oznacz jako przeczytamy"
+
+#: admin/class-salesking-admin.php:1974 admin/class-salesking-admin.php:2148
+#, fuzzy
+msgid "Max Discount Percentage (%) Allowed"
+msgstr ""
+"Maksymalny procent rabatu (%) dozwolony / Max Discount Percentage (%) Allowed"
+
+#: public/dashboard/coupons.php:157
+msgid "Max Spend"
+msgstr "Maksymalne wydatki"
+
+#: public/dashboard/coupons.php:120
+msgid "Maximum allowed discount:"
+msgstr "Maksymalna dopuszczalna zniżka:"
+
+#: admin/class-salesking-admin.php:1181
+msgid "Maximum discount allowed"
+msgstr "Maksymalna dopuszczalna zniżka"
+
+#: public/dashboard/coupons.php:75
+msgid "Maximum Spend (optional)"
+msgstr "Maksymalne wydatki (opcjonalne)"
+
+#: admin/class-salesking-settings.php:146
+#, fuzzy
+msgid "Maximum subagent levels"
+msgstr "Maksymalna ilość Subagentów"
+
+#: admin/class-salesking-admin.php:711 admin/class-salesking-admin.php:736
+msgid "Message"
+msgstr "Wiadomość"
+
+#: admin/class-salesking-admin.php:725
+msgid "Message image"
+msgstr "Zdjęcie wiadomości"
+
+#: admin/class-salesking-admin.php:732
+#, fuzzy
+msgid "Message navigation"
+msgstr "Nawigacja wiadomości"
+
+#: admin/class-salesking-admin.php:710 admin/class-salesking-admin.php:712
+#: admin/class-salesking-admin.php:713 admin/class-salesking-admin.php:1159
+#: public/dashboard/dashboard-content.php:375
+#: public/dashboard/templates/sidebar.php:49
+msgid "Messages"
+msgstr "Wiadomości"
+
+#: public/dashboard/messages.php:390
+#, fuzzy
+msgid "Messages & Inbox"
+msgstr "Messages & Inbox"
+
+#: admin/class-salesking-admin.php:5401
+#, fuzzy
+msgid ""
+"Messages allow you to stay in touch with your sales team, ask or receive "
+"questions, clarify matters, queries, etc. Sales agents can also initiate "
+"messages."
+msgstr ""
+"Wiadomości pozwalają Ci pozostać w kontakcie z zespołem sprzedaży, zadawać "
+"lub otrzymywać pytania, wyjaśniać sprawy, zapytania itp. Agenci handlowi "
+"mogą również inicjować wiadomości."
+
+#: admin/class-salesking-admin.php:733
+msgid "Messages list"
+msgstr "Lista wiadomości"
+
+#: includes/emails/templates/new-payout-email-template.php:16
+#: includes/emails/templates/plain-new-payout-email-template.php:13
+#, fuzzy
+msgid "Method: "
+msgstr "Metoda::"
+
+#: public/dashboard/coupons.php:156
+msgid "Min Spend"
+msgstr "Min wydatki"
+
+#: public/dashboard/coupons.php:65
+msgid "Minimum Spend (optional)"
+msgstr "Minimalne wydatki (opcjonalne)"
+
+#: admin/class-salesking-settings.php:551
+msgid "Modules"
+msgstr "Moduły"
+
+#: admin/class-salesking-admin.php:4460 admin/class-salesking-admin.php:4577
+#: admin/class-salesking-admin.php:4623
+#, fuzzy
+msgid "Multiple"
+msgstr "Wiele / Multiple"
+
+#: public/dashboard/templates/sidebar.php:94
+#, fuzzy
+msgid "My Customers"
+msgstr "Moi klienci"
+
+#: public/dashboard/cart-sharing.php:17
+#, fuzzy
+msgid "My Customers -> Shop as Customer"
+msgstr "Mój Klient -> Zakupy jako Klient"
+
+#: public/dashboard/templates/sidebar.php:104
+msgid "My Orders"
+msgstr "Moje zamówienia"
+
+#: public/dashboard/templates/sidebar.php:114
+msgid "My Team"
+msgstr "Mój zespół"
+
+#: public/dashboard/teams.php:11
+#, fuzzy
+msgid "My Team - Subagents"
+msgstr "Mój zespół - Moi Agenci"
+
+#: admin/class-salesking-admin.php:2839 admin/class-salesking-admin.php:2897
+#, fuzzy
+msgid "Name"
+msgstr "Nazwa"
+
+#: public/dashboard/messages.php:154
+msgid "New"
+msgstr "Nowy"
+
+#: admin/class-salesking-admin.php:2742
+msgid "New Agents"
+msgstr "Nowi agenci"
+
+#: admin/class-salesking-admin.php:1548 admin/class-salesking-admin.php:1549
+#: admin/class-salesking-admin.php:1552
+#: includes/emails/class-salesking-new-announcement-email.php:13
+#: includes/emails/class-salesking-new-announcement-email.php:19
+#: includes/emails/class-salesking-new-announcement-email.php:20
+#: includes/emails/class-salesking-new-announcement-email.php:45
+#: includes/emails/class-salesking-new-announcement-email.php:46
+msgid "New announcement"
+msgstr "Nowe ogłoszenie"
+
+#: includes/class-salesking.php:417
+#, fuzzy
+msgid "New balance"
+msgstr "New balance"
+
+#: admin/class-salesking-admin.php:662
+msgid "New earning"
+msgstr "Nowe zyski"
+
+#: admin/class-salesking-admin.php:4283
+msgid "New Group"
+msgstr "Nowa grupa"
+
+#: admin/class-salesking-admin.php:1891
+msgid "New group"
+msgstr "Nowa grupa"
+
+#: admin/class-salesking-admin.php:4475
+msgid "New group:"
+msgstr "Nowa grupa :"
+
+#: admin/class-salesking-admin.php:714 admin/class-salesking-admin.php:715
+#: admin/class-salesking-admin.php:718
+#: includes/emails/class-salesking-new-message-email.php:19
+#: includes/emails/class-salesking-new-message-email.php:20
+#: includes/emails/class-salesking-new-message-email.php:45
+#: includes/emails/class-salesking-new-message-email.php:46
+#, fuzzy
+msgid "New message"
+msgstr "Nowa wiadomość"
+
+#: includes/emails/class-salesking-new-message-email.php:13
+msgid "New message (SalesKing)"
+msgstr "Nowe wiadomości (Salesking)"
+
+#: public/dashboard/salesking-dashboard-login.php:290
+msgid "New on our platform?"
+msgstr "Nowy na naszej platformie?"
+
+#: includes/emails/class-salesking-new-payout-email.php:13
+#: includes/emails/class-salesking-new-payout-email.php:19
+#: includes/emails/class-salesking-new-payout-email.php:20
+#: includes/emails/class-salesking-new-payout-email.php:45
+#: includes/emails/class-salesking-new-payout-email.php:46
+#, fuzzy
+msgid "New Payout"
+msgstr "Nowa wypłata"
+
+#: admin/class-salesking-admin.php:4010 admin/class-salesking-admin.php:4348
+#, fuzzy
+msgid "New rule"
+msgstr "Nowa zasada"
+
+#: admin/class-salesking-admin.php:1556
+msgid "No announcements found"
+msgstr "Nie znaleziono ogłoszeń"
+
+#: admin/class-salesking-admin.php:1557
+#, fuzzy
+msgid "No announcements found in trash"
+msgstr "Brak ogłoszeń znalezionych w koszu na śmieci"
+
+#: admin/class-salesking-admin.php:666
+msgid "No earnings found"
+msgstr "Nie znaleziono zarobków"
+
+#: admin/class-salesking-admin.php:667
+#, fuzzy
+msgid "No earnings found in trash"
+msgstr "Brak zarobków znalezionych w koszu na śmieci"
+
+#: admin/class-salesking-admin.php:1895
+msgid "No groups found"
+msgstr "Nie znaleziono grup"
+
+#: admin/class-salesking-admin.php:1896
+#, fuzzy
+msgid "No groups found in trash"
+msgstr "Nie znaleziono grup w koszu na śmieci"
+
+#: admin/class-salesking-admin.php:722
+msgid "No messages found"
+msgstr "Nie znaleziono wiadomości"
+
+#: admin/class-salesking-admin.php:723
+#, fuzzy
+msgid "No messages found in trash"
+msgstr "Brak wiadomości znalezionych w koszu na śmieci"
+
+#: admin/class-salesking-admin.php:3959
+#, fuzzy
+msgid "No payment yet"
+msgstr "Nie ma jeszcze płatności"
+
+#: admin/class-salesking-admin.php:4014 admin/class-salesking-admin.php:4352
+msgid "No rules found"
+msgstr "Nie znaleziono reguł"
+
+#: admin/class-salesking-admin.php:4015 admin/class-salesking-admin.php:4353
+#, fuzzy
+msgid "No rules found in trash"
+msgstr "Nie znaleziono żadnych zasad w koszu na śmieci"
+
+#: admin/class-salesking-admin.php:3818 includes/class-salesking.php:417
+#, fuzzy
+msgid "Note"
+msgstr "Notatka"
+
+#: admin/class-salesking-admin.php:3777 admin/class-salesking-admin.php:3884
+#, fuzzy
+msgid "Note / Details"
+msgstr "Notatka / szczegóły"
+
+#: public/dashboard/payouts.php:73
+msgid "Notes"
+msgstr "Notatki"
+
+#: includes/emails/templates/new-payout-email-template.php:18
+#: includes/emails/templates/plain-new-payout-email-template.php:15
+msgid "Notes: "
+msgstr "notatki :"
+
+#: admin/class-salesking-admin.php:1180
+msgid "Number of agents"
+msgstr "Liczba agentów"
+
+#: admin/class-salesking-admin.php:2665 admin/class-salesking-admin.php:2762
+#: public/dashboard/customers.php:68 public/dashboard/teams.php:45
+msgid "Number of Orders"
+msgstr "Liczba zamówień"
+
+#: includes/class-salesking.php:417
+#, fuzzy
+msgid "Old balance"
+msgstr "Old balance"
+
+#: public/dashboard/orders.php:119
+#, fuzzy
+msgid "On Hold"
+msgstr "On Hold"
+
+#: admin/class-salesking-admin.php:4580
+#, fuzzy
+msgid "Once per order"
+msgstr "Raz na zamówienie/Once per order"
+
+#: admin/class-salesking-admin.php:3194 admin/class-salesking-admin.php:3449
+#: public/dashboard/earnings.php:365 public/dashboard/earnings.php:608
+#: public/dashboard/orders.php:38
+#, fuzzy
+msgid "Order"
+msgstr "Zamówienie"
+
+#: public/dashboard/earnings.php:394 public/dashboard/earnings.php:620
+#: public/dashboard/orders.php:57
+#, fuzzy
+msgid "order"
+msgstr "zamówienie"
+
+#: admin/class-salesking-admin.php:3258 admin/class-salesking-admin.php:3363
+#: admin/class-salesking-admin.php:3515
+#: public/dashboard/dashboard-content.php:513
+#: public/dashboard/dashboard-content.php:639 public/dashboard/earnings.php:476
+#: public/dashboard/earnings.php:686
+msgid "Order Cancelled"
+msgstr "Zamówienie odwołane"
+
+#: admin/class-salesking-admin.php:3264 admin/class-salesking-admin.php:3369
+#: admin/class-salesking-admin.php:3521
+#: public/dashboard/dashboard-content.php:519
+#: public/dashboard/dashboard-content.php:645 public/dashboard/earnings.php:482
+#: public/dashboard/earnings.php:692
+#, fuzzy
+msgid "Order Failed"
+msgstr "Zamówienie nie powiodło się"
+
+#: admin/class-salesking-admin.php:3162
+#, fuzzy
+msgid "Order History"
+msgstr "Historia zamówień"
+
+#: public/dashboard/dashboard-content.php:427
+#: public/dashboard/dashboard-content.php:555
+#, fuzzy
+msgid "Order No."
+msgstr "Numer zamówienia"
+
+#: admin/class-salesking-admin.php:3255 admin/class-salesking-admin.php:3360
+#: admin/class-salesking-admin.php:3512
+#: public/dashboard/dashboard-content.php:510
+#: public/dashboard/dashboard-content.php:636 public/dashboard/earnings.php:473
+#: public/dashboard/earnings.php:683
+msgid "Order Refunded"
+msgstr "Zamówienie zwrócone"
+
+#: public/dashboard/dashboard-content.php:189
+msgid "Order Statistics (last 30 days)"
+msgstr "Statystyki zamówienia (w ciągu ostatnich 30 dni)"
+
+#: public/dashboard/earnings.php:377 public/dashboard/earnings.php:612
+#: public/dashboard/orders.php:43
+msgid "Order Total"
+msgstr "Zamówienie całkowite"
+
+#: public/dashboard/earnings.php:405 public/dashboard/earnings.php:624
+#: public/dashboard/orders.php:62
+msgid "order total"
+msgstr "Zamówienie całkowite"
+
+#: admin/class-salesking-admin.php:3199 admin/class-salesking-admin.php:3453
+msgid "Order Value"
+msgstr "Wartość zamówienia"
+
+#: admin/class-salesking-admin.php:2281 admin/class-salesking-admin.php:2282
+#: admin/class-salesking-admin.php:2718
+#: public/dashboard/dashboard-content.php:230 public/dashboard/orders.php:11
+msgid "Orders"
+msgstr "Zamówienia"
+
+#: public/class-salesking-public.php:2077
+msgid "orders"
+msgstr "Zamówienia"
+
+#: admin/class-salesking-admin.php:3144
+msgid "Orders of"
+msgstr "Zamówienia z"
+
+#: admin/class-salesking-admin.php:4747
+#, fuzzy
+msgid "Orders of Subagents"
+msgstr "Zamówienia Subagentów"
+
+#: admin/class-salesking-admin.php:3442
+#, fuzzy
+msgid "Orders of subagents"
+msgstr "Zamówienia subagentów"
+
+#: admin/class-salesking-admin.php:4738
+msgid "Orders placed by Agent"
+msgstr "Zamówienia złożone przez agenta"
+
+#: admin/class-salesking-admin.php:4743
+msgid "Orders placed by Customer"
+msgstr "Zamówienia złożone przez klienta"
+
+#: admin/class-salesking-admin.php:3817
+#, fuzzy
+msgid "Outstanding (Unpaid) Balance"
+msgstr "Outstanding (Unpaid) Balance"
+
+#: admin/class-salesking-admin.php:3919 admin/class-salesking-admin.php:3985
+#, fuzzy
+msgid "Outstanding Balance"
+msgstr "Kwota do rozliczenia/Outstanding Balance"
+
+#: public/dashboard/earnings.php:176
+msgid "over the last thirty calendar days"
+msgstr "W ciągu ostatnich 30 dni kalendarzowych"
+
+#: admin/class-salesking-settings.php:199
+#, fuzzy
+msgid ""
+"Parent agent commission (agent recruiter) is substracted from the agent "
+"commission."
+msgstr ""
+"Prowizja agenta nadrzędnego (rekrutującego agenta) jest odejmowana od "
+"prowizji agenta."
+
+#: admin/class-salesking-admin.php:1558
+#, fuzzy
+msgid "Parent announcement"
+msgstr "Ogłoszenia Agentów nadrzędnych / Parent announcement"
+
+#: admin/class-salesking-admin.php:668
+#, fuzzy
+msgid "Parent earning"
+msgstr "Zarobki nadrzędnych agentów / Parent earning"
+
+#: admin/class-salesking-admin.php:1897
+#, fuzzy
+msgid "Parent group"
+msgstr "Agenci nadrzędni grupy / Parent group"
+
+#: admin/class-salesking-admin.php:724
+#, fuzzy
+msgid "Parent message"
+msgstr "Wiadomość nadrzędnych agentów / Parent message"
+
+#: admin/class-salesking-admin.php:4016 admin/class-salesking-admin.php:4354
+#, fuzzy
+msgid "Parent rule"
+msgstr "Zasady agentów nadrzędnych / Parent rule"
+
+#: public/dashboard/customers.php:546
+#: public/dashboard/salesking-dashboard-login.php:272
+#: public/dashboard/teams.php:196
+msgid "Password"
+msgstr "hasło"
+
+#: public/dashboard/salesking-dashboard-login.php:243
+msgid "Password is empty"
+msgstr " Hasło jest puste"
+
+#: public/dashboard/salesking-dashboard-login.php:240
+msgid "Password is incorrect"
+msgstr "Hasło jest nieprawidłowe"
+
+#: includes/class-salesking.php:1467
+#, fuzzy, php-format
+msgid "Password: %s"
+msgstr "Hasło: %s"
+
+#: admin/class-salesking-admin.php:3765
+msgid "Payment Amount"
+msgstr "Kwota płatności"
+
+#: admin/class-salesking-admin.php:3771 admin/class-salesking-admin.php:3816
+#: public/dashboard/payouts.php:71
+#, fuzzy
+msgid "Payment Method"
+msgstr "Metoda wypłat"
+
+#: includes/class-salesking-pending-gateway.php:47
+msgid "Payment method description that the customer will see on your website."
+msgstr ""
+"Opis metody płatności, którą klient zobaczy na Twojej stronie internetowej."
+
+#: public/dashboard/payouts.php:41
+#, fuzzy
+msgid "Payout Account"
+msgstr "Konto płatnicze / Payout Account"
+
+#: admin/class-salesking-settings.php:508
+#, fuzzy
+msgid "Payout settings"
+msgstr "Ustawienia wypłat / Payout settings"
+
+#: admin/class-salesking-admin.php:2294 admin/class-salesking-admin.php:2295
+#: admin/class-salesking-settings.php:507
+#: admin/class-salesking-settings.php:624 public/dashboard/payouts.php:12
+#: public/dashboard/templates/sidebar.php:134
+#, fuzzy
+msgid "Payouts"
+msgstr "Wypłaty"
+
+#: admin/class-salesking-admin.php:3613
+#, fuzzy
+msgid "Payouts for"
+msgstr "Wypłaty dla"
+
+#: admin/class-salesking-admin.php:3795
+#, fuzzy
+msgid "Payouts History"
+msgstr "Historia wypłat"
+
+#: public/dashboard/payouts.php:152
+msgid "PayPal"
+msgstr "Paypal"
+
+#: public/dashboard/payouts.php:186
+msgid "PayPal Email Address"
+msgstr "adres e-mail Paypal"
+
+#: admin/class-salesking-admin.php:3649
+msgid "PayPal email address"
+msgstr "adres e-mail Paypal"
+
+#: public/class-salesking-public.php:2075
+#: public/dashboard/dashboard-content.php:205
+#, fuzzy
+msgid "Pending"
+msgstr "Trwające"
+
+#: includes/emails/class-salesking-order-pending-email.php:18
+#: includes/emails/class-salesking-order-pending-email.php:19
+#: includes/emails/class-salesking-order-pending-email.php:20
+#: includes/emails/class-salesking-order-pending-email.php:50
+#: includes/emails/class-salesking-order-pending-email.php:51
+#, fuzzy
+msgid "Pending order"
+msgstr "Oczekujące zamówienie"
+
+#: admin/class-salesking-admin.php:3246 admin/class-salesking-admin.php:3249
+#: admin/class-salesking-admin.php:3351 admin/class-salesking-admin.php:3354
+#: admin/class-salesking-admin.php:3503 admin/class-salesking-admin.php:3506
+#: public/dashboard/dashboard-content.php:501
+#: public/dashboard/dashboard-content.php:504
+#: public/dashboard/dashboard-content.php:627
+#: public/dashboard/dashboard-content.php:630 public/dashboard/earnings.php:464
+#: public/dashboard/earnings.php:467 public/dashboard/earnings.php:674
+#: public/dashboard/earnings.php:677
+#, fuzzy
+msgid "Pending Order Completion"
+msgstr "Oczekujące na zakończenie zamówienia / Pending Order Completion"
+
+#: admin/class-salesking-admin.php:3261 admin/class-salesking-admin.php:3366
+#: admin/class-salesking-admin.php:3518
+#: public/dashboard/dashboard-content.php:516
+#: public/dashboard/dashboard-content.php:642 public/dashboard/earnings.php:479
+#: public/dashboard/earnings.php:689
+#, fuzzy
+msgid "Pending Order Payment"
+msgstr "Płatność za zamówienie oczekujące"
+
+#: includes/class-salesking-pending-gateway.php:14
+#: includes/class-salesking-pending-gateway.php:41
+#: public/dashboard/orders.php:131
+#, fuzzy
+msgid "Pending Payment"
+msgstr "Oczekująca płatność"
+
+#: admin/class-salesking-admin.php:4554
+#, fuzzy
+msgid "Percentage"
+msgstr "Procent"
+
+#: public/dashboard/profile.php:71
+msgid "Personal"
+msgstr "osobiste"
+
+#: public/dashboard/templates/profile-sidebar.php:31
+msgid "Personal Infomation"
+msgstr "Informacje osobiste"
+
+#: public/dashboard/profile.php:15
+msgid "Personal Information"
+msgstr "Informacje osobiste"
+
+#: public/dashboard/customers.php:85 public/dashboard/teams.php:47
+#, fuzzy
+msgid "Phone"
+msgstr "Telefon"
+
+#: public/dashboard/customers.php:358 public/dashboard/teams.php:178
+#, fuzzy
+msgid "Phone No"
+msgstr "Numer telefonu"
+
+#: includes/class-salesking.php:635
+msgid ""
+"Please contact your administrator to have your profile information changed."
+msgstr ""
+"Proszę skontaktować się z administratorem, aby Twoje dane profilowe zostały "
+"zmienione."
+
+#: admin/class-salesking-admin.php:3698 public/dashboard/payouts.php:254
+msgid "Postcode"
+msgstr "Kod pocztowy"
+
+#: public/dashboard/customers.php:352
+#, fuzzy
+msgid "Postcode / ZIP"
+msgstr "Kod pocztowy / ZIP"
+
+#: public/dashboard/cart-sharing.php:118
+msgid "Price"
+msgstr "Ceny"
+
+#: admin/class-salesking-settings.php:479
+#, fuzzy
+msgid "Primary plugin settings"
+msgstr "Podstawowe ustawienia wtyczki"
+
+#: public/class-salesking-public.php:2072
+#, fuzzy
+msgid "Print"
+msgstr "Drukuj"
+
+#: public/class-salesking-public.php:679
+#, fuzzy
+msgid "Private Sales Agent Notes"
+msgstr "Prywatne notatki agenta"
+
+#: public/dashboard/orders.php:116
+msgid "Processing"
+msgstr "Przetwarzanie"
+
+#: public/dashboard/cart-sharing.php:116
+msgid "Product"
+msgstr "Produkty"
+
+#: admin/class-salesking-admin.php:4591 admin/class-salesking-admin.php:4777
+msgid "Product Categories"
+msgstr "Kategoria produktów"
+
+#: public/dashboard/affiliate-links.php:69
+msgid "Product Link Generator"
+msgstr "Generator linków produktu"
+
+#: admin/class-salesking-admin.php:4586
+msgid "Product or Variation ID(s)"
+msgstr "Produkt lub wariant ID(s)"
+
+#: admin/class-salesking-admin.php:4601 admin/class-salesking-admin.php:4792
+msgid "Product Tags"
+msgstr "Tagi produktu"
+
+#: public/dashboard/templates/sidebar.php:143
+msgid "Profile"
+msgstr "Profil"
+
+#: public/dashboard/profile-settings.php:12
+msgid "Profile Settings"
+msgstr "Ustawienia profilu"
+
+#: admin/class-salesking-settings.php:166
+#, fuzzy
+msgid "Profit-based commission calculation (coming soon...)"
+msgstr "Kalkulacja prowizji w oparciu o zysk (wkrótce...)"
+
+#: admin/class-salesking-admin.php:3198 public/dashboard/earnings.php:375
+#: public/dashboard/orders.php:42
+msgid "Purchased"
+msgstr "Zakupione"
+
+#: public/dashboard/earnings.php:404 public/dashboard/orders.php:61
+msgid "purchased"
+msgstr "Zakupione"
+
+#: public/dashboard/cart-sharing.php:119
+msgid "Quantity"
+msgstr "ilość"
+
+#: admin/class-salesking-admin.php:2701
+msgid "Quick Select:"
+msgstr "Szybki wybór:"
+
+#: public/dashboard/announcements.php:69
+#, fuzzy
+msgid "Read"
+msgstr "Przeczytane"
+
+#: public/class-salesking-public.php:2063
+msgid "Ready"
+msgstr "gotowy"
+
+#: public/dashboard/dashboard-content.php:421
+msgid "Recent Earnings"
+msgstr "Ostatnie zarobki"
+
+#: public/dashboard/templates/header-bar.php:24
+msgid "Recent Messages"
+msgstr "Ostatnie wiadomości"
+
+#: public/dashboard/dashboard-content.php:549
+msgid "Recent Orders"
+msgstr "Ostatnie zamówienia"
+
+#: public/dashboard/payouts.php:64
+#, fuzzy
+msgid "Recent Payouts"
+msgstr "Ostatnie wypłaty"
+
+#: public/dashboard/orders.php:125
+#, fuzzy
+msgid "Refunded"
+msgstr "Zwrócono"
+
+#: admin/class-salesking-settings.php:484
+msgid "Registration"
+msgstr "Rejestracja"
+
+#: public/dashboard/affiliate-links.php:36
+#, fuzzy
+msgid "Registration Link"
+msgstr "Link rejestracyjny"
+
+#: admin/class-salesking-settings.php:564
+#, fuzzy
+msgid "Registration Settings"
+msgstr "Ustawienia Rejestracji"
+
+#: admin/class-salesking-settings.php:485
+#, fuzzy
+msgid "Registration settings"
+msgstr "Ustawienia rejestracji"
+
+#: public/dashboard/announcement.php:30
+#, fuzzy
+msgid "Released:"
+msgstr "Uwolnione: / Released:"
+
+#: admin/class-salesking-admin.php:1561
+msgid "Remove announcement image"
+msgstr "Usunąć zdjęcie ogłoszenia"
+
+#: admin/class-salesking-admin.php:671
+#, fuzzy
+msgid "Remove earning image"
+msgstr "Usuń zdjęcie zarobków"
+
+#: admin/class-salesking-admin.php:1900
+msgid "Remove group image"
+msgstr "Usunąć obraz grupy"
+
+#: admin/class-salesking-admin.php:727
+msgid "Remove message image"
+msgstr "Usunąć obraz wiadomości"
+
+#: admin/class-salesking-admin.php:4019 admin/class-salesking-admin.php:4357
+#, fuzzy
+msgid "Remove rule image"
+msgstr "Usunąć obraz reguły"
+
+#: public/dashboard/messages.php:313
+msgid "Reply"
+msgstr "Odpowiedź"
+
+#: admin/class-salesking-admin.php:2305 admin/class-salesking-admin.php:2306
+msgid "Reports"
+msgstr "Raporty"
+
+#: admin/class-salesking-admin.php:4003 admin/class-salesking-admin.php:4341
+msgid "Rule"
+msgstr "reguła"
+
+#: admin/class-salesking-admin.php:4060 admin/class-salesking-admin.php:4398
+#, fuzzy
+msgid "Rule Details"
+msgstr "Szczegóły reguły"
+
+#: admin/class-salesking-admin.php:4017 admin/class-salesking-admin.php:4355
+#, fuzzy
+msgid "Rule image"
+msgstr "Obraz reguły"
+
+#: admin/class-salesking-admin.php:1220 admin/class-salesking-admin.php:4279
+#, fuzzy
+msgid "Rule name"
+msgstr "Nazwa reguły"
+
+#: admin/class-salesking-admin.php:4280
+#, fuzzy
+msgid "Rule type"
+msgstr "Rodzaj reguły"
+
+#: admin/class-salesking-admin.php:4413 admin/class-salesking-admin.php:4543
+msgid "Rule type:"
+msgstr "Rodzaj reguły:"
+
+#: admin/class-salesking-admin.php:4024 admin/class-salesking-admin.php:4362
+#, fuzzy
+msgid "Rules navigation"
+msgstr "Nawigacja reguły"
+
+#: admin/class-salesking-admin.php:2716
+msgid "Sales"
+msgstr "Sprzedaż"
+
+#: admin/class-salesking-admin.php:2051 admin/class-salesking-admin.php:2215
+#: public/dashboard/templates/header-bar.php:191
+msgid "Sales Agent"
+msgstr "Agent sprzedaży"
+
+#: admin/class-salesking-admin.php:340
+#, fuzzy
+msgid "Sales agent managing this order:"
+msgstr "Agent zarządzający tym zamówieniem:"
+
+#: admin/class-salesking-admin.php:771
+#, fuzzy
+msgid "Sales Agents Commissions"
+msgstr "Prowizja Agenta"
+
+#: admin/class-salesking-admin.php:2658
+msgid "Sales Reports"
+msgstr "Raporty sprzedaży"
+
+#: public/class-salesking-public.php:1706
+msgid "Sales Representative ID (optional)"
+msgstr "Identyfikator sprzedaży (opcjonalny)"
+
+#. Plugin Name of the plugin/theme
+#: admin/class-salesking-admin.php:2247 admin/class-salesking-admin.php:2248
+#, fuzzy
+msgid "SalesKing"
+msgstr "SalesKing"
+
+#. Description of the plugin/theme
+#, fuzzy
+msgid ""
+"SalesKing is the ultimate sales team, sales reps & agents management "
+"solution for WooCommerce"
+msgstr ""
+"SalesKing to najlepsze rozwiązanie do zarządzania zespołem sprzedaży, "
+"przedstawicielami handlowymi i agentami dla WooCommerce"
+
+#: admin/class-salesking-admin.php:3889
+msgid "Save Adjustment"
+msgstr "Zachowaj ustawienia"
+
+#: public/dashboard/coupons.php:104
+#, fuzzy
+msgid "Save Coupon"
+msgstr "Zachowaj kupon"
+
+#: public/dashboard/payouts.php:371
+msgid "Save Info"
+msgstr "Zachowaj info"
+
+#: admin/class-salesking-admin.php:3787
+#, fuzzy
+msgid "Save Payment and Notify Agent"
+msgstr "Zapisz płatność i powiadom agenta"
+
+#: admin/class-salesking-settings.php:722
+#: public/dashboard/profile-settings.php:54
+msgid "Save Settings"
+msgstr "Zachowaj ustawienia"
+
+#: public/class-salesking-public.php:2066
+#, fuzzy
+msgid "Search "
+msgstr "Szukaj "
+
+#: admin/class-salesking-admin.php:1555
+#, fuzzy
+msgid "Search announcements"
+msgstr "Szukaj ogłoszeń"
+
+#: public/dashboard/customers.php:26
+#, fuzzy
+msgid "Search customers..."
+msgstr "Szukaj klientów..."
+
+#: admin/class-salesking-admin.php:665
+#, fuzzy
+msgid "Search earnings"
+msgstr "Szukaj zysków"
+
+#: admin/class-salesking-admin.php:1894
+#, fuzzy
+msgid "Search groups"
+msgstr "Szukaj grup"
+
+#: admin/class-salesking-admin.php:721
+#, fuzzy
+msgid "Search messages"
+msgstr "Szukaj wiadomości"
+
+#: public/dashboard/orders.php:26
+#, fuzzy
+msgid "Search orders..."
+msgstr "Szukaj zamówień..."
+
+#: admin/class-salesking-admin.php:4013 admin/class-salesking-admin.php:4351
+#, fuzzy
+msgid "Search rules"
+msgstr "Szukaj zasad"
+
+#: public/dashboard/teams.php:26
+#, fuzzy
+msgid "Search subagents..."
+msgstr "Szukaj subagentów..."
+
+#: public/dashboard/earnings.php:353 public/dashboard/earnings.php:596
+#, fuzzy
+msgid "Search transactions..."
+msgstr "Szukaj transakcji..."
+
+#: public/dashboard/payouts.php:136
+msgid "Select a payment method:"
+msgstr "Wybierz metodę płatności:"
+
+#: admin/class-salesking-admin.php:4579
+msgid "Select categories & tags"
+msgstr "Wybierz kategorie i tagi"
+
+#: admin/class-salesking-settings.php:445
+msgid "Select Image"
+msgstr "Wybierz obraz"
+
+#: admin/class-salesking-admin.php:4498 admin/class-salesking-admin.php:4916
+#, fuzzy
+msgid "Select multiple agent options"
+msgstr "Wybierz wiele opcji agenta / Select multiple agent options"
+
+#: admin/class-salesking-admin.php:4766
+msgid "Select multiple categories & tags"
+msgstr "Wybierz różne kategorie i etykiety"
+
+#: admin/class-salesking-admin.php:4814
+msgid "Select multiple customer options"
+msgstr "Wybierz kilka opcji klienta"
+
+#: admin/class-salesking-admin.php:4461 admin/class-salesking-admin.php:4626
+#: admin/class-salesking-admin.php:4675
+msgid "Select multiple options"
+msgstr "Wybierz kilka opcji"
+
+#: includes/class-salesking-pending-gateway.php:62
+msgid "Select shipping methods"
+msgstr "Wybierz metody wysyłki"
+
+#: public/dashboard/messages.php:325 public/dashboard/messages.php:378
+#, fuzzy
+msgid "Send"
+msgstr "Wyślij"
+
+#: admin/class-salesking-admin.php:1340
+msgid "Send message"
+msgstr "Wyślij wiadomość"
+
+#: includes/emails/templates/new-message-email-template.php:15
+msgid "Sender: "
+msgstr "Wysyłanie :"
+
+#: admin/class-salesking-settings.php:675
+#, fuzzy
+msgid "Set accounts"
+msgstr "Ustaw konta"
+
+#: admin/class-salesking-settings.php:662
+#, fuzzy
+msgid "Set accounts as subagents of an agent"
+msgstr "Ustaw konta jako subagentów agenta"
+
+#: admin/class-salesking-settings.php:707
+#, fuzzy
+msgid "Set agent"
+msgstr "Ustaw agenta"
+
+#: admin/class-salesking-settings.php:683
+#, fuzzy
+msgid "Set an agent for all customers:"
+msgstr "Ustaw agenta dla wszystkich klientów:"
+
+#: admin/class-salesking-admin.php:1560
+msgid "Set announcement image"
+msgstr "Ustaw zdjęcie ogłoszenia"
+
+#: admin/class-salesking-admin.php:670
+#, fuzzy
+msgid "Set earning image"
+msgstr "Ustaw zdjęcie wypłat"
+
+#: admin/class-salesking-admin.php:1899
+#, fuzzy
+msgid "Set group image"
+msgstr "Ustaw zdjęcie grupy"
+
+#: admin/class-salesking-admin.php:726
+#, fuzzy
+msgid "Set message image"
+msgstr "Ustaw zdjęcie wiadomości"
+
+#: public/dashboard/payouts.php:54
+#, fuzzy
+msgid "Set payout account"
+msgstr "Ustaw sposób wypłat"
+
+#: public/dashboard/payouts.php:129
+#, fuzzy
+msgid "Set Payout Method"
+msgstr "Ustaw metodę wypłat"
+
+#: admin/class-salesking-admin.php:4018 admin/class-salesking-admin.php:4356
+#, fuzzy
+msgid "Set rule image"
+msgstr "Ustaw zdjęcie zasady"
+
+#: admin/class-salesking-admin.php:5253
+msgid "Set up group rules (optional)"
+msgstr "Ustawienie zasad grupowych (opcjonalne)"
+
+#: admin/class-salesking-settings.php:655
+msgid "Set users as subagents of an agent:"
+msgstr "Ustaw użytkowników jako Subagentów agenta:"
+
+#: admin/class-salesking-admin.php:2330 admin/class-salesking-admin.php:2331
+#: admin/class-salesking-admin.php:2795
+#: public/dashboard/templates/profile-sidebar.php:32
+msgid "Settings"
+msgstr "Ustawienia"
+
+#: public/dashboard/cart-sharing.php:29
+#, fuzzy
+msgid "Share Links"
+msgstr "Dzielenie linkami"
+
+#: public/dashboard/affiliate-links.php:15
+#, fuzzy
+msgid ""
+"Share your affiliate links with potential customers, and earn a commission "
+"when they are used!"
+msgstr ""
+"Podziel się linkami partnerskimi z potencjalnymi klientami i zarabiaj "
+"prowizję, gdy są one wykorzystywane!"
+
+#: public/dashboard/cart-sharing.php:36
+#, fuzzy
+msgid "Shareable Cart Link"
+msgstr "Udostępniany link do koszyka"
+
+#: public/dashboard/messages.php:120 public/dashboard/messages.php:359
+#: public/dashboard/messages.php:360
+#: public/dashboard/templates/header-bar.php:91
+msgid "Shop"
+msgstr "Sklep"
+
+#: public/dashboard/customers.php:276
+msgid "Shop as Customer"
+msgstr "Sprzedaż jako klient"
+
+#: public/dashboard/affiliate-links.php:52
+msgid "Shopping Link"
+msgstr "Link zakupowy"
+
+#: public/dashboard/salesking-dashboard-login.php:286
+#, fuzzy
+msgid "Sign in"
+msgstr "Zaloguj"
+
+#: public/dashboard/templates/header-bar.php:216
+#, fuzzy
+msgid "Sign out"
+msgstr "Wyloguj"
+
+#: public/dashboard/salesking-dashboard-login.php:256
+#, fuzzy
+msgid "Sign-In"
+msgstr "Zaloguj"
+
+#: public/dashboard/earnings.php:100
+msgid "since the start of the current month"
+msgstr "od początku bieżącego miesiąca"
+
+#: public/dashboard/cart-sharing.php:117
+#, fuzzy
+msgid "SKU"
+msgstr "SKU"
+
+#: includes/class-salesking.php:655
+msgid "Sorry, you are not allowed to access this page."
+msgstr "Przepraszam, nie masz dostępu do tej strony."
+
+#: admin/class-salesking-admin.php:3694 public/dashboard/payouts.php:244
+msgid "State"
+msgstr "Państwo"
+
+#: admin/class-salesking-admin.php:3196 admin/class-salesking-admin.php:3451
+#: public/dashboard/announcements.php:43
+#: public/dashboard/dashboard-content.php:437
+#: public/dashboard/dashboard-content.php:565 public/dashboard/orders.php:40
+msgid "Status"
+msgstr "Status"
+
+#: public/dashboard/orders.php:59
+msgid "status"
+msgstr "Status"
+
+#: public/dashboard/dashboard-content.php:224
+#, fuzzy
+msgid "Store Statistics (last 30 days)"
+msgstr "Statystyki sklepu (ostatnie 30 dni)"
+
+#: public/dashboard/customers.php:340
+#, fuzzy
+msgid "Street address"
+msgstr "Adres ulicy"
+
+#: admin/class-salesking-admin.php:2861 admin/class-salesking-admin.php:3452
+#: public/dashboard/earnings.php:611
+msgid "Subagent"
+msgstr "Subagent"
+
+#: public/dashboard/earnings.php:623
+msgid "subagent"
+msgstr "Subagent"
+
+#: public/dashboard/teams.php:158
+msgid "Subagent Info"
+msgstr "Informacje Subagent"
+
+#: admin/class-salesking-admin.php:2842 admin/class-salesking-admin.php:2900
+#, fuzzy
+msgid "Subagent of"
+msgstr "Subagent przynależy do:"
+
+#: public/dashboard/announcements.php:37 public/dashboard/messages.php:370
+#, fuzzy
+msgid "Subject"
+msgstr "Temat"
+
+#: admin/class-salesking-settings.php:154
+#, fuzzy
+msgid "Substract parent agent commissions"
+msgstr "Odejmij prowizje agenta nadrzędnego"
+
+#: public/class-salesking-public.php:1490
+#: public/dashboard/salesking-dashboard-login.php:136
+#, fuzzy
+msgid "Switch to Agent"
+msgstr "Switch to Agent"
+
+#: admin/class-salesking-admin.php:2317 admin/class-salesking-admin.php:2318
+msgid "Teams"
+msgstr "Zespół"
+
+#: public/class-salesking-public.php:2071
+msgid ""
+"The agent account could not be created. It may be because the username or "
+"email already exists. Here are the error details: "
+msgstr ""
+"Konto agenta nie mogło być utworzone. Może dlatego, że nazwa użytkownika lub "
+"e-mail już istnieje. Oto szczegóły błędu:"
+
+#: public/class-salesking-public.php:2070
+msgid ""
+"The agent account has been created. An email has been sent to the agent with "
+"account details."
+msgstr ""
+"Konto agenta zostało utworzone. Do agenta został wysłany e-mail z "
+"szczegółami konta."
+
+#: public/dashboard/coupons.php:93
+#, fuzzy
+msgid "The coupon will expire at 00:00 of this date."
+msgstr "Kupon kończy się o godzinie 00:00 tej daty"
+
+#: public/class-salesking-public.php:2069
+msgid ""
+"The customer account could not be created. It may be because the username or "
+"email already exists. Here are the error details:"
+msgstr ""
+"Konto klienta nie mogło zostać utworzone. Może dlatego, że nazwa użytkownika "
+"lub e-mail już istnieje. Oto szczegóły błędu:"
+
+#: public/class-salesking-public.php:2068
+msgid ""
+"The customer account has been created. An email has been sent to the "
+"customer with account details."
+msgstr ""
+"Konto klienta zostało utworzone. Klient otrzymał wiadomość e-mail z "
+"szczegółami konta."
+
+#: includes/class-salesking-pending-gateway.php:48
+msgid ""
+"The customer will receive an email with order details and a payment link."
+msgstr ""
+"Klient otrzymuje wiadomość e-mail z szczegółami zamówienia i linkem do "
+"płatności."
+
+#: public/class-salesking-public.php:696
+msgid "The following note was added by the sales agent:"
+msgstr "Następujące notatki zostały dodane przez agenta sprzedaży:"
+
+#: admin/class-salesking-admin.php:3639
+#, fuzzy
+msgid "The user has not configured a payout method yet"
+msgstr "Użytkownik nie ustawił jeszcze metody wypłaty"
+
+#: admin/class-salesking-admin.php:2020
+msgid "There are no agents in this group"
+msgstr "W tej grupie nie ma żadnych agentów"
+
+#: public/class-salesking-public.php:681
+#, fuzzy
+msgid "These notes are visible to the shop, but not visible to the customer."
+msgstr "Te notatki są widoczne dla sklepu, ale nie są widoczne dla klienta."
+
+#: admin/class-salesking-admin.php:1990
+#, fuzzy
+msgid ""
+"These values can also be set for each agent individually in their profile "
+"panel. Agent values have priority over group values."
+msgstr ""
+"Wartości te można również ustawić indywidualnie dla każdego agenta w jego "
+"panelu profilu. Wartości agenta mają pierwszeństwo przed wartościami "
+"grupowymi."
+
+#: includes/emails/class-salesking-new-announcement-email.php:107
+#: includes/emails/class-salesking-new-message-email.php:114
+#: includes/emails/class-salesking-new-payout-email.php:102
+#, fuzzy
+msgid ""
+"This controls the email subject line. Leave blank to use the default subject:"
+" "
+msgstr ""
+"Kontroluje temat wiadomości e-mail. Pozostaw puste, aby użyć tematu "
+"domyślnego:"
+
+#: includes/emails/class-salesking-new-announcement-email.php:114
+#: includes/emails/class-salesking-new-message-email.php:121
+#: includes/emails/class-salesking-new-payout-email.php:109
+#, fuzzy
+msgid ""
+"This controls the main heading contained within the email notification. "
+"Leave blank to use the default heading: "
+msgstr ""
+"Kontroluje główny nagłówek zawarty w powiadomieniu e-mail. Pozostaw puste, "
+"aby użyć domyślnego nagłówka:"
+
+#: includes/class-salesking-pending-gateway.php:40
+#, fuzzy
+msgid "This controls the title which the user sees during checkout."
+msgstr ""
+"Kontroluje tytuł, który użytkownik widzi podczas realizacji transakcji."
+
+#: admin/class-salesking-admin.php:341
+#, fuzzy
+msgid ""
+"This does NOT assign commission. This only controls which agent can view / "
+"edit / handle this order. For commissions, scroll down to the \"Sales Agent "
+"Commissions\" box."
+msgstr ""
+"NIE powoduje to przypisania prowizji. Kontroluje to tylko, który agent może "
+"przeglądać/edytować/obsługiwać to zamówienie. Aby zobaczyć prowizje, przewiń "
+"w dół do pola „Prowizje agenta sprzedaży”."
+
+#: includes/emails/class-salesking-new-announcement-email.php:16
+#, fuzzy
+msgid "This email is sent when a new announcement is released"
+msgstr "Ten e-mail jest wysyłany po opublikowaniu nowego ogłoszenia"
+
+#: includes/emails/class-salesking-new-message-email.php:16
+msgid "This email is sent when a new message is sent"
+msgstr "Ten e-mail zostanie wysłany, gdy zostanie wysłana nowa wiadomość"
+
+#: includes/emails/class-salesking-new-payout-email.php:16
+#, fuzzy
+msgid "This email is sent when a payout is saved"
+msgstr "Ten e-mail jest wysłany, gdy wypłata jest zapisana"
+
+#: public/dashboard/coupons.php:75
+#, fuzzy
+msgid ""
+"This field allows you to set the maximum spend (subtotal) allowed to use the "
+"coupon."
+msgstr ""
+"To pole pozwala ustawić maksymalne wydatki (sumę częściową), które pozwalają "
+"na wykorzystanie kuponu."
+
+#: public/dashboard/coupons.php:65
+msgid ""
+"This field allows you to set the minimum spend (subtotal) allowed to use the "
+"coupon."
+msgstr ""
+"Pole to pozwala ustawić minimalne wydatki (subtotal) dozwolone do "
+"korzystania z kuponu."
+
+#: admin/class-salesking-settings.php:349
+#, fuzzy
+msgid "This gives users the option to enter an agent ID at registration."
+msgstr ""
+"Dzięki temu użytkownicy mają możliwość wprowadzenia identyfikatora agenta "
+"podczas rejestracji."
+
+#: includes/emails/class-salesking-order-pending-email.php:21
+#, fuzzy
+msgid ""
+"This is an order notification sent to customers after a sales agent places "
+"the order."
+msgstr ""
+"Jest to powiadomienie o zamówieniu wysyłane do klientów po złożeniu "
+"zamówienia przez agenta sprzedaży."
+
+#: public/dashboard/payouts.php:35
+#, fuzzy
+msgid ""
+"This is the amount you currently have in earnings, available for your next "
+"payout."
+msgstr ""
+"Jest to kwota, którą aktualnie posiadasz w zarobkach, dostępna do następnej "
+"wypłaty."
+
+#: admin/class-salesking-admin.php:1970
+#, fuzzy
+msgid ""
+"This is the maximum discount (wiggle room) sales agents can offer to end "
+"customers."
+msgstr ""
+"Jest to maksymalna zniżka, jaką agenci sprzedaży mogą zaoferować klientom "
+"końcowym. / This is the maximum discount (wiggle room) sales agents can "
+"offer to end customers."
+
+#: admin/class-salesking-admin.php:2144
+#, fuzzy
+msgid ""
+"This is the maximum discount (wiggle room) this particular agent can offer "
+"to end customers."
+msgstr ""
+"Jest to maksymalna zniżka (swoboda manewru), jaką ten konkretny agent może "
+"zaoferować klientom końcowym."
+
+#: admin/class-salesking-admin.php:4367
+#, fuzzy
+msgid "This is where you can create commission rules"
+msgstr "Tutaj możesz stworzyć zasady prowizji"
+
+#: admin/class-salesking-admin.php:4029
+#, fuzzy
+msgid "This is where you can create group rules"
+msgstr "Tutaj możesz utworzyć reguły grupowe"
+
+#: admin/class-salesking-admin.php:1910
+msgid "This is where you can create new agent groups"
+msgstr "Tutaj można utworzyć nowe grupy agentów"
+
+#: admin/class-salesking-admin.php:1571
+msgid "This is where you can create new announcements"
+msgstr "Tutaj możesz tworzyć nowe ogłoszenia"
+
+#: admin/class-salesking-admin.php:737
+msgid "This is where you can send new messages"
+msgstr "Tutaj możesz wysłać nowe wiadomości"
+
+#: public/dashboard/affiliate-links.php:53
+#, fuzzy
+msgid "This link contains a tracking cookie and links orders to you."
+msgstr ""
+"Ten link zawiera śledzący plik cookie i łączy zamówienia z Tobą. This link "
+"contains a tracking cookie and links orders to you.\n"
+
+#: admin/class-salesking-admin.php:2702
+msgid "This Month"
+msgstr "W tym miesiącu"
+
+#: admin/class-salesking-admin.php:5418
+#, fuzzy
+msgid ""
+"This panel allows you to manage payouts for each of your agents, and keep "
+"track of payments sent, payments due, bonuses, etc."
+msgstr ""
+"Panel ten umożliwia zarządzanie wypłatami dla każdego z Twoich agentów, "
+"śledzenie wysłanych płatności, należnych płatności, premii itp."
+
+#: admin/class-salesking-admin.php:5435
+msgid "This panel allows you to view, and keep track of your agents' earnings"
+msgstr "Ten panel umożliwia wyświetlanie i śledzenie zarobków Twoich agentów"
+
+#: admin/class-salesking-admin.php:2046
+msgid "This user is a"
+msgstr "Użytkownik ten jest"
+
+#: admin/class-salesking-admin.php:2704
+msgid "This Year"
+msgstr "W tym roku"
+
+#: admin/class-salesking-admin.php:1151
+#, fuzzy
+msgid "Thread Details"
+msgstr "Szczegóły wątku"
+
+#: admin/class-salesking-admin.php:5368
+#, fuzzy
+msgid ""
+"Through group rules, you can automatically change an agent's group when they "
+"hit a particular threshold such as an earnings numbers. For example, this "
+"allows you to promote agents across ranks."
+msgstr ""
+"Dzięki regułom grupowym możesz automatycznie zmieniać grupę agenta, gdy "
+"osiągnie on określony próg, np. kwotę zarobków. Umożliwia to na przykład "
+"awansowanie agentów na różne stopnie."
+
+#: includes/class-salesking-pending-gateway.php:38
+msgid "Title"
+msgstr "Tytuł"
+
+#: public/dashboard/cart-sharing.php:90
+#, fuzzy
+msgid "To create a personalized sharable cart, "
+msgstr "Aby utworzyć spersonalizowany, udostępniany koszyk,"
+
+#: public/dashboard/cart-sharing.php:16
+#, fuzzy
+msgid ""
+"To place orders on behalf of customers directly, and only send them the "
+"payment link, go to "
+msgstr ""
+"Aby składać zamówienia bezpośrednio w imieniu klientów i wysyłać im jedynie "
+"link do płatności, przejdź do "
+
+#: includes/class-salesking.php:1479
+msgid "To set a new password, visit the following address:"
+msgstr "Aby ustawić nowe hasło, odwiedź następujący adres:"
+
+#: admin/class-salesking-admin.php:2696
+msgid "To:"
+msgstr "do :"
+
+#: admin/class-salesking-settings.php:516
+#: admin/class-salesking-settings.php:644
+msgid "Tools"
+msgstr "Narzędzia"
+
+#: admin/class-salesking-settings.php:517
+msgid "Tools & User Management"
+msgstr "Narzędzia i zarządzanie użytkownikami"
+
+#: admin/class-salesking-settings.php:646
+#, fuzzy
+msgid "Tools to manage agents and accounts"
+msgstr "Narzędzia do zarządzania agentami i kontami"
+
+#: admin/class-salesking-admin.php:2928 admin/class-salesking-admin.php:3092
+#, fuzzy
+msgid "Total Agent Commissions"
+msgstr "Całkowita prowizja agentów"
+
+#: admin/class-salesking-admin.php:4301 admin/class-salesking-admin.php:4441
+msgid "Total earnings reached"
+msgstr "Całkowity dochód osiągnięty"
+
+#: admin/class-salesking-admin.php:4303
+msgid "Total order value"
+msgstr "Całkowita wartość zamówienia"
+
+#: admin/class-salesking-admin.php:2924 admin/class-salesking-admin.php:3088
+msgid "Total Orders Value"
+msgstr "Całkowita wartość zamówienia"
+
+#: admin/class-salesking-admin.php:4442
+msgid "Total orders value"
+msgstr "Całkowita wartość zamówienia"
+
+#: admin/class-salesking-admin.php:2664 admin/class-salesking-admin.php:2751
+msgid "Total Sales"
+msgstr "Łączna sprzedaż"
+
+#: admin/class-salesking-admin.php:2659
+msgid "Total Sales Value"
+msgstr "Całkowita wartość sprzedaży"
+
+#: public/dashboard/customers.php:60
+#, fuzzy
+msgid "Total Spend"
+msgstr "Całkowite wydatki"
+
+#: public/dashboard/customers.php:346
+#, fuzzy
+msgid "Town / City"
+msgstr "Miasto"
+
+#: admin/class-salesking-settings.php:669
+#, fuzzy
+msgid "Turn subagents into regular agent accounts:"
+msgstr ""
+"Zmień Subagentów na regularne konta agenta: / Turn subagents into regular "
+"agent accounts:"
+
+#: public/dashboard/announcements.php:65
+#, fuzzy
+msgid "Unread"
+msgstr "Nie przeczytane"
+
+#: public/dashboard/templates/header-bar.php:141
+#, fuzzy
+msgid "Unread Announcements"
+msgstr "Nieprzeczytane ogłoszenia"
+
+#: admin/class-salesking-admin.php:4749
+#, fuzzy
+msgid "Until subagent earnings reach x total"
+msgstr "Dopóki zarobki subagenta nie osiągną sumy x"
+
+#: public/dashboard/profile.php:68 public/dashboard/profile.php:105
+msgid "Update Profile"
+msgstr "Aktualizacja profilu"
+
+#: admin/class-salesking-admin.php:1564
+#, fuzzy
+msgid "Uploaded to this announcement"
+msgstr "Przesłano do tego ogłoszenia"
+
+#: admin/class-salesking-admin.php:674
+#, fuzzy
+msgid "Uploaded to this earning"
+msgstr "Przesłano do tego zarobku"
+
+#: admin/class-salesking-admin.php:1903
+#, fuzzy
+msgid "Uploaded to this group"
+msgstr "Przesłano do tej grupy"
+
+#: admin/class-salesking-admin.php:730
+#, fuzzy
+msgid "Uploaded to this message"
+msgstr "Przesłano do tej wiadomości"
+
+#: admin/class-salesking-admin.php:4022 admin/class-salesking-admin.php:4360
+#, fuzzy
+msgid "Uploaded to this rule"
+msgstr "Przesłano do tej reguły"
+
+#: public/dashboard/coupons.php:44
+#, fuzzy
+msgid "Usage Limit"
+msgstr "Limit wykorzystania"
+
+#: admin/class-salesking-admin.php:1562
+msgid "Use as announcement image"
+msgstr "Użyj jako obraz ogłoszenia"
+
+#: admin/class-salesking-admin.php:672
+#, fuzzy
+msgid "Use as earning image"
+msgstr "Użyj jako obraz zysków"
+
+#: admin/class-salesking-admin.php:1901
+#, fuzzy
+msgid "Use as group image"
+msgstr "Ustaw jako obraz grupy"
+
+#: admin/class-salesking-admin.php:728
+#, fuzzy
+msgid "Use as message image"
+msgstr "Ustaw jako obraz wiadomości"
+
+#: admin/class-salesking-admin.php:4020 admin/class-salesking-admin.php:4358
+#, fuzzy
+msgid "Use as rule image"
+msgstr "Ustaw jako obraz reguły"
+
+#: public/dashboard/profile.php:28
+msgid "User Info"
+msgstr "Informacje użytkownika"
+
+#: admin/class-salesking-admin.php:3601
+msgid "User Payouts"
+msgstr "Wypłaty użytkownika"
+
+#: public/dashboard/customers.php:534 public/dashboard/teams.php:184
+msgid "Username"
+msgstr "Nazwa użytkownika"
+
+#: public/dashboard/salesking-dashboard-login.php:237
+msgid "Username is empty"
+msgstr "Nazwa użytkownika jest pusta"
+
+#: public/dashboard/salesking-dashboard-login.php:234
+#, fuzzy
+msgid "Username is invalid"
+msgstr "Nazwa użytkownika jest niepoprawna"
+
+#: includes/class-salesking.php:1466
+#, fuzzy, php-format
+msgid "Username: %s"
+msgstr "Nazwa użytkownika: %s"
+
+#: admin/class-salesking-admin.php:4694 admin/class-salesking-admin.php:4880
+msgid "Users (individual)"
+msgstr "Użytkownicy ( pojedynczo )"
+
+#: admin/class-salesking-admin.php:1790
+msgid "Users: "
+msgstr "Użytkownicy :"
+
+#: public/dashboard/coupons.php:164
+#, fuzzy
+msgid "Uses Left"
+msgstr "Uses left"
+
+#: public/dashboard/coupons.php:211
+#, fuzzy
+msgid "uses left"
+msgstr "uses left"
+
+#: admin/class-salesking-admin.php:4282
+msgid "Value"
+msgstr "Wartość"
+
+#: public/dashboard/templates/header-bar.php:125
+#: public/dashboard/templates/header-bar.php:177
+msgid "View All"
+msgstr "Zobacz wszystkie"
+
+#: public/dashboard/payouts.php:14
+#, fuzzy
+msgid "View and keep track of your payouts."
+msgstr "Sprawdź i śledź swoje wypłaty."
+
+#: admin/class-salesking-admin.php:1553
+msgid "View announcement"
+msgstr "Zobacz ogłoszenie"
+
+#: admin/class-salesking-admin.php:1554
+msgid "View announcements"
+msgstr "Zobacz ogłoszenia"
+
+#: admin/class-salesking-admin.php:663
+msgid "View earning"
+msgstr "Zobacz zarobki"
+
+#: admin/class-salesking-admin.php:2355 admin/class-salesking-admin.php:2356
+#: admin/class-salesking-admin.php:3041
+msgid "View Earnings"
+msgstr "Zobacz zarobki"
+
+#: admin/class-salesking-admin.php:664
+#: public/dashboard/dashboard-content.php:39
+msgid "View earnings"
+msgstr "Zobacz zarobki"
+
+#: admin/class-salesking-admin.php:1892
+msgid "View group"
+msgstr "Widok grupy"
+
+#: admin/class-salesking-admin.php:1893
+msgid "View groups"
+msgstr "Zobacz grupy"
+
+#: admin/class-salesking-admin.php:719
+msgid "View message"
+msgstr "Zobacz wiadomość"
+
+#: admin/class-salesking-admin.php:720
+msgid "View messages"
+msgstr "Zobacz wiadomości"
+
+#: admin/class-salesking-admin.php:3074
+msgid "View Orders"
+msgstr "Zobacz zamówienia"
+
+#: admin/class-salesking-admin.php:2344 admin/class-salesking-admin.php:2345
+#: admin/class-salesking-admin.php:3974
+#, fuzzy
+msgid "View Payouts"
+msgstr "Zobacz Wypłaty"
+
+#: admin/class-salesking-admin.php:4011 admin/class-salesking-admin.php:4349
+#, fuzzy
+msgid "View rule"
+msgstr "Zobacz zasadę"
+
+#: admin/class-salesking-admin.php:4012 admin/class-salesking-admin.php:4350
+msgid "View rules"
+msgstr "Zobacz zasady"
+
+#: admin/class-salesking-admin.php:1757
+msgid "Visible to:"
+msgstr "Widoczne dla:"
+
+#: admin/class-salesking-admin.php:5317
+msgid ""
+"Warning: The plugin \"SalesKing\" requires WooCommerce to be installed and "
+"activated."
+msgstr ""
+"Ostrzeżenie: Plugin \"Salesking\" wymaga instalacji i aktywacji Woocommerce."
+
+#. Author of the plugin/theme
+#, fuzzy
+msgid "WebWizards"
+msgstr "WebWizards"
+
+#. Author URI of the plugin/theme
+#, fuzzy
+msgid "webwizards.dev"
+msgstr "webwizards.dev"
+
+#: public/dashboard/dashboard-content.php:13
+#, fuzzy
+msgid "Welcome to your dashboard"
+msgstr "Witamy w Twoim Pulpicie Agenta"
+
+#: admin/class-salesking-settings.php:218
+#, fuzzy
+msgid ""
+"When agents order on behalf of customers, they can edit prices to increase "
+"price, and win the difference as profit."
+msgstr ""
+"Kiedy agenci zamawiają w imieniu klientów, mogą edytować ceny, aby zwiększyć "
+"cenę i zebrać różnicę jako zysk."
+
+#: admin/class-salesking-settings.php:236
+msgid ""
+"When agents order on behalf of customers, they can edit prices to offer "
+"discounts."
+msgstr ""
+"Gdy agenci zamawiają w imieniu klientów, mogą edytować ceny, aby zaoferować "
+"zniżki."
+
+#. Plugin URI of the plugin/theme
+#, fuzzy
+msgid "woocommerce-b2b-plugin.com"
+msgstr "woocommerce-b2b-plugin.com"
+
+#: admin/class-salesking-admin.php:4758
+#, fuzzy
+msgid "X:"
+msgstr "X:"
+
+#: admin/class-salesking-admin.php:1529
+#, fuzzy
+msgid "Yesterday at "
+msgstr "Wczoraj o"
+
+#: public/class-salesking-public.php:1484
+#: public/dashboard/salesking-dashboard-login.php:130
+#, fuzzy
+msgid "You are shopping as "
+msgstr "Kupujesz jako "
+
+#: public/dashboard/coupons.php:234
+msgid "You don't have any coupons yet. Create your first coupon."
+msgstr "Na razie nie masz kuponów. Stwórz swój pierwszy kupon."
+
+#: public/dashboard/announcements.php:11
+#, fuzzy
+msgid "You have "
+msgstr "Ty masz "
+
+#: includes/emails/templates/new-announcement-email-template.php:13
+#: includes/emails/templates/plain-new-announcement-email-template.php:9
+msgid "You have a new announcement."
+msgstr "Masz nowe ogłoszenie."
+
+#: includes/emails/templates/new-message-email-template.php:13
+#: includes/emails/templates/plain-new-message-email-template.php:9
+msgid "You have a new message."
+msgstr "Masz nową wiadomość."
+
+#. translators: Login details notification email subject. %s: Site title.
+#: includes/class-salesking.php:1491
+#, fuzzy, php-format
+msgid "Your %s sales agent account details"
+msgstr "Dane Twojego konta agenta sprzedaży %s"
+
+#: public/dashboard/affiliate-links.php:89
+#, fuzzy
+msgid "Your Agent ID:"
+msgstr "Twój Agent ID:"
+
+#: public/dashboard/profile.php:17
+msgid "Your basic profile information."
+msgstr "Podstawowe informacje o profilu."
+
+#: public/dashboard/salesking-dashboard-login.php:179
+msgid ""
+"Your current account is not a sales agent. To login as a sales agent, please "
+"logout first. "
+msgstr ""
+"Ten panel dostępny jest jedynie dla naszych ukochanych Agentów. Aby "
+"zalogować się jako Agent  musisz się najpierw wylogować :)"
+
+#: admin/class-salesking-settings.php:444
+#, fuzzy
+msgid "Your Custom Logo"
+msgstr "Twoje niestandardowe logo"
+
+#: public/dashboard/earnings.php:341
+msgid "Your direct earnings"
+msgstr "Twoje bezpośrednie zyski"
+
+#: public/dashboard/earnings.php:378 public/dashboard/earnings.php:613
+msgid "Your Earnings"
+msgstr "Twoje zyski"
+
+#: public/dashboard/earnings.php:406 public/dashboard/earnings.php:625
+msgid "your earnings"
+msgstr "Twoje zyski"
+
+#: public/dashboard/affiliate-links.php:27
+#, fuzzy
+msgid "Your Links"
+msgstr "Twoje Linki"
+
+#: includes/emails/templates/new-payout-email-template.php:12
+#: includes/emails/templates/plain-new-payout-email-template.php:9
+#, fuzzy
+msgid "Your payout has been processed! Happy Spending!"
+msgstr ""
+"Twoja wypłata została przetworzona! Życzymy szczęśliwego wydawania pieniędzy "
+":)"
+
+#: includes/class-salesking.php:1464
+#, fuzzy, php-format
+msgid ""
+"Your sales agent account for %s has been created! Here are your login "
+"details:"
+msgstr ""
+"Twoje konto agenta sprzedaży dla %s zostało utworzone! Oto Twoje dane do "
+"logowania:"
+
+#: public/dashboard/teams.php:44
+#, fuzzy
+msgid "Your Total Commission"
+msgstr "Twoja całkowita prowizja"
+
+#: admin/class-salesking-admin.php:3133 admin/class-salesking-admin.php:3606
+msgid "←  Go Back"
+msgstr "← Wróć"

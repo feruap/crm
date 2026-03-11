@@ -1,0 +1,14 @@
+[dotenv@17.3.1] injecting env (26) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.3.1] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Asking AI...
+------------------- AI RESPONSE -----------------------
+¡Hola! Qué gusto saludarte, colega.
+
+Para tu especialidad tengo dos opciones que te van a interesar:
+
+1. **Prueba Rápida Cardiac Combo Advanced** ($975) - Es un panel múltiple que te permite evaluar varios marcadores cardiacos en una sola prueba, ideal para diagnóstico rápido en consultorio.
+
+2. **Prueba rápida de péptidos natriuréticos (NT-proBNP)** ($755) - Excelente para evaluación de insuficiencia cardíaca y monitoreo de pacientes.
+
+¿Las necesitas para tu consultorio privado o para un hospital? Y dime, ¿qué volumen de pacientes manejas aproximadamente? Con eso te puedo sugerir la mejor opción y cotizarte lo que necesites.
+-------------------------------------------------------

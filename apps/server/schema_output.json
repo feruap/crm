@@ -1,0 +1,117 @@
+[
+  {
+    "table_name": "assignment_rules",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "channel_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "team_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "strategy",
+    "data_type": "text"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "is_active",
+    "data_type": "boolean"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "agent_ids",
+    "data_type": "ARRAY"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "current_index",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "assignment_rules",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "provider",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "provider_config",
+    "data_type": "jsonb"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "webhook_secret",
+    "data_type": "text"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "is_active",
+    "data_type": "boolean"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "sync_comments",
+    "data_type": "boolean"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "channels",
+    "column_name": "subtype",
+    "data_type": "text"
+  },
+  {
+    "table_name": "teams",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "teams",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "teams",
+    "column_name": "description",
+    "data_type": "text"
+  },
+  {
+    "table_name": "teams",
+    "column_name": "color",
+    "data_type": "text"
+  },
+  {
+    "table_name": "teams",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  }
+]
