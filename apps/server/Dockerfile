@@ -21,6 +21,7 @@ WORKDIR /app
 # Copy built artifacts and necessary files
 COPY --from=builder /app/apps/server/dist ./dist
 COPY --from=builder /app/apps/server/package*.json ./
+COPY --from=builder /app/packages ./packages
 # Install only production dependencies
 RUN npm install --omit=dev
 

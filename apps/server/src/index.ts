@@ -1,6 +1,8 @@
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 
@@ -196,8 +198,28 @@ cron.schedule('0 * * * *', async () => {
 // ─── Auto-Migration (Fase 7) ─────────────────────────────────────────────────
 async function runMigrations() {
     try {
-        // Check if migration already applied by looking for one of the new tables
-        // Always ensure settings table exists (added in 7.5)
+        // 1. Check for initial schema
+        const hasAgents = await db.query(`
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'agents'
+            ) AS exists
+        `);
+
+        if (!hasAgents.rows[0].exists) {
+            console.log('📦 Initializing base schema from schema.sql...');
+            const schemaPath = path.join(__dirname, '../packages/db/schema.sql');
+            if (fs.existsSync(schemaPath)) {
+                const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+                // pg handle multiple statements if they are in one string
+                await db.query(schemaSql);
+                console.log('✅ Base schema initialized successfully.');
+            } else {
+                console.error('❌ schema.sql not found at', schemaPath);
+            }
+        }
+
+        // 2. run Fase 7 migrations...
         await db.query(`
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -205,6 +227,7 @@ async function runMigrations() {
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
         `);
+        // ... rest of migrations logic ...
 
         const check = await db.query(`
             SELECT EXISTS (
@@ -306,7 +329,7 @@ async function init() {
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, async () => {
-    console.log(`Server + Socket.io running on port ${PORT}`);
+httpServer.listen(Number(PORT), '0.0.0.0', async () => {
+    console.log(`Server + Socket.io running on port ${PORT} (0.0.0.0)`);
     await init();
 });
