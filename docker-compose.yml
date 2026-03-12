@@ -31,6 +31,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-supersecret}
       CORS_ORIGIN: http://localhost:3000
       REDIS_URL: redis://redis:6379
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-amunet_crm_verify_2024}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-}
     ports:
       - "3001:3001"
     depends_on:
