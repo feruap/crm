@@ -14,8 +14,8 @@ RUN npm install
 COPY . .
 
 # Build the web app
-ARG NEXT_PUBLIC_SERVER_URL
-ENV NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL
+# Enforce the API URL directly into the Dockerfile for the Next.js production bundle
+ENV NEXT_PUBLIC_SERVER_URL=https://api-crm.botonmedico.com
 RUN npm run build --workspace=apps/web
 
 FROM base AS runner
