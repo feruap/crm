@@ -14,6 +14,8 @@ RUN npm install
 COPY . .
 
 # Build the web app
+ARG NEXT_PUBLIC_SERVER_URL
+ENV NEXT_PUBLIC_SERVER_URL=$NEXT_PUBLIC_SERVER_URL
 RUN npm run build --workspace=apps/web
 
 FROM base AS runner
