@@ -4,7 +4,7 @@ import * as Lucide from 'lucide-react';
 const {
     Code2, Layout, Palette, MessageSquare, Save, Copy, Check,
     Smartphone, Laptop, MoveVertical, Plus, Trash2, Loader2,
-    Instagram, Facebook, History
+    Instagram, Facebook, History, AlertCircle, Link2, Settings
 } = Lucide as any;
 
 import { apiFetch } from '../../hooks/useAuth';
@@ -15,10 +15,54 @@ const WhatsAppIcon = () => (
     </svg>
 );
 
-interface WidgetChannel {
-    provider: 'whatsapp' | 'facebook' | 'instagram' | 'custom';
+// TikTok icon
+const TikTokIcon = () => (
+    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.51a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.17a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.6a8.24 8.24 0 004.76 1.52v-3.4a4.85 4.85 0 01-1-.03z" />
+    </svg>
+);
+
+interface AvailableChannel {
+    id: string;
+    name: string;
+    provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok' | 'webchat';
+    subtype: string | null;
+    url: string;
+    ready: boolean;
+}
+
+interface SelectedChannel {
+    channel_id: string;
+    provider: string;
     label: string;
-    url?: string;
+    url: string;
+    enabled: boolean;
+}
+
+const PROVIDER_STYLE: Record<string, { color: string; hoverBorder: string; hoverBg: string; hoverText: string; bgBubble: string }> = {
+    whatsapp: { color: 'bg-green-500', hoverBorder: 'hover:border-green-500', hoverBg: 'hover:bg-green-50', hoverText: 'hover:text-green-700', bgBubble: 'bg-green-500' },
+    facebook: { color: 'bg-blue-600', hoverBorder: 'hover:border-blue-500', hoverBg: 'hover:bg-blue-50', hoverText: 'hover:text-blue-700', bgBubble: 'bg-blue-600' },
+    instagram: { color: 'bg-pink-500', hoverBorder: 'hover:border-pink-500', hoverBg: 'hover:bg-pink-50', hoverText: 'hover:text-pink-700', bgBubble: 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600' },
+    tiktok: { color: 'bg-slate-900', hoverBorder: 'hover:border-slate-700', hoverBg: 'hover:bg-slate-50', hoverText: 'hover:text-slate-800', bgBubble: 'bg-slate-900' },
+    webchat: { color: 'bg-indigo-500', hoverBorder: 'hover:border-indigo-500', hoverBg: 'hover:bg-indigo-50', hoverText: 'hover:text-indigo-700', bgBubble: 'bg-indigo-500' },
+};
+
+const PROVIDER_LABELS: Record<string, string> = {
+    whatsapp: 'WhatsApp',
+    facebook: 'Messenger',
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    webchat: 'Web Chat',
+};
+
+function ProviderIcon({ provider, className }: { provider: string; className?: string }) {
+    switch (provider) {
+        case 'whatsapp': return <WhatsAppIcon />;
+        case 'facebook': return <Facebook className={className || "w-5 h-5"} />;
+        case 'instagram': return <Instagram className={className || "w-5 h-5"} />;
+        case 'tiktok': return <TikTokIcon />;
+        default: return <MessageSquare className={className || "w-5 h-5"} />;
+    }
 }
 
 export default function WidgetBuilderPage() {
@@ -29,8 +73,9 @@ export default function WidgetBuilderPage() {
         welcome_text: '¿Cómo podemos ayudarte hoy?',
         position: 'right',
         is_active: true,
-        channels: [] as WidgetChannel[]
+        channels: [] as SelectedChannel[]
     });
+    const [availableChannels, setAvailableChannels] = useState<AvailableChannel[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -39,13 +84,18 @@ export default function WidgetBuilderPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await apiFetch('/api/widget-config');
-                const data = await res.json();
-                if (data.id) setConfig(data);
-
-                const codeRes = await apiFetch('/api/widget-config/embed-code');
+                const [configRes, codeRes, channelsRes] = await Promise.all([
+                    apiFetch('/api/widget-config'),
+                    apiFetch('/api/widget-config/embed-code'),
+                    apiFetch('/api/channels/widget-available'),
+                ]);
+                const configData = await configRes.json();
                 const codeData = await codeRes.json();
-                setEmbedCode(codeData.code);
+                const channelsData = await channelsRes.json();
+
+                if (configData.id) setConfig(configData);
+                setEmbedCode(codeData.code || '');
+                setAvailableChannels(channelsData);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -62,10 +112,9 @@ export default function WidgetBuilderPage() {
                 method: 'PUT',
                 body: JSON.stringify(config)
             });
-            // Refresh code
             const codeRes = await apiFetch('/api/widget-config/embed-code');
             const codeData = await codeRes.json();
-            setEmbedCode(codeData.code);
+            setEmbedCode(codeData.code || '');
         } catch (e) {
             console.error(e);
         } finally {
@@ -73,24 +122,79 @@ export default function WidgetBuilderPage() {
         }
     };
 
-    const addChannel = (provider: any) => {
+    const isChannelSelected = (channelId: string) => {
+        return config.channels.some(c => c.channel_id === channelId);
+    };
+
+    const toggleChannel = (available: AvailableChannel) => {
+        if (isChannelSelected(available.id)) {
+            setConfig({
+                ...config,
+                channels: config.channels.filter(c => c.channel_id !== available.id)
+            });
+        } else {
+            setConfig({
+                ...config,
+                channels: [...config.channels, {
+                    channel_id: available.id,
+                    provider: available.provider,
+                    label: available.name || PROVIDER_LABELS[available.provider] || available.provider,
+                    url: available.url,
+                    enabled: true,
+                }]
+            });
+        }
+    };
+
+    const updateChannelLabel = (channelId: string, label: string) => {
         setConfig({
             ...config,
-            channels: [...config.channels, { provider, label: provider === 'whatsapp' ? 'WhatsApp' : 'Chat', url: '' }]
+            channels: config.channels.map(c =>
+                c.channel_id === channelId ? { ...c, label } : c
+            )
         });
     };
 
-    const removeChannel = (index: number) => {
-        const newChannels = [...config.channels];
-        newChannels.splice(index, 1);
-        setConfig({ ...config, channels: newChannels });
+    const copyCode = async () => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(embedCode);
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = embedCode;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                textArea.style.top = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            const textArea = document.createElement('textarea');
+            textArea.value = embedCode;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            textArea.style.top = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            } catch (e) {
+                alert('No se pudo copiar. Por favor selecciona el código manualmente.');
+            }
+            document.body.removeChild(textArea);
+        }
     };
 
-    const copyCode = () => {
-        navigator.clipboard.writeText(embedCode);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+    const selectedForPreview = config.channels.filter(c => c.enabled);
 
     return (
         <div className="p-8 max-w-6xl mx-auto space-y-8 bg-slate-50 min-h-full">
@@ -119,60 +223,97 @@ export default function WidgetBuilderPage() {
                 <div className="lg:col-span-8 space-y-6">
                     {/* Step 1: Channels */}
                     <div className="bg-white rounded-3xl border shadow-sm p-8 space-y-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <MessageSquare className="w-5 h-5 text-indigo-500" />
-                            <h2 className="font-black text-lg text-slate-800">1. Canales de Contacto</h2>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                                <MessageSquare className="w-5 h-5 text-indigo-500" />
+                                <h2 className="font-black text-lg text-slate-800">1. Canales de Contacto</h2>
+                            </div>
+                            <a href="/settings" className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors font-bold">
+                                <Settings className="w-3.5 h-3.5" />
+                                Administrar canales
+                            </a>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <button onClick={() => addChannel('whatsapp')} className="flex items-center justify-center gap-2 p-4 border-2 border-slate-100 rounded-2xl hover:border-green-500 hover:bg-green-50 transition-all text-slate-600 hover:text-green-700 font-bold text-xs uppercase tracking-wider">
-                                <WhatsAppIcon /> WhatsApp
-                            </button>
-                            <button onClick={() => addChannel('instagram')} className="flex items-center justify-center gap-2 p-4 border-2 border-slate-100 rounded-2xl hover:border-pink-500 hover:bg-pink-50 transition-all text-slate-600 hover:text-pink-700 font-bold text-xs uppercase tracking-wider">
-                                <Instagram className="w-5 h-5" /> Instagram
-                            </button>
-                            <button onClick={() => addChannel('facebook')} className="flex items-center justify-center gap-2 p-4 border-2 border-slate-100 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all text-slate-600 hover:text-blue-700 font-bold text-xs uppercase tracking-wider">
-                                <Facebook className="w-5 h-5" /> Messenger
-                            </button>
-                            <button onClick={() => addChannel('webchat')} className="flex items-center justify-center gap-2 p-4 border-2 border-slate-100 rounded-2xl hover:border-indigo-500 hover:bg-indigo-50 transition-all text-slate-600 hover:text-indigo-700 font-bold text-xs uppercase tracking-wider">
-                                <MessageSquare className="w-5 h-5" /> Web Chat
-                            </button>
-                        </div>
+                        {loading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                            </div>
+                        ) : availableChannels.length === 0 ? (
+                            <div className="text-center py-8 text-slate-400">
+                                <AlertCircle className="w-8 h-8 mx-auto mb-3 text-slate-300" />
+                                <p className="text-sm font-bold">No hay canales conectados</p>
+                                <p className="text-xs mt-1">Configura tus canales en <a href="/settings" className="text-indigo-500 underline">Settings</a> primero.</p>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-xs text-slate-400 font-medium">Selecciona los canales que deseas mostrar en tu widget:</p>
+                                <div className="space-y-3">
+                                    {availableChannels.map((ch) => {
+                                        const selected = isChannelSelected(ch.id);
+                                        const style = PROVIDER_STYLE[ch.provider] || PROVIDER_STYLE.webchat;
+                                        const selectedData = config.channels.find(c => c.channel_id === ch.id);
 
-                        <div className="space-y-3">
-                            {config.channels.map((chan, idx) => (
-                                <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200/50 group">
-                                    <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-slate-400">
-                                        {chan.provider === 'whatsapp' ? <WhatsAppIcon /> : chan.provider === 'instagram' ? <Instagram /> : chan.provider === 'facebook' ? <Facebook /> : <MessageSquare />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <input
-                                            value={chan.label}
-                                            onChange={e => {
-                                                const newChannels = [...config.channels];
-                                                newChannels[idx].label = e.target.value;
-                                                setConfig({ ...config, channels: newChannels });
-                                            }}
-                                            className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-800 p-0 block w-full"
-                                            placeholder="Etiqueta del botón"
-                                        />
-                                        <input
-                                            value={chan.url || ''}
-                                            onChange={e => {
-                                                const newChannels = [...config.channels];
-                                                newChannels[idx].url = e.target.value;
-                                                setConfig({ ...config, channels: newChannels });
-                                            }}
-                                            className="bg-transparent border-none focus:ring-0 text-[10px] text-slate-400 p-0 block w-full mt-0.5"
-                                            placeholder="URL o Número (ej: 52123...)"
-                                        />
-                                    </div>
-                                    <button onClick={() => removeChannel(idx)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                        return (
+                                            <div
+                                                key={ch.id}
+                                                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                                                    selected
+                                                        ? 'border-indigo-400 bg-indigo-50/50 shadow-sm'
+                                                        : 'border-slate-100 bg-white hover:border-slate-200'
+                                                }`}
+                                                onClick={() => toggleChannel(ch)}
+                                            >
+                                                {/* Toggle checkbox */}
+                                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                                    selected ? 'bg-indigo-500 border-indigo-500' : 'border-slate-300'
+                                                }`}>
+                                                    {selected && <Check className="w-4 h-4 text-white" />}
+                                                </div>
+
+                                                {/* Provider icon */}
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${style.bgBubble}`}>
+                                                    <ProviderIcon provider={ch.provider} className="w-5 h-5" />
+                                                </div>
+
+                                                {/* Name + URL */}
+                                                <div className="flex-1 min-w-0">
+                                                    {selected ? (
+                                                        <input
+                                                            value={selectedData?.label || ''}
+                                                            onChange={e => {
+                                                                e.stopPropagation();
+                                                                updateChannelLabel(ch.id, e.target.value);
+                                                            }}
+                                                            onClick={e => e.stopPropagation()}
+                                                            className="bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-800 p-0 block w-full"
+                                                            placeholder="Etiqueta del boton"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-sm font-bold text-slate-600">{ch.name}</span>
+                                                    )}
+                                                    {ch.url ? (
+                                                        <span className="text-[10px] text-slate-400 font-mono block mt-0.5 truncate">{ch.url}</span>
+                                                    ) : ch.provider === 'webchat' ? (
+                                                        <span className="text-[10px] text-indigo-400 font-medium block mt-0.5">Chat embebido en tu sitio</span>
+                                                    ) : !ch.ready ? (
+                                                        <span className="text-[10px] text-amber-500 font-medium block mt-0.5 flex items-center gap-1">
+                                                            <AlertCircle className="w-3 h-3 inline" /> Falta configurar URL en Settings
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+
+                                                {/* Status badge */}
+                                                {ch.ready ? (
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-green-600 bg-green-50 px-2 py-1 rounded-lg">Listo</span>
+                                                ) : (
+                                                    <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">Pendiente</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            ))}
-                        </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Step 2: Styling */}
@@ -266,14 +407,17 @@ export default function WidgetBuilderPage() {
                             </div>
                             {/* Channel icons */}
                             <div className="flex flex-col gap-2">
-                                {config.channels.map((chan, idx) => (
-                                    <div key={idx} className="bg-white shadow-lg rounded-full px-4 py-2.5 flex items-center gap-3 border border-slate-100 animate-in slide-in-from-bottom-4" style={{ animationDelay: `${idx * 100}ms` }}>
-                                        <span className="text-[10px] font-black text-slate-800 whitespace-nowrap">{chan.label}</span>
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${chan.provider === 'whatsapp' ? 'bg-green-500' : chan.provider === 'instagram' ? 'bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600' : chan.provider === 'facebook' ? 'bg-blue-600' : 'bg-indigo-500'} text-white`}>
-                                            {chan.provider === 'whatsapp' ? <WhatsAppIcon /> : chan.provider === 'instagram' ? <Instagram className="w-4 h-4" /> : chan.provider === 'facebook' ? <Facebook className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                                {selectedForPreview.map((chan, idx) => {
+                                    const style = PROVIDER_STYLE[chan.provider] || PROVIDER_STYLE.webchat;
+                                    return (
+                                        <div key={idx} className="bg-white shadow-lg rounded-full px-4 py-2.5 flex items-center gap-3 border border-slate-100 animate-in slide-in-from-bottom-4" style={{ animationDelay: `${idx * 100}ms` }}>
+                                            <span className="text-[10px] font-black text-slate-800 whitespace-nowrap">{chan.label}</span>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${style.bgBubble} text-white`}>
+                                                <ProviderIcon provider={chan.provider} className="w-4 h-4" />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                             {/* Main Button */}
                             <div

@@ -77,22 +77,23 @@ const PROVIDER_META = {
         label: 'WhatsApp Business',
         color: 'bg-green-500',
         icon: '💬',
-        fields: ['phone_number_id', 'access_token', 'webhook_secret'],
+        fields: ['phone_number_id', 'whatsapp_number', 'access_token', 'webhook_secret'],
         subtypes: null,
         setupLink: 'https://developers.facebook.com/apps/',
         setupInstructions: [
             '1. Ve a Meta for Developers y crea una App de tipo Empresa.',
             '2. Añade el producto WhatsApp a tu App.',
             '3. Copia el "Identificador del número de teléfono" (Phone Number ID).',
-            '4. Genera un Token de Acceso Permanente en la configuración del sistema.',
-            '5. Configura el Webhook usando la URL provista arriba y el Verify Token.'
+            '4. Ingresa tu Número de WhatsApp con código de país (ej: 521234567890).',
+            '5. Genera un Token de Acceso Permanente en la configuración del sistema.',
+            '6. Configura el Webhook usando la URL provista arriba y el Verify Token.'
         ]
     },
     facebook: {
         label: 'Facebook',
         color: 'bg-blue-600',
         icon: '📘',
-        fields: ['page_id', 'access_token', 'app_secret', 'webhook_secret'],
+        fields: ['page_id', 'page_username', 'access_token', 'app_secret', 'webhook_secret'],
         subtypes: [
             { value: 'messenger', label: 'Messenger (DMs)' },
             { value: 'feed', label: 'Feed (comentarios en posts/anuncios)' },
@@ -110,7 +111,7 @@ const PROVIDER_META = {
         label: 'Instagram',
         color: 'bg-pink-500',
         icon: '📸',
-        fields: ['ig_account_id', 'access_token', 'webhook_secret'],
+        fields: ['ig_account_id', 'ig_username', 'access_token', 'webhook_secret'],
         subtypes: [
             { value: 'chat', label: 'Direct (mensajes directos)' },
             { value: 'comments', label: 'Comentarios en posts/anuncios' },
@@ -150,8 +151,11 @@ const SUBTYPE_LABELS: Record<string, string> = {
 
 const FIELD_LABELS: Record<string, string> = {
     page_id: 'Page ID',
+    page_username: 'Username de la Pagina (para m.me/)',
     phone_number_id: 'Phone Number ID',
+    whatsapp_number: 'Numero de WhatsApp (con codigo de pais, ej: 521234567890)',
     ig_account_id: 'Instagram Account ID',
+    ig_username: 'Username de Instagram (sin @)',
     tiktok_open_id: 'TikTok Open ID',
     access_token: 'Access Token',
     app_secret: 'App Secret',

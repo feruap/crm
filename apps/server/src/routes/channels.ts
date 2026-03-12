@@ -76,6 +76,76 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ ok: true });
 });
 
+// GET /api/channels/widget-available  — returns channels available for widget use
+router.get('/widget-available', async (_req: Request, res: Response) => {
+    // Get all active connected channels
+    const result = await db.query(`
+        SELECT id, name, provider, subtype, is_active,
+               provider_config->>'phone_number_id'   AS phone_number_id,
+               provider_config->>'whatsapp_number'    AS whatsapp_number,
+               provider_config->>'page_id'            AS page_id,
+               provider_config->>'page_username'      AS page_username,
+               provider_config->>'ig_account_id'      AS ig_account_id,
+               provider_config->>'ig_username'         AS ig_username
+        FROM channels
+        WHERE is_active = TRUE
+        ORDER BY created_at ASC
+    `);
+
+    const channels = result.rows.map((ch: any) => {
+        let url = '';
+        let ready = false;
+
+        switch (ch.provider) {
+            case 'whatsapp':
+                if (ch.whatsapp_number) {
+                    url = `https://wa.me/${ch.whatsapp_number.replace(/[^0-9]/g, '')}`;
+                    ready = true;
+                }
+                break;
+            case 'facebook':
+                if (ch.page_username || ch.page_id) {
+                    url = `https://m.me/${ch.page_username || ch.page_id}`;
+                    ready = true;
+                }
+                break;
+            case 'instagram':
+                if (ch.ig_username) {
+                    url = `https://ig.me/m/${ch.ig_username}`;
+                    ready = true;
+                } else if (ch.ig_account_id) {
+                    url = `https://ig.me/m/${ch.ig_account_id}`;
+                    ready = true;
+                }
+                break;
+            case 'tiktok':
+                ready = true;
+                break;
+        }
+
+        return {
+            id: ch.id,
+            name: ch.name,
+            provider: ch.provider,
+            subtype: ch.subtype,
+            url,
+            ready,
+        };
+    });
+
+    // Always include webchat as available (no authorization needed)
+    channels.push({
+        id: 'webchat',
+        name: 'Web Chat',
+        provider: 'webchat',
+        subtype: null,
+        url: '',
+        ready: true,
+    });
+
+    res.json(channels);
+});
+
 // GET /api/channels/webhook-url  — returns the public webhook URLs for each provider
 router.get('/webhook-url', async (req: Request, res: Response) => {
     const base = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}`;
