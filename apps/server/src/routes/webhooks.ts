@@ -611,6 +611,24 @@ router.post('/meta', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// WhatsApp Cloud API Webhook Verification (GET)
+// Meta uses the same verification for WhatsApp Cloud API
+// ─────────────────────────────────────────────
+router.get('/whatsapp', (req: Request, res: Response) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+        console.log('[WhatsApp Webhook] Verification successful');
+        res.status(200).send(challenge);
+    } else {
+        console.warn('[WhatsApp Webhook] Verification failed — token mismatch');
+        res.sendStatus(403);
+    }
+});
+
+// ─────────────────────────────────────────────
 // WhatsApp Cloud API Webhook (POST)
 // ─────────────────────────────────────────────
 router.post('/whatsapp', async (req: Request, res: Response) => {
