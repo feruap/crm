@@ -165,7 +165,21 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
         name: display_name,
         phone,
         email: attrMap['email'] ?? null,
-        address: attrMap['address'] ?? null,
+        address: attrMap['address'] ?? attrMap['address_1'] ?? null,
+        // WooCommerce shipping fields (from customer_attributes)
+        shipping: {
+            first_name: attrMap['first_name'] || (display_name || '').split(' ')[0] || '',
+            last_name: attrMap['last_name'] || (display_name || '').split(' ').slice(1).join(' ') || '',
+            address_1: attrMap['address_1'] || attrMap['address'] || '',
+            address_2: attrMap['address_2'] || '',
+            city: attrMap['city'] || '',
+            state: attrMap['state'] || '',
+            postcode: attrMap['postcode'] || attrMap['zip'] || '',
+            country: attrMap['country'] || 'MX',
+            email: attrMap['email'] || '',
+            phone: phone || '',
+        },
+        wc_customer_id: attrMap['wc_customer_id'] || null,
         customer_since: new Date(customer_since).toLocaleDateString('es', { month: 'short', year: 'numeric' }),
         total_spent: parseFloat(spent.rows[0].total),
         orders: orders.rows,
@@ -398,12 +412,16 @@ router.post('/:id/cart-link', async (req: Request, res: Response) => {
         country: billing.country,
     };
 
+    // Look up linked WC customer ID
+    const wcCustIdAttr = attrMap['wc_customer_id'] ? parseInt(attrMap['wc_customer_id']) : 0;
+
     try {
         const wcResponse = await fetch(`${wcUrl}/wp-json/wc/v3/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Basic ${wcAuth}` },
             body: JSON.stringify({
                 status: 'pending',
+                customer_id: wcCustIdAttr,
                 line_items,
                 billing,
                 shipping,

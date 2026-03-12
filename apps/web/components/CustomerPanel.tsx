@@ -5,7 +5,7 @@ const {
     User, ShoppingCart, MessageSquare, Bot, Phone, MapPin,
     Mail, Package, TrendingUp, AlertCircle, ChevronRight,
     Check, Megaphone, Clock, Star, Loader2, ExternalLink,
-    Calendar, FileText
+    Calendar, FileText, RefreshCw, Save, Link2
 } = Lucide as any;
 
 import { apiFetch } from '../hooks/useAuth';
@@ -35,12 +35,27 @@ interface AISuggestion {
     text: string;
 }
 
+interface WcShipping {
+    first_name: string;
+    last_name: string;
+    address_1: string;
+    address_2: string;
+    city: string;
+    state: string;
+    postcode: string;
+    country: string;
+    email: string;
+    phone: string;
+}
+
 interface Customer {
     id: string;
     name: string;
     phone: string | null;
     email: string | null;
     address: string | null;
+    shipping: WcShipping;
+    wc_customer_id: string | null;
     customer_since: string;
     total_spent: number;
     orders: Order[];
@@ -269,21 +284,40 @@ function OrderBuilder({ customer, conversationId }: { customer: Customer; conver
     // SalesKing pricing rules — fetched in real-time from bridge plugin
     const [skPricing, setSkPricing] = useState<SalesKingPricing | null>(null);
 
-    // Billing/shipping address state — pre-fill from customer data
+    // Billing/shipping address state — pre-fill from customer.shipping (WC data)
     const [billing, setBilling] = useState<Record<string, string>>({
-        first_name: customer.name?.split(' ')[0] || '',
-        last_name: customer.name?.split(' ').slice(1).join(' ') || '',
-        email: customer.email || '',
-        phone: customer.phone || '',
-        address_1: customer.address || '',
-        address_2: '',
-        city: '',
-        state: '',
-        postcode: '',
-        country: 'MX',
+        first_name: customer.shipping?.first_name || customer.name?.split(' ')[0] || '',
+        last_name: customer.shipping?.last_name || customer.name?.split(' ').slice(1).join(' ') || '',
+        email: customer.shipping?.email || customer.email || '',
+        phone: customer.shipping?.phone || customer.phone || '',
+        address_1: customer.shipping?.address_1 || customer.address || '',
+        address_2: customer.shipping?.address_2 || '',
+        city: customer.shipping?.city || '',
+        state: customer.shipping?.state || '',
+        postcode: customer.shipping?.postcode || '',
+        country: customer.shipping?.country || 'MX',
     });
 
-    const updateBilling = (field: string, value: string) => {
+    // Sync billing state when customer.shipping updates (after save)
+    useEffect(() => {
+        if (customer.shipping) {
+            setBilling(prev => ({
+                ...prev,
+                first_name: customer.shipping?.first_name || prev.first_name,
+                last_name: customer.shipping?.last_name || prev.last_name,
+                email: customer.shipping?.email || prev.email,
+                phone: customer.shipping?.phone || prev.phone,
+                address_1: customer.shipping?.address_1 || prev.address_1,
+                address_2: customer.shipping?.address_2 || prev.address_2,
+                city: customer.shipping?.city || prev.city,
+                state: customer.shipping?.state || prev.state,
+                postcode: customer.shipping?.postcode || prev.postcode,
+                country: customer.shipping?.country || prev.country,
+            }));
+        }
+    }, [customer.shipping]);
+
+        const updateBilling = (field: string, value: string) => {
         setBilling(prev => ({ ...prev, [field]: value }));
     };
 
@@ -659,6 +693,16 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
     const [knowledge, setKnowledge] = useState('');
     const [savingKnowledge, setSavingKnowledge] = useState(false);
 
+    // Editable WC shipping fields
+    const [shipping, setShipping] = useState<WcShipping>({
+        first_name: '', last_name: '', address_1: '', address_2: '',
+        city: '', state: '', postcode: '', country: 'MX', email: '', phone: ''
+    });
+    const [shippingDirty, setShippingDirty] = useState(false);
+    const [savingShipping, setSavingShipping] = useState(false);
+    const [syncingWc, setSyncingWc] = useState(false);
+    const [wcSyncResult, setWcSyncResult] = useState<string | null>(null);
+
     useEffect(() => {
         setLoading(true);
         setCustomer(null);
@@ -669,6 +713,10 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
                 const res = await apiFetch(`/api/conversations/${conversationId}/customer`);
                 const cust = await res.json();
                 setCustomer(cust);
+                // Populate shipping fields from API response
+                if (cust.shipping) {
+                    setShipping(cust.shipping);
+                }
 
                 // Events
                 const resEvents = await apiFetch(`/api/events?customer_id=${cust.id}`);
@@ -694,6 +742,69 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
                 body: JSON.stringify({ value: knowledge }),
             });
         } catch (err) { console.error(err); } finally { setSavingKnowledge(false); }
+    };
+
+    const updateShippingField = (field: keyof WcShipping, value: string) => {
+        setShipping(prev => ({ ...prev, [field]: value }));
+        setShippingDirty(true);
+    };
+
+    const saveShipping = async () => {
+        if (!customer) return;
+        setSavingShipping(true);
+        try {
+            await apiFetch(`/api/customers/${customer.id}/shipping`, {
+                method: 'PUT',
+                body: JSON.stringify(shipping),
+            });
+            setShippingDirty(false);
+            // Update customer object with new shipping data
+            setCustomer(prev => prev ? { ...prev, shipping, email: shipping.email || prev.email, phone: shipping.phone || prev.phone } : prev);
+        } catch (err) { console.error(err); }
+        finally { setSavingShipping(false); }
+    };
+
+    const syncWithWooCommerce = async () => {
+        if (!customer) return;
+        setSyncingWc(true);
+        setWcSyncResult(null);
+        try {
+            // Save current fields first
+            await apiFetch(`/api/customers/${customer.id}/shipping`, {
+                method: 'PUT',
+                body: JSON.stringify(shipping),
+            });
+            // Then sync with WC
+            const res = await apiFetch(`/api/customers/${customer.id}/wc-sync`, {
+                method: 'POST',
+                body: JSON.stringify({ shipping }),
+            });
+            const data = await res.json();
+            setWcSyncResult(data.message || 'Sincronizado');
+            if (data.wc_customer_id) {
+                setCustomer(prev => prev ? { ...prev, wc_customer_id: String(data.wc_customer_id) } : prev);
+            }
+            // If WC returned imported data, update shipping fields
+            if (data.imported_shipping) {
+                const imp = data.imported_shipping;
+                setShipping(prev => ({
+                    ...prev,
+                    first_name: imp.first_name || prev.first_name,
+                    last_name: imp.last_name || prev.last_name,
+                    address_1: imp.address_1 || prev.address_1,
+                    address_2: imp.address_2 || prev.address_2,
+                    city: imp.city || prev.city,
+                    state: imp.state || prev.state,
+                    postcode: imp.postcode || prev.postcode,
+                    country: imp.country || prev.country,
+                }));
+            }
+            setShippingDirty(false);
+        } catch (err) {
+            console.error(err);
+            setWcSyncResult('Error al sincronizar');
+        }
+        finally { setSyncingWc(false); }
     };
 
     const toggleEvent = async (id: string, currentStatus: string) => {
@@ -813,24 +924,84 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
                 {/* PERFIL */}
                 {tab === 'perfil' && (
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            {[
-                                { icon: <Phone className="w-3.5 h-3.5 text-slate-400" />, label: 'Teléfono', value: customer.phone },
-                                { icon: <Mail className="w-3.5 h-3.5 text-slate-400" />, label: 'Email', value: customer.email },
-                                { icon: <MapPin className="w-3.5 h-3.5 text-slate-400" />, label: 'Dirección', value: customer.address },
-                            ].map(({ icon, label, value }) => (
-                                <div key={label} className="flex items-start gap-2 text-sm">
-                                    <span className="mt-0.5">{icon}</span>
-                                    <div>
-                                        <p className="text-xs text-slate-400">{label}</p>
-                                        {value
-                                            ? <p className="text-slate-700">{value}</p>
-                                            : <p className="text-slate-300 italic text-xs">Sin datos</p>
-                                        }
-                                    </div>
-                                </div>
-                            ))}
+                        {/* WC Customer link indicator */}
+                        <div className={`text-xs flex items-center gap-1.5 px-2 py-1.5 rounded-lg ${customer.wc_customer_id ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                            {customer.wc_customer_id
+                                ? <><Link2 className="w-3 h-3" /> WC Customer #{customer.wc_customer_id}</>
+                                : <><AlertCircle className="w-3 h-3" /> Sin cuenta WooCommerce</>
+                            }
                         </div>
+
+                        {/* Editable WC Shipping Fields */}
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Datos de envío (WooCommerce)</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Nombre</label>
+                                    <input value={shipping.first_name} onChange={e => updateShippingField('first_name', e.target.value)} placeholder="Nombre" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Apellido</label>
+                                    <input value={shipping.last_name} onChange={e => updateShippingField('last_name', e.target.value)} placeholder="Apellido" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Teléfono</label>
+                                    <input value={shipping.phone} onChange={e => updateShippingField('phone', e.target.value)} placeholder="Teléfono" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Email</label>
+                                    <input value={shipping.email} onChange={e => updateShippingField('email', e.target.value)} placeholder="Email" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-slate-400">Dirección</label>
+                                <input value={shipping.address_1} onChange={e => updateShippingField('address_1', e.target.value)} placeholder="Calle y número" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-slate-400">Colonia / Interior</label>
+                                <input value={shipping.address_2} onChange={e => updateShippingField('address_2', e.target.value)} placeholder="Colonia / Interior (opcional)" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Ciudad</label>
+                                    <input value={shipping.city} onChange={e => updateShippingField('city', e.target.value)} placeholder="Ciudad" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-400">Estado</label>
+                                    <input value={shipping.state} onChange={e => updateShippingField('state', e.target.value)} placeholder="Estado" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] text-slate-400">C.P.</label>
+                                    <input value={shipping.postcode} onChange={e => updateShippingField('postcode', e.target.value)} placeholder="Código postal" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-400">País</label>
+                                    <input value={shipping.country} onChange={e => updateShippingField('country', e.target.value)} placeholder="MX" className="w-full text-xs border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" />
+                                </div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex gap-2 pt-1">
+                                <button onClick={saveShipping} disabled={!shippingDirty || savingShipping} className={`flex-1 py-1.5 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${shippingDirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                                    {savingShipping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                    Guardar
+                                </button>
+                                <button onClick={syncWithWooCommerce} disabled={syncingWc} className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50">
+                                    {syncingWc ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                    {customer.wc_customer_id ? 'Re-sincronizar WC' : 'Crear en WooCommerce'}
+                                </button>
+                            </div>
+                            {wcSyncResult && (
+                                <p className={`text-[10px] px-2 py-1 rounded ${wcSyncResult.includes('Error') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                    {wcSyncResult}
+                                </p>
+                            )}
+                        </div>
+
                         <div className="border-t pt-4">
                             <p className="text-xs font-semibold text-slate-600 mb-3 uppercase tracking-wide">Enviar Pedido</p>
                             <OrderBuilder customer={customer} conversationId={conversationId} />

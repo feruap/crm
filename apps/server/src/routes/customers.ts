@@ -209,4 +209,199 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
         });
 });
 
+
+// PUT /api/customers/:id/shipping ? bulk-save WooCommerce shipping fields
+router.put('/:id/shipping', async (req, res) => {
+    const { id } = req.params;
+    const fields = req.body; // { first_name, last_name, address_1, ... }
+    const ALLOWED = ['first_name','last_name','email','phone','address_1','address_2','city','state','postcode','country','wc_customer_id'];
+    
+    const entries = Object.entries(fields).filter(([k]) => ALLOWED.includes(k));
+    if (entries.length === 0) return res.status(400).json({ error: 'No valid fields' });
+    
+    for (const [key, value] of entries) {
+        await db.query(
+            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+             VALUES ($1, $2, $3, 'string')
+             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+            [id, key, String(value)]
+        );
+    }
+    
+    // Also update display_name if first_name/last_name provided
+    if (fields.first_name || fields.last_name) {
+        const name = [fields.first_name || '', fields.last_name || ''].join(' ').trim();
+        if (name) {
+            await db.query('UPDATE customers SET display_name = $1 WHERE id = $2', [name, id]);
+        }
+    }
+    
+    res.json({ ok: true, saved: entries.length });
+});
+
+// POST /api/customers/:id/wc-sync ? search or create WooCommerce customer
+router.post('/:id/wc-sync', async (req, res) => {
+    const { id } = req.params;
+    const { shipping } = req.body; // WC shipping fields from frontend
+    
+    const wcUrl = process.env.WC_URL;
+    const wcKey = process.env.WC_KEY;
+    const wcSecret = process.env.WC_SECRET;
+    if (!wcUrl || !wcKey || !wcSecret) {
+        return res.status(503).json({ error: 'WooCommerce not configured' });
+    }
+    const wcAuth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+    
+    // Get current customer data
+    const custRow = await db.query('SELECT display_name FROM customers WHERE id = $1', [id]);
+    if (custRow.rows.length === 0) return res.status(404).json({ error: 'Customer not found' });
+    
+    const attrs = await db.query('SELECT key, value FROM customer_attributes WHERE customer_id = $1', [id]);
+    const attrMap: Record<string, string> = {};
+    for (const row of attrs.rows) attrMap[row.key] = row.value;
+    
+    // Check if already linked
+    if (attrMap['wc_customer_id']) {
+        return res.json({ 
+            status: 'already_linked', 
+            wc_customer_id: parseInt(attrMap['wc_customer_id']),
+            message: 'Customer already linked to WooCommerce'
+        });
+    }
+    
+    const email = shipping?.email || attrMap['email'] || '';
+    const phone = shipping?.phone || attrMap['phone'] || '';
+    
+    // Search WC by email first, then by phone (billing_phone meta)
+    let wcCustomer = null;
+    
+    if (email) {
+        const searchResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers?email=${encodeURIComponent(email)}&per_page=1`, {
+            headers: { Authorization: `Basic ${wcAuth}` }
+        });
+        const results = await searchResp.json();
+        if (Array.isArray(results) && results.length > 0) wcCustomer = results[0];
+    }
+    
+    if (!wcCustomer && phone) {
+        // WC REST API doesn't support phone search directly ? search all recent and filter
+        const searchResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers?search=${encodeURIComponent(phone)}&per_page=5`, {
+            headers: { Authorization: `Basic ${wcAuth}` }
+        });
+        const results = await searchResp.json();
+        if (Array.isArray(results)) {
+            wcCustomer = results.find(c => 
+                c.billing?.phone === phone || c.shipping?.phone === phone
+            ) || null;
+        }
+    }
+    
+    if (wcCustomer) {
+        // Found existing ? link and import their data
+        await db.query(
+            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+             VALUES ($1, 'wc_customer_id', $2, 'string')
+             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+            [id, String(wcCustomer.id)]
+        );
+        
+        // Import WC shipping fields back
+        const wcShipping = wcCustomer.shipping || wcCustomer.billing || {};
+        const importFields = ['first_name','last_name','address_1','address_2','city','state','postcode','country'];
+        for (const key of importFields) {
+            if (wcShipping[key]) {
+                await db.query(
+                    `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                     VALUES ($1, $2, $3, 'string')
+                     ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                    [id, key, wcShipping[key]]
+                );
+            }
+        }
+        
+        return res.json({
+            status: 'found',
+            wc_customer_id: wcCustomer.id,
+            imported_shipping: wcShipping,
+            message: `Found existing WC customer #${wcCustomer.id}`
+        });
+    }
+    
+    // Not found ? create new WC customer
+    const firstName = shipping?.first_name || custRow.rows[0].display_name?.split(' ')[0] || 'Cliente';
+    const lastName = shipping?.last_name || custRow.rows[0].display_name?.split(' ').slice(1).join(' ') || '';
+    
+    // Auto-generate email if missing (WC requires email)
+    const customerEmail = email || `customer-${id}@placeholder.myalice.local`;
+    
+    // Auto-generate username and password for WP account
+    const username = customerEmail.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '') + '-' + Date.now().toString(36);
+    const password = 'CRM-' + Math.random().toString(36).substring(2, 10) + '!' + Date.now().toString(36).slice(-4);
+    
+    const wcBody = {
+        email: customerEmail,
+        username: username,
+        password: password,
+        first_name: firstName,
+        last_name: lastName,
+        billing: {
+            first_name: firstName,
+            last_name: lastName,
+            email: customerEmail,
+            phone: phone,
+            address_1: shipping?.address_1 || '',
+            address_2: shipping?.address_2 || '',
+            city: shipping?.city || '',
+            state: shipping?.state || '',
+            postcode: shipping?.postcode || '',
+            country: shipping?.country || 'MX',
+        },
+        shipping: {
+            first_name: firstName,
+            last_name: lastName,
+            address_1: shipping?.address_1 || '',
+            address_2: shipping?.address_2 || '',
+            city: shipping?.city || '',
+            state: shipping?.state || '',
+            postcode: shipping?.postcode || '',
+            country: shipping?.country || 'MX',
+        },
+    };
+    
+    try {
+        const createResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Basic ${wcAuth}` },
+            body: JSON.stringify(wcBody),
+        });
+        
+        if (!createResp.ok) {
+            const errText = await createResp.text();
+            console.error('WC customer creation failed:', errText);
+            return res.status(502).json({ error: 'WC customer creation failed', detail: errText });
+        }
+        
+        const newCustomer = await createResp.json();
+        
+        // Save wc_customer_id
+        await db.query(
+            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+             VALUES ($1, 'wc_customer_id', $2, 'string')
+             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+            [id, String(newCustomer.id)]
+        );
+        
+        return res.json({
+            status: 'created',
+            wc_customer_id: newCustomer.id,
+            username: newCustomer.username,
+            message: `Created WC customer #${newCustomer.id} (username: ${newCustomer.username})`
+        });
+    } catch (err) {
+        console.error('WC sync error:', err);
+        return res.status(500).json({ error: 'WC sync failed', detail: String(err) });
+    }
+});
+
+
 export default router;
