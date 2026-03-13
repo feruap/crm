@@ -284,7 +284,7 @@ export async function getAIResponse(
         case 'gemini':
             return getGeminiResponse(finalSystemPrompt, userMessage, apiKey);
         case 'z_ai':
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, generateZaiJWT(apiKey), model || 'glm-5', 'https://api.z.ai/api/coding/paas/v4/chat/completions');
+            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, generateZaiJWT(apiKey), model || 'glm-4-flash', 'https://open.bigmodel.cn/api/paas/v4/chat/completions');
         default:
             throw new Error(`Provider not supported: ${provider}`);
     }

@@ -270,7 +270,7 @@ export async function handleBotResponse(
         });
         getIO().emit('conversation_list_updated', { conversation_id: conversationId });
     } catch (err: any) {
-        require('fs').appendFileSync('c:/Users/admin/ai/myalice/apps/server/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`);
+        try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
 
         let errorHint = "Error de conexión con IA.";
         if (err.message.includes("1113") || err.message.includes("余额不足")) {
