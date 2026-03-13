@@ -292,11 +292,18 @@ export async function getAIResponse(
         case 'z_ai': {
             // Zhipu API key format: AppId.AppSecret → needs JWT
             const zaiModel = model || 'glm-5';
-            const zaiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
             const hasSecret = apiKey.includes('.');
             const authToken = hasSecret ? generateZaiJWT(apiKey) : apiKey;
-            console.log(`🔑 Z.ai: model=${zaiModel}, key_len=${apiKey.length}, hasSecret=${hasSecret}, jwt_prefix=${authToken.substring(0, 20)}...`);
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, authToken, zaiModel, zaiUrl, 3, 1.0, 4096);
+            console.log(`🔑 Z.ai: model=${zaiModel}, key_len=${apiKey.length}, hasSecret=${hasSecret}, jwt=${authToken.substring(0, 20)}...`);
+            // Try api.z.ai first, then open.bigmodel.cn as fallback
+            try {
+                return await getOpenAICompatibleResponse(finalSystemPrompt, userMessage, authToken, zaiModel, 'https://api.z.ai/api/paas/v4/chat/completions', 1, 1.0, 4096);
+            } catch (e1: any) {
+                console.log(`⚠️ api.z.ai failed: ${e1.message}. Trying open.bigmodel.cn...`);
+                // Regenerate JWT since timestamp may have shifted
+                const authToken2 = hasSecret ? generateZaiJWT(apiKey) : apiKey;
+                return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, authToken2, zaiModel, 'https://open.bigmodel.cn/api/paas/v4/chat/completions', 2, 1.0, 4096);
+            }
         }
         default:
             throw new Error(`Provider not supported: ${provider}`);
