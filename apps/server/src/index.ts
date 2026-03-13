@@ -318,12 +318,15 @@ async function runMigrations() {
     }
 
     // ── Post-migration: add columns that may be missing ─────────────────────
-    try {
-        await db.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wc_agent_id TEXT`);
-    } catch (_) { /* ignore if already exists */ }
-    try {
-        await db.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_agent_code TEXT`);
-    } catch (_) { /* ignore */ }
+    const safeAlter = async (sql: string) => {
+        try { await db.query(sql); } catch (_) { /* column already exists */ }
+    };
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wc_agent_id TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_agent_code TEXT`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS excluded_categories TEXT[]`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS model_name TEXT`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS temperature NUMERIC(3,2) DEFAULT 0.7`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
 }
 
 // ─── Startup Initialization ──────────────────────────────────────────────────
