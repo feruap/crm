@@ -290,17 +290,11 @@ export async function getAIResponse(
         case 'gemini':
             return getGeminiResponse(finalSystemPrompt, userMessage, apiKey);
         case 'z_ai': {
-            // Modern Zhipu v4 API accepts the raw API key directly as Bearer token
-            // Try raw key first; the JWT approach was for older API versions
+            // Zhipu v4 API accepts the raw API key directly as Bearer token
             const zaiModel = model || 'glm-5';
             const zaiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-            console.log(`🔑 Z.ai: trying raw API key (prefix=${apiKey.substring(0, 15)}...) with model=${zaiModel}`);
-            try {
-                return await getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl);
-            } catch (rawErr: any) {
-                console.log(`⚠️ Z.ai raw key failed: ${rawErr.message}. Trying JWT...`);
-                return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, generateZaiJWT(apiKey), zaiModel, zaiUrl);
-            }
+            console.log(`🔑 Z.ai: model=${zaiModel}, key_prefix=${apiKey.substring(0, 15)}...`);
+            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl);
         }
         default:
             throw new Error(`Provider not supported: ${provider}`);
@@ -313,32 +307,47 @@ async function getOpenAICompatibleResponse(
     userMessage: string,
     apiKey: string,
     model: string,
-    url: string
+    url: string,
+    maxRetries: number = 3
 ): Promise<string> {
-    console.log(`🔑 API call: model=${model}, url=${url}, key_prefix=${apiKey.substring(0, 20)}...`);
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-            model: model,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage },
-            ],
-            temperature: 0.7,
-            max_tokens: 1500,
-        }),
-    });
-    if (!res.ok) {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (attempt > 0) {
+            const waitSec = (attempt + 1) * 2; // 4s, 6s
+            console.log(`⏳ Rate limit hit, waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}...`);
+            await new Promise(r => setTimeout(r, waitSec * 1000));
+        }
+        console.log(`🔑 API call (attempt ${attempt + 1}): model=${model}, url=${url.split('/').pop()}`);
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessage },
+                ],
+                temperature: 0.7,
+                max_tokens: 1500,
+            }),
+        });
+        if (res.ok) {
+            const data: any = await res.json();
+            console.log(`✅ AI response received (attempt ${attempt + 1})`);
+            return data.choices[0].message.content;
+        }
         let errText = '';
         try { errText = await res.text(); } catch (e) { }
+        // Retry on 429 (rate limit)
+        if (res.status === 429 && attempt < maxRetries - 1) {
+            console.log(`⚠️ Rate limited (429): ${errText}`);
+            continue;
+        }
         throw new Error(`AI chat failed: ${res.status} ${errText}`);
     }
-    const data: any = await res.json();
-    return data.choices[0].message.content;
+    throw new Error('AI chat failed: max retries exceeded');
 }
 
 async function getClaudeResponse(
