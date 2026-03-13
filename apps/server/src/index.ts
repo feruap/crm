@@ -295,11 +295,35 @@ async function runMigrations() {
             )
         `);
 
+        // 7.6 AI Settings config
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS ai_settings (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                provider TEXT NOT NULL,
+                api_key_encrypted TEXT,
+                model_name TEXT NOT NULL,
+                system_prompt TEXT,
+                temperature NUMERIC(3,2) DEFAULT 0.7,
+                is_default BOOLEAN DEFAULT FALSE,
+                excluded_categories TEXT[],
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+
         console.log('✅ Fase 7 migration completed successfully!');
     } catch (err) {
         console.error('❌ Fase 7 migration error:', err);
         // Don't crash the server — tables might partially exist
     }
+
+    // ── Post-migration: add columns that may be missing ─────────────────────
+    try {
+        await db.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wc_agent_id TEXT`);
+    } catch (_) { /* ignore if already exists */ }
+    try {
+        await db.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_agent_code TEXT`);
+    } catch (_) { /* ignore */ }
 }
 
 // ─── Startup Initialization ──────────────────────────────────────────────────
