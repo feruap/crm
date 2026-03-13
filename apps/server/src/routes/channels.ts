@@ -157,4 +157,74 @@ router.get('/webhook-url', async (req: Request, res: Response) => {
     });
 });
 
+// ── Channel Configuration (Meta/WhatsApp credentials in business_settings) ────
+
+// GET /api/channels/config — get channel config (app_id, app_secret masked, verify_token, access_token status)
+router.get('/config', async (_req: Request, res: Response) => {
+    try {
+        const keys = ['meta_app_id', 'meta_app_secret', 'meta_verify_token', 'meta_access_token'];
+        const result = await db.query(
+            `SELECT key, value FROM business_settings WHERE key = ANY($1)`,
+            [keys]
+        );
+        const settings: Record<string, any> = {};
+        for (const row of result.rows) {
+            if (row.key === 'meta_app_secret') {
+                // Mask the secret, show only last 6 chars
+                settings[row.key] = row.value ? `${'•'.repeat(Math.max(0, row.value.length - 6))}${row.value.slice(-6)}` : null;
+                settings.meta_app_secret_set = !!row.value;
+            } else if (row.key === 'meta_access_token') {
+                // Mask the token, show only first 10 and last 6 chars
+                settings[row.key] = row.value ? `${row.value.slice(0, 10)}${'•'.repeat(20)}${row.value.slice(-6)}` : null;
+                settings.meta_access_token_set = !!row.value;
+            } else {
+                settings[row.key] = row.value;
+            }
+        }
+        // Also check env vars as fallback indicators
+        settings.env_meta_verify_token = !!process.env.META_VERIFY_TOKEN;
+        settings.env_meta_app_secret = !!process.env.META_APP_SECRET;
+        settings.env_meta_access_token = !!process.env.META_ACCESS_TOKEN;
+        settings.env_meta_app_id = !!process.env.META_APP_ID;
+
+        res.json(settings);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/channels/config — update channel config
+router.patch('/config', async (req: Request, res: Response) => {
+    const allowedKeys = ['meta_app_id', 'meta_app_secret', 'meta_verify_token', 'meta_access_token'];
+    const updates: string[] = [];
+
+    try {
+        for (const key of allowedKeys) {
+            if (req.body[key] !== undefined) {
+                const value = (req.body[key] || '').trim();
+                if (value) {
+                    await db.query(
+                        `INSERT INTO business_settings (key, value) VALUES ($1, $2)
+                         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+                        [key, value]
+                    );
+                    updates.push(key);
+                } else {
+                    await db.query(`DELETE FROM business_settings WHERE key = $1`, [key]);
+                    updates.push(`${key} (removed)`);
+                }
+            }
+        }
+
+        if (updates.length === 0) {
+            res.status(400).json({ error: 'No valid keys provided', allowed: allowedKeys });
+            return;
+        }
+
+        res.json({ ok: true, updated: updates });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

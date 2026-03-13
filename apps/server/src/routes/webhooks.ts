@@ -7,6 +7,15 @@ import { assignFromGroup } from './agent-groups';
 
 const router = Router();
 
+// Helper: get a business setting from DB, fallback to env var
+async function getBusinessSetting(key: string, envFallback?: string): Promise<string | null> {
+    try {
+        const row = await db.query(`SELECT value FROM business_settings WHERE key = $1 LIMIT 1`, [key]);
+        if (row.rows[0]?.value) return row.rows[0].value;
+    } catch { /* ignore */ }
+    return envFallback || null;
+}
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -614,12 +623,15 @@ router.post('/meta', async (req: Request, res: Response) => {
 // WhatsApp Cloud API Webhook Verification (GET)
 // Meta uses the same verification for WhatsApp Cloud API
 // ─────────────────────────────────────────────
-router.get('/whatsapp', (req: Request, res: Response) => {
+router.get('/whatsapp', async (req: Request, res: Response) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
+    // Read verify token from DB first, env fallback
+    const verifyToken = await getBusinessSetting('meta_verify_token', process.env.META_VERIFY_TOKEN);
+
+    if (mode === 'subscribe' && verifyToken && token === verifyToken) {
         console.log('[WhatsApp Webhook] Verification successful');
         res.status(200).send(challenge);
     } else {
@@ -642,7 +654,9 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
 
         const { id: channelId, webhook_secret } = channel.rows[0];
 
-        if (webhook_secret && !validateMetaSignature(req, webhook_secret)) {
+        // Signature validation: use webhook_secret from channel, fallback to app_secret from DB/env
+        const sigSecret = webhook_secret || await getBusinessSetting('meta_app_secret', process.env.META_APP_SECRET);
+        if (sigSecret && !validateMetaSignature(req, sigSecret)) {
             console.warn('WhatsApp webhook signature mismatch — dropping');
             return;
         }

@@ -606,6 +606,176 @@ function EquiposTab() {
     );
 }
 
+// ── Meta API Config Section (inside Canales) ─────────────────────────────────
+function MetaConfigSection() {
+    const [config, setConfig] = useState<Record<string, any>>({});
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [expanded, setExpanded] = useState(false);
+    const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+    const [edits, setEdits] = useState<Record<string, string>>({});
+
+    const loadConfig = useCallback(async () => {
+        try {
+            const r = await apiFetch('/api/channels/config');
+            const data = await r.json();
+            setConfig(data);
+        } catch { /* ignore */ }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { loadConfig(); }, [loadConfig]);
+
+    const toggleSecret = (key: string) => {
+        setShowSecrets(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const handleSave = async () => {
+        if (Object.keys(edits).length === 0) return;
+        setSaving(true); setError(null);
+        try {
+            const r = await apiFetch('/api/channels/config', {
+                method: 'PATCH',
+                body: JSON.stringify(edits),
+            });
+            if (!r.ok) throw new Error('Error al guardar');
+            setSaved(true);
+            setEdits({});
+            await loadConfig();
+            setTimeout(() => setSaved(false), 3000);
+        } catch (e: any) { setError(e.message); }
+        finally { setSaving(false); }
+    };
+
+    const fields = [
+        { key: 'meta_app_id', label: 'Meta App ID', sensitive: false, placeholder: 'ej: 1452652589836082', envKey: 'env_meta_app_id' },
+        { key: 'meta_app_secret', label: 'App Secret', sensitive: true, placeholder: 'ej: f4e61d3b5283...', envKey: 'env_meta_app_secret' },
+        { key: 'meta_access_token', label: 'Access Token (Permanente)', sensitive: true, placeholder: 'ej: EAAUpLgmZAZAzI...', envKey: 'env_meta_access_token' },
+        { key: 'meta_verify_token', label: 'Webhook Verify Token', sensitive: false, placeholder: 'ej: amunet_crm_verify_2024', envKey: 'env_meta_verify_token' },
+    ];
+
+    const hasAnyConfig = fields.some(f => config[f.key] || config[f.envKey]);
+    const hasEdits = Object.keys(edits).length > 0;
+
+    if (loading) return null;
+
+    return (
+        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full flex items-center gap-4 p-5 text-left hover:bg-slate-50/50 transition-colors"
+            >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-lg shrink-0">
+                    🔑
+                </div>
+                <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-slate-800 text-sm">Configuración Meta API</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                        App ID, App Secret, Access Token — credenciales para WhatsApp, Facebook e Instagram
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    {hasAnyConfig && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> Configurado
+                        </span>
+                    )}
+                    {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="border-t p-5 space-y-4">
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex gap-3">
+                        <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <div className="text-xs text-blue-700 space-y-1">
+                            <p><strong>Estas credenciales se almacenan en la base de datos</strong> y tienen prioridad sobre las variables de entorno. Ya no necesitas modificar archivos <code className="bg-blue-100 px-1 rounded">.env</code> ni Coolify.</p>
+                            <p>Las credenciales se usan para validar webhooks, enviar mensajes y sincronizar campañas.</p>
+                        </div>
+                    </div>
+
+                    {fields.map(field => {
+                        const currentValue = config[field.key];
+                        const hasEnv = config[field.envKey];
+                        const isEditing = edits[field.key] !== undefined;
+                        const displayValue = isEditing ? edits[field.key] : (currentValue || '');
+                        const isSet = !!currentValue || (field.sensitive && config[`${field.key}_set`]);
+
+                        return (
+                            <div key={field.key}>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-sm font-medium text-slate-700">
+                                        {field.label}
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        {isSet && (
+                                            <span className="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded font-medium">BD</span>
+                                        )}
+                                        {hasEnv && !isSet && (
+                                            <span className="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-medium">ENV</span>
+                                        )}
+                                        {field.sensitive && (
+                                            <button onClick={() => toggleSecret(field.key)}
+                                                className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                                                {showSecrets[field.key]
+                                                    ? <EyeOff className="w-3.5 h-3.5" />
+                                                    : <Eye className="w-3.5 h-3.5" />}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <input
+                                    type={field.sensitive && !showSecrets[field.key] ? 'password' : 'text'}
+                                    value={displayValue}
+                                    onChange={e => setEdits(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                    placeholder={field.placeholder}
+                                    className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                />
+                                {isSet && !isEditing && (
+                                    <p className="text-xs text-slate-400 mt-0.5">
+                                        Guardado en BD. Deja vacío para usar variable de entorno como fallback.
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {error && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{error}</p>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleSave}
+                            disabled={saving || !hasEdits}
+                            className="bg-blue-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-60 text-sm"
+                        >
+                            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
+                                : saved ? <><CheckCircle className="w-4 h-4" /> Guardado</>
+                                    : <><Save className="w-4 h-4" /> Guardar credenciales</>}
+                        </button>
+                        {hasEdits && (
+                            <button onClick={() => setEdits({})}
+                                className="text-sm text-slate-500 hover:text-slate-700">
+                                Cancelar cambios
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="bg-slate-50 border rounded-lg px-4 py-3 text-xs text-slate-500 flex gap-2">
+                        <Shield className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                        <div>
+                            Los secretos se almacenan en la base de datos y se enmascaran en la UI. La API nunca expone los valores completos. El sistema usa: <strong>BD → ENV → fallback</strong>.
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── Canales Tab ───────────────────────────────────────────────────────────────
 function CanalesTab() {
     const [channels, setChannels] = useState<Channel[]>([]);
@@ -741,6 +911,9 @@ function CanalesTab() {
                     </div>
                 )}
             </div>
+
+            {/* Meta API Configuration */}
+            <MetaConfigSection />
 
             {/* Existing channels */}
             {channels.length > 0 && (
