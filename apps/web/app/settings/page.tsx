@@ -1232,7 +1232,7 @@ function AITab() {
 
     const MODELS: Record<string, string[]> = {
         deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-        z_ai: ['glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5', 'glm-4.5-air'],
+        z_ai: ['glm-5-plus', 'glm-5', 'glm-4.7', 'glm-4.6', 'glm-4.5', 'glm-4.5-air'],
         claude: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5-20251001', 'claude-opus-4-5'],
         gemini: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
     };
