@@ -293,8 +293,8 @@ export async function getAIResponse(
             // Zhipu v4 API accepts the raw API key directly as Bearer token
             const zaiModel = model || 'glm-5';
             const zaiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
-            console.log(`🔑 Z.ai: model=${zaiModel}, key_prefix=${apiKey.substring(0, 15)}...`);
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl);
+            console.log(`🔑 Z.ai: model=${zaiModel}, key_len=${apiKey.length}, key_prefix=${apiKey.substring(0, 15)}..., key_suffix=...${apiKey.substring(apiKey.length - 5)}`);
+            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl, 3, 1.0, 4096);
         }
         default:
             throw new Error(`Provider not supported: ${provider}`);
@@ -308,7 +308,9 @@ async function getOpenAICompatibleResponse(
     apiKey: string,
     model: string,
     url: string,
-    maxRetries: number = 3
+    maxRetries: number = 3,
+    temperature: number = 0.7,
+    maxTokens: number = 1500
 ): Promise<string> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         if (attempt > 0) {
@@ -316,7 +318,7 @@ async function getOpenAICompatibleResponse(
             console.log(`⏳ Rate limit hit, waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}...`);
             await new Promise(r => setTimeout(r, waitSec * 1000));
         }
-        console.log(`🔑 API call (attempt ${attempt + 1}): model=${model}, url=${url.split('/').pop()}`);
+        console.log(`🔑 API call (attempt ${attempt + 1}): model=${model}, url=${url.split('/').pop()}, temp=${temperature}`);
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -329,8 +331,8 @@ async function getOpenAICompatibleResponse(
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userMessage },
                 ],
-                temperature: 0.7,
-                max_tokens: 1500,
+                temperature: temperature,
+                max_tokens: maxTokens,
             }),
         });
         if (res.ok) {
