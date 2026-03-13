@@ -113,7 +113,7 @@ export default function InboxPage() {
     const assignDropdownRef = useRef<HTMLDivElement>(null);
 
     const bottomRef = useRef<HTMLDivElement>(null);
-    const { joinConversation, leaveConversation, onNewMessage } = useSocket();
+    const { joinConversation, leaveConversation, onNewMessage, onConversationListUpdated } = useSocket();
 
     // ── Load conversations when filters change ─────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -197,6 +197,13 @@ export default function InboxPage() {
             setMessages(prev => [...prev, msg]);
         });
     }, [onNewMessage]);
+
+    // ── Auto-refresh conversation list when webhooks create/update conversations ─
+    useEffect(() => {
+        return onConversationListUpdated(() => {
+            loadConversations();
+        });
+    }, [onConversationListUpdated, loadConversations]);
 
     // ── Scroll to bottom on new messages ──────────────────────────────────────
     useEffect(() => {

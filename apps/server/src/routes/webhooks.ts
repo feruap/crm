@@ -4,6 +4,7 @@ import { db } from '../db';
 import { findBestAnswer, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
 import { findMatchingFlow, isWithinBusinessHours } from './flows';
 import { assignFromGroup } from './agent-groups';
+import { emitNewMessage, getIO } from '../socket';
 
 const router = Router();
 
@@ -674,11 +675,20 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
             const customerId = await resolveOrCreateCustomer('whatsapp', phone, displayName);
             const conversationId = await resolveOrCreateConversation(customerId, channelId);
 
-            await db.query(
+            const insertResult = await db.query(
                 `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
-                 VALUES ($1, $2, $3, 'inbound', $4, $5)`,
+                 VALUES ($1, $2, $3, 'inbound', $4, $5)
+                 RETURNING id, conversation_id, channel_id, customer_id, direction, content, created_at, handled_by`,
                 [conversationId, channelId, customerId, messageText, msg.id]
             );
+
+            // Emit real-time socket events
+            if (insertResult.rows[0]) {
+                const savedMsg = insertResult.rows[0];
+                emitNewMessage(conversationId, savedMsg);
+                // Broadcast globally so all connected clients refresh their conversation list
+                getIO().emit('conversation_list_updated', { conversationId, channelId });
+            }
 
             handleBotResponse(conversationId, channelId, customerId, messageText).catch(console.error);
         }
