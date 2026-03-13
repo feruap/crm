@@ -292,7 +292,7 @@ export async function getAIResponse(
         case 'z_ai': {
             // Zhipu v4 API accepts the raw API key directly as Bearer token
             const zaiModel = model || 'glm-5';
-            const zaiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            const zaiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
             console.log(`🔑 Z.ai: model=${zaiModel}, key_prefix=${apiKey.substring(0, 15)}...`);
             return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl);
         }
