@@ -270,6 +270,7 @@ export async function handleBotResponse(
         });
         getIO().emit('conversation_list_updated', { conversation_id: conversationId });
     } catch (err: any) {
+        console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
         try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
 
         let errorHint = "Error de conexión con IA.";

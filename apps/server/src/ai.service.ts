@@ -112,7 +112,7 @@ async function generateZaiEmbedding(text: string, apiKey: string): Promise<numbe
                 Authorization: `Bearer ${generateZaiJWT(apiKey)}`,
             },
             body: JSON.stringify({
-                model: 'embedding-2',
+                model: 'embedding-3',
                 input: text,
             }),
         });
