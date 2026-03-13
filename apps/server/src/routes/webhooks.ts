@@ -6,6 +6,118 @@ import { findMatchingFlow, isWithinBusinessHours } from './flows';
 import { assignFromGroup } from './agent-groups';
 import { emitNewMessage, getIO } from '../socket';
 
+// ─────────────────────────────────────────────
+// Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
+// ─────────────────────────────────────────────
+async function sendOutboundReply(
+    channelId: string,
+    customerId: string,
+    replyText: string
+): Promise<void> {
+    try {
+        // Get channel info + provider config
+        const chResult = await db.query(
+            `SELECT provider, provider_config FROM channels WHERE id = $1`,
+            [channelId]
+        );
+        if (chResult.rows.length === 0) return;
+
+        const { provider, provider_config } = chResult.rows[0];
+        const config = typeof provider_config === 'string' ? JSON.parse(provider_config) : (provider_config || {});
+
+        // Get customer's external ID (phone number for WhatsApp, page-scoped ID for Messenger)
+        const eiResult = await db.query(
+            `SELECT provider_id FROM external_identities WHERE customer_id = $1 AND provider = $2 LIMIT 1`,
+            [customerId, provider]
+        );
+        if (eiResult.rows.length === 0) {
+            console.log(`[SendReply] No external identity for customer ${customerId} on ${provider}`);
+            return;
+        }
+        const recipientId = eiResult.rows[0].provider_id;
+
+        if (provider === 'whatsapp') {
+            // Get access token: first from channel config, then from business_settings, then from env
+            let accessToken = config.access_token;
+            if (!accessToken) {
+                const tokenRow = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_access_token' LIMIT 1`);
+                accessToken = tokenRow.rows[0]?.value || process.env.META_ACCESS_TOKEN;
+            }
+            const phoneNumberId = config.phone_number_id;
+
+            if (!accessToken || !phoneNumberId) {
+                console.error(`[SendReply] WhatsApp channel missing access_token or phone_number_id`);
+                return;
+            }
+
+            const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
+            console.log(`📤 Sending WhatsApp reply to ${recipientId} via phone ${phoneNumberId}`);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: recipientId,
+                    type: 'text',
+                    text: { preview_url: false, body: replyText },
+                }),
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                console.error(`❌ WhatsApp send failed (${response.status}): ${errBody}`);
+            } else {
+                const result = await response.json();
+                console.log(`✅ WhatsApp reply sent. Message ID: ${(result as any)?.messages?.[0]?.id}`);
+            }
+        } else if (provider === 'facebook' || provider === 'instagram') {
+            // Meta Messenger / Instagram Direct send-back
+            let accessToken = config.access_token;
+            if (!accessToken) {
+                const tokenRow = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_access_token' LIMIT 1`);
+                accessToken = tokenRow.rows[0]?.value || process.env.META_ACCESS_TOKEN;
+            }
+            if (!accessToken) {
+                console.error(`[SendReply] ${provider} channel missing access_token`);
+                return;
+            }
+
+            const url = provider === 'instagram'
+                ? `https://graph.facebook.com/v21.0/me/messages`
+                : `https://graph.facebook.com/v21.0/me/messages`;
+
+            console.log(`📤 Sending ${provider} reply to ${recipientId}`);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({
+                    recipient: { id: recipientId },
+                    message: { text: replyText },
+                }),
+            });
+
+            if (!response.ok) {
+                const errBody = await response.text();
+                console.error(`❌ ${provider} send failed (${response.status}): ${errBody}`);
+            } else {
+                console.log(`✅ ${provider} reply sent to ${recipientId}`);
+            }
+        }
+        // webchat, tiktok — no outbound API needed (handled by socket/other mechanisms)
+    } catch (err: any) {
+        console.error(`[SendReply] Error:`, err.message);
+    }
+}
+
 const router = Router();
 
 // Helper: get a business setting from DB, fallback to env var
@@ -269,6 +381,9 @@ export async function handleBotResponse(
             last_message_at: insertedMessage.created_at,
         });
         getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+
+        // ── Send the reply back via the channel's native API (WhatsApp, Messenger, etc.) ──
+        await sendOutboundReply(channelId, customerId, botReply);
     } catch (err: any) {
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
         try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
