@@ -289,8 +289,19 @@ export async function getAIResponse(
             return getClaudeResponse(finalSystemPrompt, userMessage, apiKey);
         case 'gemini':
             return getGeminiResponse(finalSystemPrompt, userMessage, apiKey);
-        case 'z_ai':
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, generateZaiJWT(apiKey), model || 'glm-5', 'https://open.bigmodel.cn/api/paas/v4/chat/completions');
+        case 'z_ai': {
+            // Modern Zhipu v4 API accepts the raw API key directly as Bearer token
+            // Try raw key first; the JWT approach was for older API versions
+            const zaiModel = model || 'glm-5';
+            const zaiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            console.log(`🔑 Z.ai: trying raw API key (prefix=${apiKey.substring(0, 15)}...) with model=${zaiModel}`);
+            try {
+                return await getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl);
+            } catch (rawErr: any) {
+                console.log(`⚠️ Z.ai raw key failed: ${rawErr.message}. Trying JWT...`);
+                return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, generateZaiJWT(apiKey), zaiModel, zaiUrl);
+            }
+        }
         default:
             throw new Error(`Provider not supported: ${provider}`);
     }
@@ -304,6 +315,7 @@ async function getOpenAICompatibleResponse(
     model: string,
     url: string
 ): Promise<string> {
+    console.log(`🔑 API call: model=${model}, url=${url}, key_prefix=${apiKey.substring(0, 20)}...`);
     const res = await fetch(url, {
         method: 'POST',
         headers: {
