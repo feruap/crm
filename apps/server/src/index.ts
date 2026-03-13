@@ -329,6 +329,22 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_instructions TEXT`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS automated_flow TEXT`);
+
+    // Ensure automations table exists (was missing from Fase 7)
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS automations (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT NOT NULL,
+                trigger_type TEXT NOT NULL DEFAULT 'message',
+                conditions JSONB DEFAULT '{}',
+                actions JSONB DEFAULT '{}',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+    } catch (_) { /* already exists */ }
 }
 
 // ─── Startup Initialization ──────────────────────────────────────────────────
