@@ -327,6 +327,8 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS model_name TEXT`);
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS temperature NUMERIC(3,2) DEFAULT 0.7`);
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_instructions TEXT`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS automated_flow TEXT`);
 }
 
 // ─── Startup Initialization ──────────────────────────────────────────────────
