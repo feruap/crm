@@ -290,11 +290,13 @@ export async function getAIResponse(
         case 'gemini':
             return getGeminiResponse(finalSystemPrompt, userMessage, apiKey);
         case 'z_ai': {
-            // Zhipu v4 API accepts the raw API key directly as Bearer token
+            // Zhipu API key format: AppId.AppSecret → needs JWT
             const zaiModel = model || 'glm-5';
             const zaiUrl = 'https://api.z.ai/api/paas/v4/chat/completions';
-            console.log(`🔑 Z.ai: model=${zaiModel}, key_len=${apiKey.length}, key_prefix=${apiKey.substring(0, 15)}..., key_suffix=...${apiKey.substring(apiKey.length - 5)}`);
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, zaiModel, zaiUrl, 3, 1.0, 4096);
+            const hasSecret = apiKey.includes('.');
+            const authToken = hasSecret ? generateZaiJWT(apiKey) : apiKey;
+            console.log(`🔑 Z.ai: model=${zaiModel}, key_len=${apiKey.length}, hasSecret=${hasSecret}, jwt_prefix=${authToken.substring(0, 20)}...`);
+            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, authToken, zaiModel, zaiUrl, 3, 1.0, 4096);
         }
         default:
             throw new Error(`Provider not supported: ${provider}`);
