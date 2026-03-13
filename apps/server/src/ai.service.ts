@@ -87,9 +87,8 @@ export async function generateEmbedding(
         case 'gemini':
             return generateGeminiEmbedding(text, apiKey);
         case 'deepseek':
-            return generateOpenAICompatibleEmbedding(
-                text, apiKey, 'https://api.deepseek.com/v1/embeddings', 'deepseek-embedding'
-            );
+            // DeepSeek does not offer embeddings; return zero vector
+            return new Array(1536).fill(0);
         case 'claude':
             // Anthropic does not offer embeddings; use Gemini if key is available
             if (process.env.GEMINI_API_KEY) {
