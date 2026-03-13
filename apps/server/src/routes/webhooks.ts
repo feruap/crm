@@ -273,23 +273,30 @@ export async function handleBotResponse(
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
         try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
 
-        let errorHint = "Error de conexión con IA.";
+        // Friendly fallback message for the customer — never expose internal errors
+        const friendlyMessage = "¡Hola! Un momento, te atiendo enseguida. 😊";
+
+        // Log the real error internally for CRM agents
         if (err.message.includes("1113") || err.message.includes("余额不足")) {
-            errorHint = "⚠️ El bot se ha detenido porque los créditos de tu API (Z.ai / Zhipu) se han agotado (Error 429: Saldo insuficiente). Por favor recarga tu cuenta o cambia de proveedor en la configuración.";
+            console.error('⚠️ Z.ai/Zhipu credits exhausted (Error 429). Please recharge API credits.');
         }
 
-        const fallback = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', 0) RETURNING *`,
-            [conversationId, channelId, customerId, errorHint]
-        );
-        const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
-        emitNewMessage(conversationId, fallback.rows[0]);
-        emitConversationUpdated(conversationId, {
-            last_message: errorHint,
-            last_message_at: fallback.rows[0].created_at,
-        });
-        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+        try {
+            const fallback = await db.query(
+                `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
+                 VALUES ($1, $2, $3, 'outbound', $4, 'bot', 0) RETURNING *`,
+                [conversationId, channelId, customerId, friendlyMessage]
+            );
+            const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
+            emitNewMessage(conversationId, fallback.rows[0]);
+            emitConversationUpdated(conversationId, {
+                last_message: friendlyMessage,
+                last_message_at: fallback.rows[0].created_at,
+            });
+            getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+        } catch (dbErr) {
+            console.error('🤖 Bot Error: Failed to save fallback message:', dbErr);
+        }
     }
 }
 

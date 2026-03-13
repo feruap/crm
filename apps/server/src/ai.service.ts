@@ -97,7 +97,8 @@ export async function generateEmbedding(
             }
             return new Array(1536).fill(0);
         case 'z_ai':
-            return generateZaiEmbedding(text, apiKey);
+            // Z.ai/Zhipu does not have a working embedding model — skip API call
+            return new Array(1536).fill(0);
         default:
             return new Array(1536).fill(0);
     }
@@ -214,16 +215,20 @@ export async function getAIResponse(
         }
     }
 
-    // Always check for campaign-specific instructions
+    // Always check for campaign-specific instructions (wrapped in try/catch for safety)
     if (customerId && conversationId) {
-        const attrRes = await db.query(
-            `SELECT c.name, c.ai_instructions FROM attributions a 
-             JOIN campaigns c ON a.campaign_id = c.id
-             WHERE a.customer_id = $1 AND a.conversation_id = $2 LIMIT 1`,
-            [customerId, conversationId]
-        );
-        if (attrRes.rows.length > 0 && attrRes.rows[0].ai_instructions) {
-            finalSystemPrompt += `\n\n=== INSTRUCCIONES ESPECÍFICAS DE LA CAMPAÑA (${attrRes.rows[0].name}) ===\n${attrRes.rows[0].ai_instructions}\nAplica estas instrucciones y reglas en toda tu interacción con este cliente.`;
+        try {
+            const attrRes = await db.query(
+                `SELECT c.name, c.ai_instructions FROM attributions a 
+                 JOIN campaigns c ON a.campaign_id = c.id
+                 WHERE a.customer_id = $1 AND a.conversation_id = $2 LIMIT 1`,
+                [customerId, conversationId]
+            );
+            if (attrRes.rows.length > 0 && attrRes.rows[0].ai_instructions) {
+                finalSystemPrompt += `\n\n=== INSTRUCCIONES ESPECÍFICAS DE LA CAMPAÑA (${attrRes.rows[0].name}) ===\n${attrRes.rows[0].ai_instructions}\nAplica estas instrucciones y reglas en toda tu interacción con este cliente.`;
+            }
+        } catch (campaignErr) {
+            console.warn('Campaign attribution query failed (non-critical):', (campaignErr as any).message);
         }
     }
 
