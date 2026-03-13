@@ -237,8 +237,7 @@ async function runMigrations() {
         `);
         if (check.rows[0].migrated) {
             console.log('✅ Fase 7 migration already applied, skipping.');
-            return;
-        }
+        } else {
 
         console.log('📦 Running Fase 7 migration...');
 
@@ -312,6 +311,7 @@ async function runMigrations() {
         `);
 
         console.log('✅ Fase 7 migration completed successfully!');
+        } // end else (migration not yet applied)
     } catch (err) {
         console.error('❌ Fase 7 migration error:', err);
         // Don't crash the server — tables might partially exist
