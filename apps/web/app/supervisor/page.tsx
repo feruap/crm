@@ -7,7 +7,9 @@ const {
     TrendingUp, TrendingDown, Layout, Target, PieChart, Info
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 interface AnalyticsData {
     new_conversations: number;
@@ -20,6 +22,7 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsDashboard() {
+    const { authFetch } = useAuth();
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [agents, setAgents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -30,8 +33,8 @@ export default function AnalyticsDashboard() {
             setLoading(true);
             try {
                 const [sumRes, agentRes] = await Promise.all([
-                    apiFetch('/api/analytics/summary'),
-                    apiFetch('/api/analytics/by-agent')
+                    authFetch(`${API_URL}/api/analytics/summary`),
+                    authFetch(`${API_URL}/api/analytics/by-agent`)
                 ]);
                 const sumData = await sumRes.json();
                 const agentData = await agentRes.json();
@@ -57,7 +60,7 @@ export default function AnalyticsDashboard() {
             finally { setLoading(false); }
         };
         fetchData();
-    }, [timeframe]);
+    }, [timeframe, authFetch]);
 
     if (loading || !data) {
         return (

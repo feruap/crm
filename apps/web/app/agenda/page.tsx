@@ -7,7 +7,9 @@ const {
     Filter, AlertCircle, CheckCircle2, Users
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 interface Event {
     id: string;
@@ -31,6 +33,7 @@ const EVENT_TYPE_STYLE: Record<string, { label: string; bg: string; text: string
 };
 
 function NewEventModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+    const { authFetch } = useAuth();
     const [title, setTitle] = useState('');
     const [type, setType] = useState('meeting');
     const [start, setStart] = useState('');
@@ -41,7 +44,7 @@ function NewEventModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     const save = async () => {
         setSaving(true);
         try {
-            await apiFetch('/api/events', {
+            await authFetch(`${API_URL}/api/events`, {
                 method: 'POST',
                 body: JSON.stringify({ title, event_type: type, start_at: start, end_at: end, notes })
             });
@@ -106,6 +109,7 @@ function NewEventModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
 }
 
 export default function AgendaPage() {
+    const { authFetch } = useAuth();
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [showNew, setShowNew] = useState(false);
@@ -114,17 +118,17 @@ export default function AgendaPage() {
     const fetchEvents = async () => {
         setLoading(true);
         try {
-            const res = await apiFetch('/api/events');
+            const res = await authFetch(`${API_URL}/api/events`);
             const data = await res.json();
             setEvents(data);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchEvents(); }, []);
+    useEffect(() => { fetchEvents(); }, [authFetch]);
 
     const markCompleted = async (id: string) => {
-        await apiFetch(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'completed' }) });
+        await authFetch(`${API_URL}/api/events/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'completed' }) });
         fetchEvents();
     };
 

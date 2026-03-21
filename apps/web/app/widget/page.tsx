@@ -7,7 +7,9 @@ const {
     Instagram, Facebook, History, AlertCircle, Link2, Settings
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 const WhatsAppIcon = () => (
     <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
@@ -66,6 +68,7 @@ function ProviderIcon({ provider, className }: { provider: string; className?: s
 }
 
 export default function WidgetBuilderPage() {
+    const { authFetch } = useAuth();
     const [config, setConfig] = useState({
         name: 'Mi Widget Principal',
         bg_color: '#3b82f6',
@@ -85,9 +88,9 @@ export default function WidgetBuilderPage() {
         const fetchData = async () => {
             try {
                 const [configRes, codeRes, channelsRes] = await Promise.all([
-                    apiFetch('/api/widget-config'),
-                    apiFetch('/api/widget-config/embed-code'),
-                    apiFetch('/api/channels/widget-available'),
+                    authFetch(`${API_URL}/api/widget-config`),
+                    authFetch(`${API_URL}/api/widget-config/embed-code`),
+                    authFetch(`${API_URL}/api/channels/widget-available`),
                 ]);
                 const configData = await configRes.json();
                 const codeData = await codeRes.json();
@@ -103,16 +106,16 @@ export default function WidgetBuilderPage() {
             }
         };
         fetchData();
-    }, []);
+    }, [authFetch]);
 
     const handleSave = async () => {
         setSaving(true);
         try {
-            await apiFetch('/api/widget-config', {
+            await authFetch(`${API_URL}/api/widget-config`, {
                 method: 'PUT',
                 body: JSON.stringify(config)
             });
-            const codeRes = await apiFetch('/api/widget-config/embed-code');
+            const codeRes = await authFetch(`${API_URL}/api/widget-config/embed-code`);
             const codeData = await codeRes.json();
             setEmbedCode(codeData.code || '');
         } catch (e) {

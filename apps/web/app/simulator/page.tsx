@@ -7,9 +7,11 @@ const {
     Wifi, WifiOff, Sparkles, Zap,
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
 import { useSocket } from '../../hooks/useSocket';
 import Link from 'next/link';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Channel {
@@ -73,6 +75,7 @@ function generatePhone() {
 
 // ── Page Component ────────────────────────────────────────────────────────────
 export default function SimulatorPage() {
+    const { authFetch } = useAuth();
     const [channels, setChannels] = useState<Channel[]>([]);
     const [selectedChannelId, setSelectedChannelId] = useState('');
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -98,7 +101,7 @@ export default function SimulatorPage() {
     useEffect(() => {
         (async () => {
             try {
-                const r = await apiFetch('/api/channels');
+                const r = await authFetch(`${API_URL}/api/channels`);
                 const data: Channel[] = await r.json();
                 const active = data.filter(c => c.is_active);
 
@@ -106,7 +109,7 @@ export default function SimulatorPage() {
                     setChannels(active);
                     setSelectedChannelId(active[0].id);
                 } else {
-                    const cr = await apiFetch('/api/channels', {
+                    const cr = await authFetch(`${API_URL}/api/channels`, {
                         method: 'POST',
                         body: JSON.stringify({
                             name: 'WhatsApp Demo',
@@ -121,13 +124,13 @@ export default function SimulatorPage() {
                 }
 
                 // Fetch campaigns
-                const cmpR = await apiFetch('/api/campaigns');
+                const cmpR = await authFetch(`${API_URL}/api/campaigns`);
                 const cmpData = await cmpR.json();
                 setCampaigns(cmpData);
 
                 // ── Restore previous simulator session ──────────────────────
                 try {
-                    const sessionRes = await apiFetch('/api/simulator/session');
+                    const sessionRes = await authFetch(`${API_URL}/api/simulator/session`);
                     const session = await sessionRes.json();
                     if (session && session.conversation_id) {
                         if (session.channel_id) setSelectedChannelId(session.channel_id);
@@ -136,7 +139,7 @@ export default function SimulatorPage() {
                         if (session.campaign_id) setSelectedCampaignId(session.campaign_id);
                         setConversationId(session.conversation_id);
                         // Load message history
-                        const msgRes = await apiFetch(`/api/simulator/messages/${session.conversation_id}`);
+                        const msgRes = await authFetch(`${API_URL}/api/simulator/messages/${session.conversation_id}`);
                         const msgData = await msgRes.json();
                         setMessages(msgData);
                     }
@@ -151,7 +154,7 @@ export default function SimulatorPage() {
                 setLoadingChannels(false);
             }
         })();
-    }, []);
+    }, [authFetch]);
 
     // ── Subscribe to outbound (agent) messages in real time ──────────────────
     useEffect(() => {
@@ -183,7 +186,7 @@ export default function SimulatorPage() {
         setCreatingChannel(true);
         setError('');
         try {
-            const r = await apiFetch('/api/channels', {
+            const r = await authFetch(`${API_URL}/api/channels`, {
                 method: 'POST',
                 body: JSON.stringify({
                     name: 'WhatsApp Demo',
@@ -201,19 +204,19 @@ export default function SimulatorPage() {
         } finally {
             setCreatingChannel(false);
         }
-    }, []);
+    }, [authFetch]);
 
     // ── Load full message history for a conversation ──────────────────────────
     const loadMessages = useCallback(async (convId: string) => {
         setLoadingHistory(true);
         try {
-            const r = await apiFetch(`/api/simulator/messages/${convId}`);
+            const r = await authFetch(`${API_URL}/api/simulator/messages/${convId}`);
             const data = await r.json();
             setMessages(data);
         } finally {
             setLoadingHistory(false);
         }
-    }, []);
+    }, [authFetch]);
 
     // ── Send a message ────────────────────────────────────────────────────────
     const sendMessage = useCallback(async (quickText?: string) => {
@@ -225,7 +228,7 @@ export default function SimulatorPage() {
         setError('');
 
         try {
-            const r = await apiFetch('/api/simulator/message', {
+            const r = await authFetch(`${API_URL}/api/simulator/message`, {
                 method: 'POST',
                 body: JSON.stringify({
                     channel_id: selectedChannelId,
@@ -242,7 +245,7 @@ export default function SimulatorPage() {
                 setConversationId(data.conversation_id);
                 await loadMessages(data.conversation_id);
                 // Persist session so it survives page navigation
-                apiFetch('/api/simulator/session', {
+                authFetch(`${API_URL}/api/simulator/session`, {
                     method: 'POST',
                     body: JSON.stringify({
                         conversation_id: data.conversation_id,
@@ -266,7 +269,7 @@ export default function SimulatorPage() {
             setSending(false);
             setTimeout(() => textareaRef.current?.focus(), 50);
         }
-    }, [input, selectedChannelId, selectedCampaignId, sending, customerName, customerPhone, conversationId, loadMessages]);
+    }, [input, selectedChannelId, selectedCampaignId, sending, customerName, customerPhone, conversationId, loadMessages, authFetch]);
 
     // ── Keyboard: Enter sends, Shift+Enter = new line ─────────────────────────
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -283,7 +286,7 @@ export default function SimulatorPage() {
         setMessages([]);
         setCustomerPhone(generatePhone());
         // Clear persisted session
-        apiFetch('/api/simulator/session', { method: 'DELETE' }).catch(() => {});
+        authFetch(`${API_URL}/api/simulator/session`, { method: 'DELETE' }).catch(() => {});
     };
 
     // ── Reload message history ────────────────────────────────────────────────

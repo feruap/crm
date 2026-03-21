@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch } from '../../../hooks/useAuth';
+import { useAuth } from '../../../components/AuthProvider';
 import * as Lucide from 'lucide-react';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 const {
     Save, ArrowLeft, Loader2, Play, Trash2, Plus, GripVertical,
     MessageSquare, ListOrdered, GitBranch, Users, Bot, Zap,
@@ -85,6 +87,7 @@ function EdgeSVG({ edge, nodes }: { edge: FlowEdge; nodes: FlowNode[] }) {
 // ── Main FlowEditor Component ────────────────────────────────────────────────
 
 export default function FlowEditorPage() {
+    const { authFetch } = useAuth();
     const [flowId, setFlowId] = useState<string | null>(null);
     const [flowName, setFlowName] = useState('Nuevo Flujo Visual');
     const [isActive, setIsActive] = useState(true);
@@ -113,8 +116,8 @@ export default function FlowEditorPage() {
         const id = params.get('id');
 
         Promise.all([
-            apiFetch('/api/agent-groups').then(r => r.json()),
-            apiFetch('/api/channels').then(r => r.json()),
+            authFetch(`${API_URL}/api/agent-groups`).then(r => r.json()),
+            authFetch(`${API_URL}/api/channels`).then(r => r.json()),
         ]).then(([g, c]) => {
             setGroups(g || []);
             setChannels(c || []);
@@ -123,7 +126,7 @@ export default function FlowEditorPage() {
         if (id) {
             setFlowId(id);
             setLoading(true);
-            apiFetch(`/api/flows/${id}`)
+            authFetch(`${API_URL}/api/flows/${id}`)
                 .then(r => r.json())
                 .then(flow => {
                     setFlowName(flow.name);
@@ -135,7 +138,7 @@ export default function FlowEditorPage() {
                 })
                 .finally(() => setLoading(false));
         }
-    }, []);
+    }, [authFetch]);
 
     // ── Drag handling ────────────────────────────────────────────────────────
     const handleMouseDown = useCallback((e: React.MouseEvent, nodeId: string) => {
@@ -242,9 +245,9 @@ export default function FlowEditorPage() {
             };
 
             if (flowId) {
-                await apiFetch(`/api/flows/${flowId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+                await authFetch(`${API_URL}/api/flows/${flowId}`, { method: 'PATCH', body: JSON.stringify(payload) });
             } else {
-                const res = await apiFetch('/api/flows', { method: 'POST', body: JSON.stringify(payload) });
+                const res = await authFetch(`${API_URL}/api/flows`, { method: 'POST', body: JSON.stringify(payload) });
                 const created = await res.json();
                 setFlowId(created.id);
                 window.history.replaceState({}, '', `?id=${created.id}`);

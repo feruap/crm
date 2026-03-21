@@ -7,7 +7,9 @@ const {
     Search, Check
 } = Lucide as any;
 
-import { apiFetch } from '../../../hooks/useAuth';
+import { useAuth } from '../../../components/AuthProvider';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 interface Rule {
     id: string;
@@ -26,6 +28,7 @@ interface Agent {
 }
 
 export default function AssignmentRulesPage() {
+    const { authFetch } = useAuth();
     const [rules, setRules] = useState<Rule[]>([]);
     const [agents, setAgents] = useState<Agent[]>([]);
     const [channels, setChannels] = useState<any[]>([]);
@@ -45,9 +48,9 @@ export default function AssignmentRulesPage() {
         setLoading(true);
         try {
             const [rulesRes, agentsRes, channelsRes] = await Promise.all([
-                apiFetch('/api/assignment-rules'),
-                apiFetch('/api/agents'),
-                apiFetch('/api/channels')
+                authFetch(`${API_URL}/api/assignment-rules`),
+                authFetch(`${API_URL}/api/agents`),
+                authFetch(`${API_URL}/api/channels`)
             ]);
             setRules(await rulesRes.json());
             setAgents(await agentsRes.json());
@@ -61,7 +64,7 @@ export default function AssignmentRulesPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await apiFetch('/api/assignment-rules', {
+            await authFetch(`${API_URL}/api/assignment-rules`, {
                 method: 'POST',
                 body: JSON.stringify(form)
             });
@@ -73,7 +76,7 @@ export default function AssignmentRulesPage() {
     };
 
     const toggleRuleStatus = async (id: string, currentStatus: boolean) => {
-        await apiFetch(`/api/assignment-rules/${id}`, {
+        await authFetch(`${API_URL}/api/assignment-rules/${id}`, {
             method: 'PATCH',
             body: JSON.stringify({ is_active: !currentStatus })
         });
@@ -82,7 +85,7 @@ export default function AssignmentRulesPage() {
 
     const deleteRule = async (id: string) => {
         if (!confirm('¿Seguro que deseas eliminar esta regla?')) return;
-        await apiFetch(`/api/assignment-rules/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/api/assignment-rules/${id}`, { method: 'DELETE' });
         fetchData();
     };
 

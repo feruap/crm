@@ -5,8 +5,10 @@ import * as Lucide from 'lucide-react';
 const {
     Bot, Search, Trash2, Edit2, Check, TrendingUp, Plus, Loader2, Zap, X, Users, GitBranch
 } = Lucide as any;
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
 import Link from 'next/link';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface KnowledgeEntry {
@@ -49,6 +51,7 @@ export default function AutomationsPage() {
 
 // ── Flujos Tab (New Automations UI) ───────────────────────────────────────────
 function FlujosTab() {
+    const { authFetch } = useAuth();
     const [rules, setRules] = useState<any[]>([]);
     const [visualFlows, setVisualFlows] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -73,7 +76,7 @@ function FlujosTab() {
 
     const fetchAutomations = async () => {
         try {
-            const res = await apiFetch('/api/automations');
+            const res = await authFetch(`${API_URL}/api/automations`);
             if (res.ok) {
                 const data = await res.json();
                 setRules(data);
@@ -87,7 +90,7 @@ function FlujosTab() {
 
     const fetchVisualFlows = async () => {
         try {
-            const res = await apiFetch('/api/flows');
+            const res = await authFetch(`${API_URL}/api/flows`);
             if (res.ok) {
                 const data = await res.json();
                 setVisualFlows(data.filter((f: any) => f.flow_type === 'visual'));
@@ -97,17 +100,17 @@ function FlujosTab() {
 
     const handleDeleteVisualFlow = async (id: string) => {
         if (!confirm('¿Eliminar este flujo visual?')) return;
-        await apiFetch(`/api/flows/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/api/flows/${id}`, { method: 'DELETE' });
         fetchVisualFlows();
     };
 
     const handleSaveRule = async () => {
         try {
             const isEdit = editingId !== null;
-            const url = isEdit ? `/api/automations/${editingId}` : '/api/automations';
+            const url = isEdit ? `${API_URL}/api/automations/${editingId}` : `${API_URL}/api/automations`;
             const method = isEdit ? 'PUT' : 'POST';
 
-            const res = await apiFetch(url, {
+            const res = await authFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newRule)
@@ -125,7 +128,7 @@ function FlujosTab() {
     const handleDelete = async (id: number) => {
         if (!confirm('¿Seguro de eliminar este flujo?')) return;
         try {
-            const res = await apiFetch(`/api/automations/${id}`, { method: 'DELETE' });
+            const res = await authFetch(`${API_URL}/api/automations/${id}`, { method: 'DELETE' });
             if (res.ok) fetchAutomations();
         } catch (error) {
             console.error('Error deleting automation:', error);
@@ -352,6 +355,7 @@ function FlujosTab() {
 
 // ── Grupos de Agentes Tab (reemplaza EnrutamientoTab) ─────────────────────────
 function GruposAgentesTab() {
+    const { authFetch } = useAuth();
     const [groups, setGroups] = useState<any[]>([]);
     const [channels, setChannels] = useState<any[]>([]);
     const [agents, setAgents] = useState<any[]>([]);
@@ -369,18 +373,18 @@ function GruposAgentesTab() {
 
     useEffect(() => {
         Promise.all([
-            apiFetch('/api/agent-groups').then(r => r.json()),
-            apiFetch('/api/channels').then(r => r.json()),
-            apiFetch('/api/agents').then(r => r.json())
+            authFetch(`${API_URL}/api/agent-groups`).then(r => r.json()),
+            authFetch(`${API_URL}/api/channels`).then(r => r.json()),
+            authFetch(`${API_URL}/api/agents`).then(r => r.json())
         ]).then(([groupsData, channelsData, agentsData]) => {
             setGroups(groupsData || []);
             setChannels(channelsData || []);
             setAgents(agentsData || []);
         }).finally(() => setIsLoading(false));
-    }, []);
+    }, [authFetch]);
 
     const fetchGroups = async () => {
-        const res = await apiFetch('/api/agent-groups');
+        const res = await authFetch(`${API_URL}/api/agent-groups`);
         setGroups(await res.json());
     };
 
@@ -388,12 +392,12 @@ function GruposAgentesTab() {
         if (!form.name || form.agent_ids.length === 0) return alert('Nombre y al menos un agente requeridos');
 
         if (editingId) {
-            await apiFetch(`/api/agent-groups/${editingId}`, {
+            await authFetch(`${API_URL}/api/agent-groups/${editingId}`, {
                 method: 'PATCH',
                 body: JSON.stringify(form)
             });
         } else {
-            await apiFetch('/api/agent-groups', {
+            await authFetch(`${API_URL}/api/agent-groups`, {
                 method: 'POST',
                 body: JSON.stringify(form)
             });
@@ -418,7 +422,7 @@ function GruposAgentesTab() {
 
     const handleDelete = async (id: string) => {
         if (!confirm('¿Eliminar este grupo de agentes?')) return;
-        await apiFetch(`/api/agent-groups/${id}`, { method: 'DELETE' });
+        await authFetch(`${API_URL}/api/agent-groups/${id}`, { method: 'DELETE' });
         fetchGroups();
     };
 
@@ -572,6 +576,7 @@ function GruposAgentesTab() {
 
 // ── Conocimiento Tab (Tabla de RAG) ────────────────
 function ConocimientoTab() {
+    const { authFetch } = useAuth();
     const [entries, setEntries] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -585,12 +590,12 @@ function ConocimientoTab() {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        apiFetch('/api/bot/knowledge')
+        authFetch(`${API_URL}/api/bot/knowledge`)
             .then(r => r.json())
             .then(setEntries)
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, []);
+    }, [authFetch]);
 
     const filtered = entries.filter(e =>
         e.question.toLowerCase().includes(search.toLowerCase()) ||
@@ -601,7 +606,7 @@ function ConocimientoTab() {
         setSaving(true);
         try {
             const updatedMetadata = { ...metadata, upsell: editForm.upsell };
-            await apiFetch(`/api/bot/knowledge/${id}`, {
+            await authFetch(`${API_URL}/api/bot/knowledge/${id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({ question: editForm.question, answer: editForm.answer, metadata: updatedMetadata })
             });
@@ -615,7 +620,7 @@ function ConocimientoTab() {
         if (!confirm('¿Seguro de eliminar esta entrada?')) return;
         setSaving(true);
         try {
-            await apiFetch(`/api/bot/knowledge/${id}`, { method: 'DELETE' });
+            await authFetch(`${API_URL}/api/bot/knowledge/${id}`, { method: 'DELETE' });
             setEntries(prev => prev.filter(e => e.id !== id));
         } finally {
             setSaving(false);
@@ -626,7 +631,7 @@ function ConocimientoTab() {
         if (!newForm.question.trim() || !newForm.answer.trim()) return;
         setSaving(true);
         try {
-            const res = await apiFetch('/api/bot/knowledge', {
+            const res = await authFetch(`${API_URL}/api/bot/knowledge`, {
                 method: 'POST',
                 body: JSON.stringify({ question: newForm.question, answer: newForm.answer })
             });
@@ -634,7 +639,7 @@ function ConocimientoTab() {
 
             if (newForm.upsell) {
                 // PATCH if there's upsell/metadata right away
-                await apiFetch(`/api/bot/knowledge/${entry.id}`, {
+                await authFetch(`${API_URL}/api/bot/knowledge/${entry.id}`, {
                     method: 'PATCH',
                     body: JSON.stringify({ metadata: { upsell: newForm.upsell } })
                 });
@@ -651,7 +656,7 @@ function ConocimientoTab() {
         if (!scrapeUrl.trim()) return;
         setSaving(true);
         try {
-            const res = await apiFetch('/api/bot/knowledge/scrape', {
+            const res = await authFetch(`${API_URL}/api/bot/knowledge/scrape`, {
                 method: 'POST',
                 body: JSON.stringify({ url: scrapeUrl })
             });
@@ -670,11 +675,11 @@ function ConocimientoTab() {
     const handleSyncWC = async () => {
         setSaving(true);
         try {
-            const res = await apiFetch('/api/bot/knowledge/sync-wc', { method: 'POST' });
+            const res = await authFetch(`${API_URL}/api/bot/knowledge/sync-wc`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
                 alert(`Sincronización completada. Se añadieron ${data.synced} productos.`);
-                const r = await apiFetch('/api/bot/knowledge');
+                const r = await authFetch(`${API_URL}/api/bot/knowledge`);
                 setEntries(await r.json());
             } else {
                 alert('Hubo un error al sincronizar con WooCommerce.');

@@ -6,7 +6,9 @@ const {
     MessageSquare, CheckCircle, Bot, Clock, Loader2, Crown
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -142,12 +144,13 @@ function LevelBar({ progress, color }: { progress: number; color: string }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function GamificationPage() {
+    const { authFetch } = useAuth();
     const [agentsRaw, setAgentsRaw] = useState<AgentRaw[]>([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<'leaderboard' | 'badges' | 'challenges'>('leaderboard');
 
     useEffect(() => {
-        apiFetch('/api/agents')
+        authFetch(`${API_URL}/api/agents`)
             .then(r => r.json())
             .then((data: any[]) => setAgentsRaw(data.map(a => ({
                 ...a,
@@ -157,7 +160,7 @@ export default function GamificationPage() {
             }))))
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, []);
+    }, [authFetch]);
 
     const agents: AgentStats[] = agentsRaw
         .map(a => {

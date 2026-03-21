@@ -6,7 +6,7 @@ const {
     Download, Upload, Edit2, Trash2, Mail, Phone, MessageSquare, X, Loader2, AlertCircle
 } = Lucide as any;
 
-import { apiFetch } from '../../hooks/useAuth';
+import { useAuth } from '../../components/AuthProvider';
 import Link from 'next/link';
 
 interface Customer {
@@ -18,11 +18,13 @@ interface Customer {
     created_at: string;
 }
 
-function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+function ImportModal({ onClose, onImported, authFetch }: { onClose: () => void; onImported: () => void; authFetch: (url: string, options?: RequestInit) => Promise<Response> }) {
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [error, setError] = useState('');
     const [result, setResult] = useState<{ created: number } | null>(null);
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
     const handleUpload = async () => {
         if (!file) return;
@@ -33,10 +35,8 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
         formData.append('file', file);
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/customers/import`, {
+            const res = await authFetch(`${API_URL}/api/customers/import`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
 
@@ -116,6 +116,7 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
 }
 
 export default function ContactsPage() {
+    const { authFetch } = useAuth();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -124,6 +125,7 @@ export default function ContactsPage() {
     const [labelFilter, setLabelFilter] = useState('');
     const [showImport, setShowImport] = useState(false);
 
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
     const limit = 10;
 
     const fetchCustomers = async () => {
@@ -135,7 +137,7 @@ export default function ContactsPage() {
                 search,
                 label: labelFilter
             });
-            const res = await apiFetch(`/api/customers?${params}`);
+            const res = await authFetch(`${API_URL}/api/customers?${params}`);
             const data = await res.json();
             setCustomers(data.data);
             setTotal(data.total);
@@ -347,6 +349,7 @@ export default function ContactsPage() {
                 <ImportModal
                     onClose={() => setShowImport(false)}
                     onImported={() => { fetchCustomers(); }}
+                    authFetch={authFetch}
                 />
             )}
         </div>
