@@ -34,16 +34,49 @@ interface Conversation {
     agent_name: string | null;
 }
 
+interface RawMessage {
+    id: string;
+    conversation_id: string;
+    direction: 'inbound' | 'outbound';
+    content: string;
+    message_type: string;
+    handled_by: string | null;
+    provider_message_id: string | null;
+    is_read: boolean;
+    created_at: string;
+    media_url: string | null;
+    bot_action: string | null;
+}
+
 interface Message {
     id: string;
     conversation_id: string;
     sender_type: 'customer' | 'agent' | 'bot';
-    sender_id: string | null;
-    content_type: string;
     body: string;
+    content_type: string;
     provider_message_id: string | null;
     status: string;
     created_at: string;
+    media_url: string | null;
+}
+
+// Map raw DB message to frontend Message format
+function mapMessage(raw: RawMessage): Message {
+    let sender_type: 'customer' | 'agent' | 'bot' = 'customer';
+    if (raw.direction === 'outbound') {
+        sender_type = raw.handled_by === 'bot' || raw.bot_action ? 'bot' : 'agent';
+    }
+    return {
+        id: raw.id,
+        conversation_id: raw.conversation_id,
+        sender_type,
+        body: raw.content || '',
+        content_type: raw.message_type || 'text',
+        provider_message_id: raw.provider_message_id,
+        status: raw.is_read ? 'delivered' : 'sent',
+        created_at: raw.created_at,
+        media_url: raw.media_url,
+    };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -138,7 +171,8 @@ export default function InboxPage() {
             if (afterTs) params.set('after', afterTs);
             const res = await authFetch(`${API}/api/conversations/${convId}/messages?${params}`);
             if (res.ok) {
-                const data: Message[] = await res.json();
+                const raw: RawMessage[] = await res.json();
+                const data = raw.map(mapMessage);
                 if (afterTs && data.length > 0) {
                     setMessages(prev => [...prev, ...data]);
                 } else if (!afterTs) {
