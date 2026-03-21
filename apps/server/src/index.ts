@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import dotenv from 'dotenv';
 import { db } from './db';
 import { requireAuth, requireRole } from './middleware/auth';
@@ -44,6 +45,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ─── Static files (widget.js) ────────────────
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
 // ─── Health (public) ─────────────────────────
 app.get('/health', async (_req, res) => {
     try {
@@ -59,6 +63,9 @@ app.use('/api/auth', authRouter);
 
 // ─── Webhooks (public — validated by signature) ──
 app.use('/api/webhooks', webhooksRouter);
+
+// ─── Widget config (GET public for embed, PUT has its own requireAuth) ──
+app.use('/api/widget-config', widgetConfigRouter);
 
 // ─── Protected Routes (require JWT) ──────────
 app.use('/api/conversations',     requireAuth, conversationsRouter);
@@ -89,7 +96,7 @@ app.use('/api/quick-replies',     requireAuth, quickRepliesRouter);
 app.use('/api/scheduled-messages',requireAuth, scheduledMessagesRouter);
 app.use('/api/simulator',         requireAuth, simulatorRouter);
 app.use('/api/teams',             requireAuth, teamsRouter);
-app.use('/api/widget-config',     requireAuth, widgetConfigRouter);
+// widget-config mounted above as public (GET) / protected (PUT)
 
 // ─── Manager+ Routes (gerente or director) ───
 app.use('/api/escalation-rules',  requireAuth, requireRole('gerente'), escalationRulesRouter);
