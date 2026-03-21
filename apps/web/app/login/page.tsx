@@ -1,113 +1,127 @@
-"use client";
-import React, { useState } from 'react';
+'use client';
+
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import * as Lucide from 'lucide-react';
-const { MessageSquare, Eye, EyeOff, AlertCircle } = Lucide as any;
-
-
-const API = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
+import { useAuth } from '../../components/AuthProvider';
 
 export default function LoginPage() {
-    const router = useRouter();
+    const [mode, setMode] = useState<'login' | 'register'>('login');
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [showPwd, setShowPwd] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const { login, register } = useAuth();
+    const router = useRouter();
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            const res = await fetch(`${API}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.error || 'Error al iniciar sesión');
-                return;
+            if (mode === 'login') {
+                const result = await login(email, password);
+                if (result.ok) {
+                    router.push('/conversations');
+                } else {
+                    setError(result.error || 'Error de autenticacion');
+                }
+            } else {
+                const result = await register(name, email, password);
+                if (result.ok) {
+                    router.push('/conversations');
+                } else {
+                    setError(result.error || 'Error al registrar');
+                }
             }
-
-            localStorage.setItem('myalice_token', data.token);
-            router.replace('/inbox');
-        } catch {
-            setError('No se pudo conectar con el servidor');
         } finally {
             setLoading(false);
         }
-    };
+    }
 
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
-            <div className="w-full max-w-sm">
-                {/* Logo */}
+        <div className="flex items-center justify-center min-h-screen bg-slate-50">
+            <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                        <MessageSquare className="w-6 h-6 text-white" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-white">MyAlice</h1>
-                    <p className="text-slate-400 text-sm mt-1">CRM Omnicanal con IA</p>
+                    <h1 className="text-3xl font-bold text-slate-800">Boton Medico</h1>
+                    <p className="text-slate-500 mt-2">CRM Omnicanal con IA</p>
                 </div>
 
-                {/* Card */}
-                <div className="bg-white rounded-2xl p-8 shadow-xl">
-                    <h2 className="text-lg font-bold text-slate-800 mb-6">Iniciar sesión</h2>
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8">
+                    <h2 className="text-xl font-semibold text-slate-800 mb-6">
+                        {mode === 'login' ? 'Iniciar Sesion' : 'Crear Cuenta'}
+                    </h2>
+
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                            {error}
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        {mode === 'register' && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    placeholder="Tu nombre completo"
+                                    required
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
+                                placeholder="tu@botonmedico.com"
                                 required
-                                className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="agente@empresa.com"
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                            <div className="relative">
-                                <input
-                                    type={showPwd ? 'text' : 'password'}
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    required
-                                    className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                                    placeholder="••••••••"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPwd(v => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                >
-                                    {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                </button>
-                            </div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Contrasena</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="Minimo 6 caracteres"
+                                required
+                                minLength={6}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                         </div>
-
-                        {error && (
-                            <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                {error}
-                            </div>
-                        )}
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+                            className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
                         >
-                            {loading ? 'Iniciando sesión...' : 'Entrar'}
+                            {loading ? 'Cargando...' : mode === 'login' ? 'Entrar' : 'Crear Cuenta'}
                         </button>
                     </form>
+
+                    <div className="mt-4 text-center">
+                        <button
+                            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+                            className="text-sm text-blue-600 hover:text-blue-700"
+                        >
+                            {mode === 'login'
+                                ? 'Primera vez? Crear cuenta'
+                                : 'Ya tienes cuenta? Iniciar sesion'}
+                        </button>
+                    </div>
+
+                    <p className="text-xs text-slate-400 text-center mt-4">
+                        El primer usuario registrado se convierte en Director automaticamente.
+                    </p>
                 </div>
             </div>
         </div>

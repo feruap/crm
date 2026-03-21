@@ -45,6 +45,11 @@ export function useSocket() {
         return () => { socketRef.current.off('conversation_updated', handler); };
     }, []);
 
+    const onConversationListUpdated = useCallback((handler: (data: any) => void) => {
+        socketRef.current.on('conversation_list_updated', handler);
+        return () => { socketRef.current.off('conversation_list_updated', handler); };
+    }, []);
 
-    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated };
+
+    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated, onConversationListUpdated };
 }

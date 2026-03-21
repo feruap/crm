@@ -1,20 +1,20 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db';
-import { findBestAnswer, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
-import { findMatchingFlow, isWithinBusinessHours } from './flows';
-import { assignFromGroup } from './agent-groups';
+import { getMedicalBotResponse } from '../ai.service';
+import {
+    findCampaignMapping,
+    sendCampaignAutoReply,
+    recordTouchpoint,
+    recordUTMTouchpoint,
+    MetaReferral,
+} from '../services/campaign-responder';
+import { receiveStatusFromWC } from '../services/woocommerce';
+import { evaluateEscalation, executeHandoff } from '../services/escalation-engine';
+import { analyzeCustomerHistory } from '../services/purchase-history-engine';
+import { handleIncomingMessage } from '../services/smart-bot-engine';
 
 const router = Router();
-
-// Helper: get a business setting from DB, fallback to env var
-async function getBusinessSetting(key: string, envFallback?: string): Promise<string | null> {
-    try {
-        const row = await db.query(`SELECT value FROM business_settings WHERE key = $1 LIMIT 1`, [key]);
-        if (row.rows[0]?.value) return row.rows[0].value;
-    } catch { /* ignore */ }
-    return envFallback || null;
-}
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -35,14 +35,12 @@ async function resolveOrCreateCustomer(
     providerId: string,
     displayName: string
 ): Promise<string> {
-    // Find existing identity
     const existing = await db.query(
         `SELECT customer_id FROM external_identities WHERE provider = $1 AND provider_id = $2`,
         [provider, providerId]
     );
     if (existing.rows.length > 0) return existing.rows[0].customer_id;
 
-    // Create new customer + identity
     const customer = await db.query(
         `INSERT INTO customers (display_name) VALUES ($1) RETURNING id`,
         [displayName || 'Unknown']
@@ -59,387 +57,156 @@ async function resolveOrCreateCustomer(
 
 async function resolveOrCreateConversation(
     customerId: string,
-    channelId: string
-): Promise<string> {
+    channelId: string,
+    referralData?: MetaReferral | null,
+    utmData?: Record<string, string> | null
+): Promise<{ conversationId: string; isNew: boolean }> {
     const existing = await db.query(
         `SELECT id FROM conversations
          WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
          ORDER BY created_at DESC LIMIT 1`,
         [customerId, channelId]
     );
-    if (existing.rows.length > 0) return existing.rows[0].id;
 
-    // Create new conversation
-    const conv = await db.query(
-        `INSERT INTO conversations (customer_id, channel_id) VALUES ($1, $2) RETURNING id`,
-        [customerId, channelId]
-    );
-    const convId = conv.rows[0].id;
-
-    // AUTO-ASSIGNMENT LOGIC
-    try {
-        const rules = await db.query(
-            `SELECT * FROM assignment_rules 
-             WHERE is_active = TRUE AND (channel_id = $1 OR channel_id IS NULL)
-             ORDER BY channel_id NULLS LAST LIMIT 1`,
-            [channelId]
-        );
-
-        if (rules.rows.length > 0) {
-            const rule = rules.rows[0];
-            let agentId = null;
-
-            if (rule.strategy === 'round_robin' && rule.agent_ids?.length > 0) {
-                const index = rule.current_index % rule.agent_ids.length;
-                agentId = rule.agent_ids[index];
-
-                // Update current_index for next time
-                await db.query(
-                    'UPDATE assignment_rules SET current_index = current_index + 1 WHERE id = $1',
-                    [rule.id]
-                );
-            } else if (rule.strategy === 'random' && rule.agent_ids?.length > 0) {
-                agentId = rule.agent_ids[Math.floor(Math.random() * rule.agent_ids.length)];
-            }
-
-            if (agentId) {
-                await db.query(
-                    'UPDATE conversations SET assigned_agent_id = $1 WHERE id = $2',
-                    [agentId, convId]
-                );
-                console.log(`[AutoAssign] Conv ${convId} assigned to agent ${agentId} via rule "${rule.name}"`);
-            }
-        }
-    } catch (err) {
-        console.error('[AutoAssign] Error:', err);
+    if (existing.rows.length > 0) {
+        return { conversationId: existing.rows[0].id, isNew: false };
     }
 
-    return convId;
+    const conv = await db.query(
+        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [
+            customerId,
+            channelId,
+            referralData ? JSON.stringify(referralData) : null,
+            utmData ? JSON.stringify(utmData) : null,
+        ]
+    );
+
+    return { conversationId: conv.rows[0].id, isNew: true };
 }
 
-// ─────────────────────────────────────────────
-// Auto-attribution: detect campaign from Meta referral
-// Fired when a Click-to-Messenger or Click-to-IG-DM ad is the entry point
-// ─────────────────────────────────────────────
-async function autoAttributeFromReferral(
-    customerId: string,
+async function handleBotResponse(
     conversationId: string,
-    platform: 'facebook' | 'instagram',
-    adId: string | null,
-    adSetId: string | null,
-    adContextData: object | null
+    channelId: string,
+    customerId: string,
+    messageText: string,
+    referralData?: any
 ): Promise<void> {
-    if (!adId) return;
-    try {
-        // Look up campaign by platform_ad_id
-        let campaign = await db.query(
-            `SELECT id FROM campaigns WHERE platform = $1 AND platform_ad_id = $2 LIMIT 1`,
-            [platform, adId]
-        );
+    const settings = await db.query(
+        `SELECT provider, api_key_encrypted, system_prompt
+         FROM ai_settings WHERE is_default = TRUE LIMIT 1`
+    );
+    if (settings.rows.length === 0) return;
 
-        if (campaign.rows.length === 0) {
-            const name = (adContextData as any)?.ad_title ?? `${platform} ad ${adId}`;
-            campaign = await db.query(
-                `INSERT INTO campaigns (platform, platform_campaign_id, platform_ad_id, name, metadata)
-                 VALUES ($1, $2, $3, $4, $5)
-                 ON CONFLICT (platform, platform_campaign_id)
-                     DO UPDATE SET platform_ad_id = EXCLUDED.platform_ad_id
-                 RETURNING id`,
-                [platform, adId, adId, name, JSON.stringify(adContextData ?? {})]
-            );
+    const { provider, api_key_encrypted, system_prompt } = settings.rows[0];
+
+    try {
+        // Count existing messages to detect first message
+        const msgCount = await db.query(
+            `SELECT COUNT(*) AS cnt FROM messages
+             WHERE conversation_id = $1`,
+            [conversationId]
+        );
+        const isFirstMessage = parseInt(msgCount.rows[0].cnt, 10) === 1;  // 1 because we just inserted the inbound
+
+        // ── SMART BOT ENGINE: Unified message handling ──
+        const botReply = await handleIncomingMessage({
+            conversationId,
+            customerId,
+            message: messageText,
+            channelType: 'messenger',
+            referralData,
+            isFirstMessage,
+            aiProvider: provider,
+            apiKey: api_key_encrypted,
+        });
+
+        // Handle escalation if needed
+        if (botReply.action_type === 'escalate' && botReply.routing_decision?.should_escalate) {
+            try {
+                const escalation = {
+                    shouldEscalate: true,
+                    reason: botReply.routing_decision.reason,
+                };
+
+                const handoff = await executeHandoff(
+                    conversationId, customerId, escalation, provider, api_key_encrypted
+                );
+
+                const agentNote = handoff.agent_id
+                    ? 'Un asesor se comunicará con usted en breve.'
+                    : 'Estamos buscando un asesor disponible, por favor espere un momento.';
+
+                const handoffMessage = `${botReply.message} ${agentNote}`;
+
+                await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
+                     VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5, 'escalation')`,
+                    [conversationId, channelId, customerId, handoffMessage, botReply.confidence]
+                );
+
+                console.log(`[Smart Bot Escalation] Conv ${conversationId}: ${botReply.routing_decision.reason}`);
+                return;
+            } catch (err) {
+                console.error('[Escalation execution error]:', err);
+            }
         }
 
-        const campaignId = campaign.rows[0].id;
+        // Send normal bot reply
+        await db.query(
+            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
+             VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5, $6)`,
+            [conversationId, channelId, customerId, botReply.message, botReply.confidence, botReply.intent_type.toLowerCase()]
+        );
 
+        console.log(`[Smart Bot] Conv ${conversationId}: ${botReply.intent_type} (confidence: ${botReply.confidence})`);
+    } catch (err) {
+        console.error('[Bot Response Error]:', err);
+        // Fallback to simple error message
+        await db.query(
+            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by)
+             VALUES ($1, $2, $3, 'outbound', $4, 'bot')`,
+            [conversationId, channelId, customerId, 'Disculpe, hubo un error. Un asesor lo contactará en breve.']
+        );
+    }
+}
+
+/**
+ * Handle campaign auto-reply for new conversations from ads
+ * Returns true if an auto-reply was sent
+ */
+async function handleCampaignAutoReply(
+    conversationId: string,
+    channelId: string,
+    customerId: string,
+    referral: MetaReferral,
+    channel: string
+): Promise<boolean> {
+    try {
+        // Record the touchpoint regardless
+        await recordTouchpoint(customerId, null, referral, channel);
+
+        // Find campaign mapping for auto-reply
+        const mapping = await findCampaignMapping(referral);
+        if (!mapping) return false;
+
+        // Create attribution link
         await db.query(
             `INSERT INTO attributions (customer_id, campaign_id, conversation_id)
              VALUES ($1, $2, $3)
              ON CONFLICT DO NOTHING`,
-            [customerId, campaignId, conversationId]
+            [customerId, mapping.campaign_id, conversationId]
         );
 
-        console.log(`[Attribution] ${platform} ad ${adId} → conv ${conversationId}`);
+        // Send the auto-reply
+        await sendCampaignAutoReply(conversationId, channelId, customerId, mapping);
+
+        console.log(`[Campaign Auto-Reply] Sent for campaign "${mapping.campaign_name}" to conversation ${conversationId}`);
+        return true;
     } catch (err) {
-        console.error('[Attribution] error:', err);
-    }
-}
-
-export async function handleBotResponse(
-    conversationId: string,
-    channelId: string,
-    customerId: string,
-    messageText: string
-): Promise<void> {
-    try {
-        const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
-
-        // ── 1. Check for matching bot_flow ────────────────────────────────────
-        try {
-            // Determine context for flow matching
-            const channel = await db.query(`SELECT provider FROM channels WHERE id = $1`, [channelId]);
-            const provider = channel.rows[0]?.provider || 'whatsapp';
-
-            const msgCount = await db.query(
-                `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
-                [conversationId]
-            );
-            const isFirstMessage = parseInt(msgCount.rows[0].count) <= 1;
-
-            // Check campaign attribution
-            const attribution = await db.query(
-                `SELECT campaign_id FROM attributions WHERE conversation_id = $1 LIMIT 1`,
-                [conversationId]
-            );
-            const campaignId = attribution.rows[0]?.campaign_id || null;
-
-            const afterHours = !(await isWithinBusinessHours());
-
-            const matchedFlow = await findMatchingFlow({
-                provider,
-                messageText,
-                isFirstMessage,
-                campaignId,
-                isAfterHours: afterHours,
-            });
-
-            if (matchedFlow) {
-                console.log(`[BotFlow] Matched flow "${matchedFlow.name}" (${matchedFlow.flow_type}) for conv ${conversationId}`);
-
-                if (matchedFlow.flow_type === 'visual' && matchedFlow.nodes) {
-                    await executeVisualFlow(matchedFlow, conversationId, channelId, customerId, messageText);
-                    return;
-                }
-                // For simple flows, we could use the steps field — for now fall through to RAG+AI
-            }
-        } catch (flowErr) {
-            console.error('[BotFlow] Error matching flow:', flowErr);
-            // Fall through to RAG+AI
-        }
-
-        // ── 2. Fallback: RAG + AI response (original behavior) ───────────────
-        const settings = await db.query(
-            `SELECT provider, api_key_encrypted, system_prompt, model_name
-             FROM ai_settings WHERE is_default = TRUE LIMIT 1`
-        );
-        if (settings.rows.length === 0) return;
-
-        const { provider: aiProvider, api_key_encrypted, system_prompt, model_name } = settings.rows[0];
-
-        const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
-        const knowledgeHit = await findBestAnswer(messageText, embedding);
-
-        let botReply: string;
-        let confidence: number;
-        let knowledgeContext: string | undefined = undefined;
-
-        if (knowledgeHit && knowledgeHit.confidence > 0.90) {
-            botReply = knowledgeHit.answer;
-            confidence = knowledgeHit.confidence;
-            await recordKnowledgeUse(knowledgeHit.knowledgeId as any);
-        } else {
-            if (knowledgeHit && knowledgeHit.confidence > 0.30) {
-                knowledgeContext = `Información relacionada encontrada en la base de datos:\n- Pregunta/Contexto: ${knowledgeHit.question}\n- Respuesta base: ${knowledgeHit.answer}`;
-                await recordKnowledgeUse(knowledgeHit.knowledgeId as any);
-            }
-
-            botReply = await getAIResponse(
-                aiProvider as any,
-                system_prompt || '',
-                messageText,
-                api_key_encrypted,
-                model_name,
-                customerId,
-                knowledgeContext,
-                conversationId
-            );
-            confidence = knowledgeHit ? knowledgeHit.confidence : 0.5;
-        }
-
-        const result = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5) RETURNING *`,
-            [conversationId, channelId, customerId, botReply, confidence]
-        );
-
-        const insertedMessage = result.rows[0];
-        emitNewMessage(conversationId, insertedMessage);
-        emitConversationUpdated(conversationId, {
-            last_message: botReply,
-            last_message_at: insertedMessage.created_at,
-        });
-        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
-    } catch (err: any) {
-        require('fs').appendFileSync('c:/Users/admin/ai/myalice/apps/server/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`);
-
-        let errorHint = "Error de conexión con IA.";
-        if (err.message.includes("1113") || err.message.includes("余额不足")) {
-            errorHint = "⚠️ El bot se ha detenido porque los créditos de tu API (Z.ai / Zhipu) se han agotado (Error 429: Saldo insuficiente). Por favor recarga tu cuenta o cambia de proveedor en la configuración.";
-        }
-
-        const fallback = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', 0) RETURNING *`,
-            [conversationId, channelId, customerId, errorHint]
-        );
-        const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
-        emitNewMessage(conversationId, fallback.rows[0]);
-        emitConversationUpdated(conversationId, {
-            last_message: errorHint,
-            last_message_at: fallback.rows[0].created_at,
-        });
-        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
-    }
-}
-
-// ── Visual Flow Executor ─────────────────────────────────────────────────────
-// Walks through nodes following edges from the trigger, executing each action.
-
-async function executeVisualFlow(
-    flow: any,
-    conversationId: string,
-    channelId: string,
-    customerId: string,
-    messageText: string
-): Promise<void> {
-    const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
-    const nodes: any[] = flow.nodes || [];
-    const edges: any[] = flow.edges || [];
-
-    // Find trigger node
-    const triggerNode = nodes.find((n: any) => n.type === 'trigger');
-    if (!triggerNode) return;
-
-    // Walk the graph starting from the trigger
-    const visited = new Set<string>();
-    let currentNodeId = triggerNode.id;
-
-    // Find next node(s) connected from a given node
-    function getNextNodes(nodeId: string): string[] {
-        return edges
-            .filter((e: any) => e.source === nodeId)
-            .map((e: any) => e.target);
-    }
-
-    // Helper to emit a bot message
-    async function sendBotMessage(content: string): Promise<void> {
-        const result = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', 1.0) RETURNING *`,
-            [conversationId, channelId, customerId, content]
-        );
-        const msg = result.rows[0];
-        emitNewMessage(conversationId, msg);
-        emitConversationUpdated(conversationId, {
-            last_message: content,
-            last_message_at: msg.created_at,
-        });
-        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
-    }
-
-    // Walk the flow — process first connected node after trigger, then follow edges
-    const queue = getNextNodes(currentNodeId);
-
-    while (queue.length > 0) {
-        const nodeId = queue.shift()!;
-        if (visited.has(nodeId)) continue;
-        visited.add(nodeId);
-
-        const node = nodes.find((n: any) => n.id === nodeId);
-        if (!node) continue;
-
-        switch (node.type) {
-            case 'send_message': {
-                if (node.data.message) {
-                    await sendBotMessage(node.data.message);
-                }
-                // Continue to next nodes
-                queue.push(...getNextNodes(nodeId));
-                break;
-            }
-
-            case 'menu_buttons': {
-                // Send the menu text with buttons listed
-                const buttons = node.data.buttons || [];
-                let menuText = node.data.message || '';
-                if (buttons.length > 0) {
-                    menuText += '\n\n' + buttons.map((b: any, i: number) => `${i + 1}. ${b.text}`).join('\n');
-                }
-                if (menuText.trim()) {
-                    await sendBotMessage(menuText);
-                }
-                // Menu is a pause point — we don't continue automatically
-                // The next message from the customer will re-trigger handleBotResponse
-                // which will try to match the flow again. For now, stop here.
-                break;
-            }
-
-            case 'conditional': {
-                const condition = (node.data.condition || '').toLowerCase();
-                const text = messageText.toLowerCase();
-                // Simple condition evaluation: check if message contains the condition text
-                const conditionMet = condition.split('|').some((part: string) => text.includes(part.trim()));
-
-                const nextNodes = getNextNodes(nodeId);
-                if (conditionMet && nextNodes.length > 0) {
-                    queue.push(nextNodes[0]); // True branch = first connection
-                } else if (nextNodes.length > 1) {
-                    queue.push(nextNodes[1]); // False branch = second connection
-                }
-                break;
-            }
-
-            case 'transfer_to_group': {
-                if (node.data.group_id) {
-                    const agentId = await assignFromGroup(node.data.group_id, conversationId);
-                    if (agentId) {
-                        await sendBotMessage('Te estamos conectando con un agente. Un momento por favor...');
-                    }
-                }
-                // Stop flow — agent takes over
-                break;
-            }
-
-            case 'ai_response': {
-                // Use RAG + AI with optional custom prompt
-                try {
-                    const settings = await db.query(
-                        `SELECT provider, api_key_encrypted, system_prompt, model_name
-                         FROM ai_settings WHERE is_default = TRUE LIMIT 1`
-                    );
-                    if (settings.rows.length > 0) {
-                        const { provider, api_key_encrypted, system_prompt, model_name } = settings.rows[0];
-                        const prompt = node.data.custom_prompt || system_prompt || '';
-                        const embedding = await generateEmbedding(messageText, provider, api_key_encrypted);
-                        const hit = await findBestAnswer(messageText, embedding);
-
-                        let context: string | undefined;
-                        if (hit && hit.confidence > 0.30) {
-                            context = `Info: ${hit.question} → ${hit.answer}`;
-                        }
-
-                        const reply = await getAIResponse(
-                            provider as any, prompt, messageText,
-                            api_key_encrypted, model_name, customerId, context, conversationId
-                        );
-                        await sendBotMessage(reply);
-                    }
-                } catch (aiErr) {
-                    console.error('[VisualFlow] AI Response error:', aiErr);
-                    await sendBotMessage('Lo siento, hubo un error al procesar tu solicitud.');
-                }
-                queue.push(...getNextNodes(nodeId));
-                break;
-            }
-
-            case 'wait_response': {
-                // Pause — stop flow execution. Next customer message will re-enter handleBotResponse
-                break;
-            }
-
-            default:
-                queue.push(...getNextNodes(nodeId));
-                break;
-        }
+        console.error('[Campaign Auto-Reply] Error:', err);
+        return false;
     }
 }
 
@@ -459,159 +226,53 @@ router.get('/meta', (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
-// Helpers para resolución de canales por subtype
-// ─────────────────────────────────────────────
-
-async function resolveChannelBySubtype(
-    provider: string,
-    subtype: string | null
-): Promise<{ id: string; webhook_secret: string | null } | null> {
-    // 1. Intenta encontrar canal con subtype exacto
-    if (subtype) {
-        const withSubtype = await db.query(
-            `SELECT id, webhook_secret FROM channels WHERE provider = $1 AND subtype = $2 AND is_active = TRUE LIMIT 1`,
-            [provider, subtype]
-        );
-        if (withSubtype.rows.length > 0) return withSubtype.rows[0];
-    }
-    // 2. Fallback al canal genérico sin subtype
-    const generic = await db.query(
-        `SELECT id, webhook_secret FROM channels WHERE provider = $1 AND subtype IS NULL AND is_active = TRUE LIMIT 1`,
-        [provider]
-    );
-    if (generic.rows.length > 0) return generic.rows[0];
-    // 3. Cualquier canal del provider
-    const any = await db.query(
-        `SELECT id, webhook_secret FROM channels WHERE provider = $1 AND is_active = TRUE LIMIT 1`,
-        [provider]
-    );
-    return any.rows[0] ?? null;
-}
-
-// ─────────────────────────────────────────────
 // Meta Webhook (POST) — Facebook & Instagram messages
-// Maneja: Messenger DMs, FB Feed comments, IG Direct, IG Comments
+// Now with campaign detection and auto-reply
 // ─────────────────────────────────────────────
 router.post('/meta', async (req: Request, res: Response) => {
-    // Always acknowledge immediately to avoid Meta retries
     res.sendStatus(200);
 
     try {
+        const channel = await db.query(
+            `SELECT id, webhook_secret, provider FROM channels
+             WHERE provider IN ('facebook', 'instagram') AND is_active = TRUE LIMIT 1`
+        );
+        if (channel.rows.length === 0) return;
+
+        const { id: channelId, webhook_secret, provider } = channel.rows[0];
+
+        if (webhook_secret && !validateMetaSignature(req, webhook_secret)) {
+            console.warn('Meta webhook signature mismatch — dropping');
+            return;
+        }
+
         const body = req.body;
         if (body.object !== 'page' && body.object !== 'instagram') return;
 
-        const isInstagram = body.object === 'instagram';
-        const provider = isInstagram ? 'instagram' : 'facebook';
-
         for (const entry of body.entry ?? []) {
-
-            // ── 1. DM / Messenger / IG Direct (entry.messaging[]) ────────────
             for (const event of entry.messaging ?? []) {
                 if (!event.message?.text) continue;
-
-                const subtype = isInstagram ? 'chat' : 'messenger';
-                const ch = await resolveChannelBySubtype(provider, subtype);
-                if (!ch) continue;
-
-                if (ch.webhook_secret && !validateMetaSignature(req, ch.webhook_secret)) {
-                    console.warn(`Meta webhook signature mismatch for ${provider}/${subtype} — dropping`);
-                    continue;
-                }
 
                 const senderId: string = event.sender.id;
                 const messageText: string = event.message.text;
 
+                // Extract referral data if present (Click-to-DM from ads)
+                const referral: MetaReferral | null = event.referral || event.message?.referral || null;
+
                 const customerId = await resolveOrCreateCustomer(provider, senderId, senderId);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
+                const { conversationId, isNew } = await resolveOrCreateConversation(
+                    customerId, channelId, referral
+                );
 
-                // Auto-attribution from Click-to-Messenger / Click-to-IG-DM ads
-                if (event.referral?.source === 'ADS') {
-                    autoAttributeFromReferral(
-                        customerId, conversationId, provider,
-                        event.referral.ad_id ?? null,
-                        event.referral.ads_context_data?.ad_set_id ?? null,
-                        event.referral.ads_context_data ?? null
-                    ).catch(console.error);
-                }
-
+                // Save inbound message
                 await db.query(
                     `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
                      VALUES ($1, $2, $3, 'inbound', $4, $5)`,
-                    [conversationId, ch.id, customerId, messageText, event.message.mid]
+                    [conversationId, channelId, customerId, messageText, event.message.mid]
                 );
 
-                handleBotResponse(conversationId, ch.id, customerId, messageText).catch(console.error);
-            }
-
-            // ── 2. FB Page post comments (entry.changes[field='feed']) ────────
-            for (const change of entry.changes ?? []) {
-                if (change.field !== 'feed') continue;
-                const value = change.value;
-                if (!value?.message || value.item !== 'comment') continue;
-
-                const subtype = 'feed';
-                const ch = await resolveChannelBySubtype('facebook', subtype);
-                if (!ch) continue;
-
-                const senderId: string = value.from?.id ?? value.sender_id;
-                const senderName: string = value.from?.name ?? senderId;
-                const commentText: string = value.message;
-                const commentId: string = value.comment_id ?? value.id;
-                const postId: string = value.post_id ?? '';
-
-                if (!senderId || !commentText) continue;
-
-                const customerId = await resolveOrCreateCustomer('facebook', senderId, senderName);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
-
-                await db.query(
-                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content,
-                                          provider_message_id, source_post_id, source_comment_id)
-                     VALUES ($1, $2, $3, 'inbound', $4, $5, $6, $7)
-                     ON CONFLICT DO NOTHING`,
-                    [conversationId, ch.id, customerId, commentText, commentId, postId, commentId]
-                );
-
-                // Auto-attribution si el post es de un anuncio (el postId comienza con '_' en FB)
-                autoAttributeFromReferral(
-                    customerId, conversationId, 'facebook',
-                    value.ad_id ?? null,
-                    null, value
-                ).catch(console.error);
-
-                handleBotResponse(conversationId, ch.id, customerId, commentText).catch(console.error);
-            }
-
-            // ── 3. Instagram comments (entry.changes[field='comments']) ───────
-            for (const change of entry.changes ?? []) {
-                if (change.field !== 'comments') continue;
-                const value = change.value;
-                if (!value?.text) continue;
-
-                const subtype = 'comments';
-                const ch = await resolveChannelBySubtype('instagram', subtype);
-                if (!ch) continue;
-
-                const senderId: string = value.from?.id ?? '';
-                const senderName: string = value.from?.username ?? senderId;
-                const commentText: string = value.text;
-                const commentId: string = value.id ?? '';
-                const mediaId: string = value.media?.id ?? '';
-
-                if (!senderId || !commentText) continue;
-
-                const customerId = await resolveOrCreateCustomer('instagram', senderId, senderName);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
-
-                await db.query(
-                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content,
-                                          provider_message_id, source_post_id, source_comment_id)
-                     VALUES ($1, $2, $3, 'inbound', $4, $5, $6, $7)
-                     ON CONFLICT DO NOTHING`,
-                    [conversationId, ch.id, customerId, commentText, commentId, mediaId, commentId]
-                );
-
-                handleBotResponse(conversationId, ch.id, customerId, commentText).catch(console.error);
+                // Smart bot engine handles campaign auto-reply, qualification, and routing
+                handleBotResponse(conversationId, channelId, customerId, messageText, referral).catch(console.error);
             }
         }
     } catch (err) {
@@ -621,27 +282,24 @@ router.post('/meta', async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────
 // WhatsApp Cloud API Webhook Verification (GET)
-// Meta uses the same verification for WhatsApp Cloud API
 // ─────────────────────────────────────────────
-router.get('/whatsapp', async (req: Request, res: Response) => {
+router.get('/whatsapp', (req: Request, res: Response) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    // Read verify token from DB first, env fallback
-    const verifyToken = await getBusinessSetting('meta_verify_token', process.env.META_VERIFY_TOKEN);
-
-    if (mode === 'subscribe' && verifyToken && token === verifyToken) {
+    if (mode === 'subscribe' && token === process.env.META_VERIFY_TOKEN) {
         console.log('[WhatsApp Webhook] Verification successful');
         res.status(200).send(challenge);
     } else {
-        console.warn('[WhatsApp Webhook] Verification failed — token mismatch');
+        console.warn('[WhatsApp Webhook] Verification failed');
         res.sendStatus(403);
     }
 });
 
 // ─────────────────────────────────────────────
 // WhatsApp Cloud API Webhook (POST)
+// Now with referral/campaign detection
 // ─────────────────────────────────────────────
 router.post('/whatsapp', async (req: Request, res: Response) => {
     res.sendStatus(200);
@@ -654,9 +312,7 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
 
         const { id: channelId, webhook_secret } = channel.rows[0];
 
-        // Signature validation: use webhook_secret from channel, fallback to app_secret from DB/env
-        const sigSecret = webhook_secret || await getBusinessSetting('meta_app_secret', process.env.META_APP_SECRET);
-        if (sigSecret && !validateMetaSignature(req, sigSecret)) {
+        if (webhook_secret && !validateMetaSignature(req, webhook_secret)) {
             console.warn('WhatsApp webhook signature mismatch — dropping');
             return;
         }
@@ -671,8 +327,13 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
             const messageText: string = msg.text.body;
             const displayName: string = changes.contacts?.[0]?.profile?.name || phone;
 
+            // WhatsApp Click-to-WhatsApp ads include referral
+            const referral: MetaReferral | null = msg.referral || null;
+
             const customerId = await resolveOrCreateCustomer('whatsapp', phone, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
+            const { conversationId, isNew } = await resolveOrCreateConversation(
+                customerId, channelId, referral
+            );
 
             await db.query(
                 `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
@@ -680,7 +341,8 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
                 [conversationId, channelId, customerId, messageText, msg.id]
             );
 
-            handleBotResponse(conversationId, channelId, customerId, messageText).catch(console.error);
+            // Smart bot engine handles all message routing and responses
+            handleBotResponse(conversationId, channelId, customerId, messageText, referral).catch(console.error);
         }
     } catch (err) {
         console.error('WhatsApp webhook error:', err);
@@ -688,136 +350,124 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
-// TikTok Webhook Verification (GET)
+// WooCommerce Webhook — Order Status Changes
+// Receives status updates from WC and syncs to CRM
 // ─────────────────────────────────────────────
-router.get('/tiktok', (req: Request, res: Response) => {
-    // TikTok sends a challenge string — echo it back to verify the endpoint
-    const challenge = req.query['challenge'] as string;
-    res.status(200).send(challenge ?? 'ok');
-});
-
-// ─────────────────────────────────────────────
-// TikTok Webhook (POST) — TikTok for Business DMs & ad comments
-// ─────────────────────────────────────────────
-router.post('/tiktok', async (req: Request, res: Response) => {
-    res.sendStatus(200);
+router.post('/woocommerce-status', async (req: Request, res: Response) => {
+    // WooCommerce sends a webhook secret in the header
+    const wcWebhookSecret = process.env.WC_WEBHOOK_SECRET;
+    if (wcWebhookSecret) {
+        const signature = req.headers['x-wc-webhook-signature'] as string;
+        if (signature) {
+            const expected = crypto
+                .createHmac('sha256', wcWebhookSecret)
+                .update(JSON.stringify(req.body))
+                .digest('base64');
+            if (signature !== expected) {
+                console.warn('WooCommerce webhook signature mismatch — dropping');
+                res.sendStatus(401);
+                return;
+            }
+        }
+    }
 
     try {
-        const appSecret = process.env.TIKTOK_APP_SECRET;
-        if (appSecret) {
-            const signature = req.headers['x-tiktok-signature'] as string;
-            if (!signature) {
-                console.warn('TikTok webhook: missing signature — dropping');
-                return;
-            }
-            const expected = crypto
-                .createHmac('sha256', appSecret)
-                .update(JSON.stringify(req.body))
-                .digest('hex');
-            if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-                console.warn('TikTok webhook: signature mismatch — dropping');
-                return;
-            }
-        }
+        const order = req.body;
 
-        const channel = await db.query(
-            `SELECT id FROM channels WHERE provider = 'tiktok' AND is_active = TRUE LIMIT 1`
-        );
-        if (channel.rows.length === 0) {
-            console.warn('TikTok webhook: no active tiktok channel configured');
+        // WooCommerce sends the full order object
+        if (!order.id || !order.status) {
+            res.sendStatus(200); // Acknowledge but ignore (might be a test ping)
             return;
         }
-        const channelId: string = channel.rows[0].id;
 
-        const body = req.body;
+        const externalOrderId = String(order.id);
+        const newStatus = order.status;
 
-        // DM event
-        if (body.event_type === 'message' && body.message?.content?.message_type === 'text') {
-            const senderId = body.message.sender_id as string;
-            const messageText = body.message.content.text as string;
-            const displayName = (body.message.sender_display_name as string) || senderId;
-            const messageId = (body.message.message_id as string) || '';
+        // Receive and sync the status change
+        const result = await receiveStatusFromWC(externalOrderId, newStatus);
 
-            if (!senderId || !messageText) return;
-
-            const customerId = await resolveOrCreateCustomer('tiktok', senderId, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
-
-            await db.query(
-                `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
-                 VALUES ($1, $2, $3, 'inbound', $4, $5)
-                 ON CONFLICT DO NOTHING`,
-                [conversationId, channelId, customerId, messageText, messageId]
-            );
-            await db.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId]);
-            handleBotResponse(conversationId, channelId, customerId, messageText).catch(console.error);
+        if (result.ok) {
+            console.log(`[WC→CRM Sync] Order #${externalOrderId} → ${newStatus}`);
+        } else {
+            console.error(`[WC→CRM Sync] Error for order #${externalOrderId}:`, result.error);
         }
 
-        // Ad comment event — treat as inbound message
-        if (body.event_type === 'comment' && body.comment?.text) {
-            const senderId = body.comment.user_id as string;
-            const messageText = body.comment.text as string;
-            const displayName = (body.comment.username as string) || senderId;
-            const messageId = (body.comment.comment_id as string) || '';
+        // Also sync order data if it doesn't exist in CRM
+        const existingOrder = await db.query(
+            `SELECT id FROM orders WHERE external_order_id = $1`,
+            [externalOrderId]
+        );
 
-            if (!senderId || !messageText) return;
+        if (existingOrder.rows.length === 0 && order.total) {
+            // Create order in CRM
+            const customerEmail = order.billing?.email;
+            let customerId: string | null = null;
 
-            const customerId = await resolveOrCreateCustomer('tiktok', senderId, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
+            if (customerEmail) {
+                const customer = await db.query(
+                    `SELECT c.id FROM customers c
+                     JOIN customer_attributes ca ON ca.customer_id = c.id
+                     WHERE ca.key = 'email' AND ca.value = $1
+                     LIMIT 1`,
+                    [customerEmail]
+                );
+                if (customer.rows.length > 0) {
+                    customerId = customer.rows[0].id;
+                }
+            }
 
             await db.query(
-                `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
-                 VALUES ($1, $2, $3, 'inbound', $4, $5)
-                 ON CONFLICT DO NOTHING`,
-                [conversationId, channelId, customerId, messageText, messageId]
+                `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (external_order_id) DO UPDATE
+                     SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
+                [
+                    externalOrderId,
+                    customerId,
+                    order.total,
+                    order.currency?.toUpperCase() || 'MXN',
+                    newStatus,
+                    JSON.stringify(order.line_items || []),
+                    order.date_created || new Date().toISOString(),
+                ]
             );
-            handleBotResponse(conversationId, channelId, customerId, messageText).catch(console.error);
         }
+
+        res.sendStatus(200);
     } catch (err) {
-        console.error('TikTok webhook error:', err);
+        console.error('WooCommerce webhook error:', err);
+        res.sendStatus(500);
     }
 });
 
-// Web Widget endpoint (POST /api/webhooks/webchat)
-router.post('/webchat', async (req: Request, res: Response) => {
+// ─────────────────────────────────────────────
+// Webchat — Receive UTM data from chat widget
+// Called when a webchat session starts with UTM params
+// ─────────────────────────────────────────────
+router.post('/webchat-utm', async (req: Request, res: Response) => {
     try {
-        const { contact_id, name, message } = req.body;
-        if (!contact_id || !message) {
-            res.status(400).json({ error: 'contact_id y message requeridos' });
+        const { customer_id, conversation_id, utm_data } = req.body;
+
+        if (!customer_id || !utm_data) {
+            res.status(400).json({ error: 'customer_id and utm_data are required' });
             return;
         }
 
-        // Get channel ID for webchat
-        const channel = await db.query(`SELECT id FROM channels WHERE provider = 'webchat' AND is_active = TRUE LIMIT 1`);
-        if (channel.rows.length === 0) {
-            // Auto-create if it doesn't exist (simpler for this case)
-            const newChannel = await db.query(
-                `INSERT INTO channels (provider, name, is_active) VALUES ('webchat', 'Widget Web', TRUE) RETURNING id`
+        // Save UTM data on the conversation
+        if (conversation_id) {
+            await db.query(
+                `UPDATE conversations SET utm_data = $1 WHERE id = $2`,
+                [JSON.stringify(utm_data), conversation_id]
             );
-            channel.rows.push(newChannel.rows[0]);
         }
-        const channelId = channel.rows[0].id;
 
-        const customerId = await resolveOrCreateCustomer('webchat', contact_id, name || contact_id);
-        const conversationId = await resolveOrCreateConversation(customerId, channelId);
+        // Record touchpoint
+        await recordUTMTouchpoint(customer_id, utm_data);
 
-        // Insert message
-        await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content)
-             VALUES ($1, $2, $3, 'inbound', $4)`,
-            [conversationId, channelId, customerId, message]
-        );
-
-        // Update conversation
-        await db.query(`UPDATE conversations SET updated_at = NOW() WHERE id = $1`, [conversationId]);
-
-        // Trigger bot response
-        handleBotResponse(conversationId, channelId, customerId, message).catch(console.error);
-
-        res.json({ ok: true, conversationId });
-    } catch (err: any) {
-        console.error('Webchat webhook error:', err);
-        res.status(500).json({ error: err.message });
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Webchat UTM error:', err);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
