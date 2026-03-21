@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
 import { db } from '../db';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, hashPassword } from '../middleware/auth';
 
 const router = Router();
 router.use(requireAuth);
@@ -47,7 +46,7 @@ router.post('/', requireRole('director'), async (req: Request, res: Response) =>
         return;
     }
 
-    const hash = await bcrypt.hash(password, 12);
+    const hash = hashPassword(password);
     const result = await db.query(
         `INSERT INTO agents (name, email, password_hash, role, salesking_agent_code)
          VALUES ($1, $2, $3, $4, $5)
@@ -146,7 +145,7 @@ router.post('/:id/reset-password', requireRole('director'), async (req: Request,
         return;
     }
 
-    const hash = await bcrypt.hash(new_password, 12);
+    const hash = hashPassword(new_password);
     await db.query('UPDATE agents SET password_hash = $1 WHERE id = $2', [hash, req.params.id]);
     res.json({ ok: true });
 });
