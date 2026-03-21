@@ -48,6 +48,11 @@ app.use(express.json());
 // ─── Static files (widget.js) ────────────────
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Explicit route for widget.js (fallback if express.static doesn't catch it)
+app.get('/widget.js', (_req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'widget.js'));
+});
+
 // ─── Health (public) ─────────────────────────
 app.get('/health', async (_req, res) => {
     try {
