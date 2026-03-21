@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Users, ShoppingCart, DollarSign, CheckCircle, Clock, RefreshCw, Facebook } from 'lucide-react';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
+
 type Platform = 'facebook' | 'instagram' | 'tiktok' | 'google';
 
 interface Campaign {
@@ -31,7 +33,7 @@ export default function CampaignsPage() {
     const fetchCampaigns = useCallback(async () => {
         try {
             const token = localStorage.getItem('token') || '';
-            const res = await fetch('/api/campaigns', {
+            const res = await fetch(`${API_URL}/api/campaigns`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) {
@@ -68,7 +70,7 @@ export default function CampaignsPage() {
         setSyncMsg('');
         try {
             const token = localStorage.getItem('token') || '';
-            const res = await fetch('/api/campaigns/sync-facebook', {
+            const res = await fetch(`${API_URL}/api/campaigns/sync-facebook`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -88,7 +90,7 @@ export default function CampaignsPage() {
 
     const syncWooCommerce = async () => {
         const token = localStorage.getItem('token') || '';
-        await fetch('/api/attributions/sync-woocommerce', {
+        await fetch(`${API_URL}/api/attributions/sync-woocommerce`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
         });
