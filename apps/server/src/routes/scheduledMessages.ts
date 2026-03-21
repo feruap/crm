@@ -5,7 +5,7 @@ const router = Router();
 
 // GET /api/scheduled-messages
 router.get('/', async (req: Request, res: Response) => {
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
     const result = await db.query(
         `SELECT sm.*, c.customer_id, cu.display_name as customer_name
          FROM scheduled_messages sm
@@ -21,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/scheduled-messages
 router.post('/', async (req: Request, res: Response) => {
     const { conversation_id, content, scheduled_at, media_url } = req.body;
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     if (!conversation_id || !content || !scheduled_at) {
         res.status(400).json({ error: 'conversation_id, content and scheduled_at are required' });
@@ -49,8 +49,8 @@ router.post('/', async (req: Request, res: Response) => {
 // DELETE /api/scheduled-messages/:id
 router.delete('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
-    const agentId = req.agent?.agentId;
-    const isAdmin = req.agent?.role === 'admin';
+    const agentId = req.agent?.agent_id;
+    const isAdmin = req.agent?.role === 'director';
 
     const existing = await db.query('SELECT agent_id FROM scheduled_messages WHERE id = $1', [id]);
     if (existing.rows.length === 0) {

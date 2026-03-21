@@ -472,3 +472,4 @@ router.post('/webchat-utm', async (req: Request, res: Response) => {
 });
 
 export default router;
+export { handleBotResponse };

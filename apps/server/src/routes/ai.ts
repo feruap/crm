@@ -44,7 +44,7 @@ Contexto de la conversación:\n${context}`;
         const userMessage = draft || 'Genera una respuesta apropiada para continuar la conversación.';
 
         // 4. Get AI response
-        const suggestion = await getAIResponse(provider as AIProvider, systemPrompt, userMessage, api_key_encrypted, model_name);
+        const suggestion = await getAIResponse(provider as AIProvider, systemPrompt, userMessage, api_key_encrypted);
 
         res.json({ suggestion });
     } catch (err) {

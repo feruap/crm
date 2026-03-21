@@ -146,8 +146,8 @@ router.post('/order', async (req: Request, res: Response) => {
         // Fetch agent's WC User ID from the database
         let wcAgentId = null;
         let wcAgentName = '';
-        if (req.agent?.agentId) {
-            const agentRes = await db.query('SELECT wc_agent_id, name FROM agents WHERE id = $1', [req.agent.agentId]);
+        if (req.agent?.agent_id) {
+            const agentRes = await db.query('SELECT wc_agent_id, name FROM agents WHERE id = $1', [req.agent.agent_id]);
             if (agentRes.rows.length > 0) {
                 wcAgentId = agentRes.rows[0].wc_agent_id;
                 wcAgentName = agentRes.rows[0].name;
@@ -248,7 +248,7 @@ router.get('/salesking-pricing', async (req: Request, res: Response) => {
     }
 
     // Get agent's WC User ID from the database
-    const agentRow = await db.query('SELECT wc_agent_id FROM agents WHERE id = $1', [req.agent!.agentId]);
+    const agentRow = await db.query('SELECT wc_agent_id FROM agents WHERE id = $1', [req.agent!.agent_id]);
     const wcAgentId = agentRow.rows[0]?.wc_agent_id;
 
     if (!wcAgentId) {

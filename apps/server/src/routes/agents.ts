@@ -33,7 +33,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /api/agents  — admin crea agente
-router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/', requireRole('director'), async (req: Request, res: Response) => {
     const { name, email, password, role = 'agent', salesking_agent_code } = req.body;
     if (!name || !email || !password) {
         res.status(400).json({ error: 'name, email y password son requeridos' });
@@ -58,7 +58,7 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
 });
 
 // PUT /api/agents/:id  — admin actualiza agente completo
-router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => {
+router.put('/:id', requireRole('director'), async (req: Request, res: Response) => {
     const { name, email, role, is_active, salesking_agent_code, avatar_url } = req.body;
     const { id } = req.params;
 
@@ -91,7 +91,7 @@ router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => 
 });
 
 // PATCH /api/agents/:id  — alias compatible hacia atrás
-router.patch('/:id', requireRole('admin', 'supervisor'), async (req: Request, res: Response) => {
+router.patch('/:id', requireRole('director'), async (req: Request, res: Response) => {
     const { name, role, is_active, salesking_agent_code } = req.body;
     await db.query(
         `UPDATE agents SET
@@ -107,12 +107,12 @@ router.patch('/:id', requireRole('admin', 'supervisor'), async (req: Request, re
 
 // DELETE /api/agents/:id  — admin desactiva agente (soft delete)
 // Reasigna sus conversaciones abiertas a null
-router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('director'), async (req: Request, res: Response) => {
     const { id } = req.params;
     const { reassign_to } = req.body; // UUID del agente que recibirá las convs, o null
 
     // Prevent self-deletion
-    if (req.agent?.agentId === id) {
+    if (req.agent?.agent_id === id) {
         res.status(400).json({ error: 'No puedes desactivar tu propia cuenta' });
         return;
     }
@@ -139,7 +139,7 @@ router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) 
 });
 
 // POST /api/agents/:id/reset-password  — admin resetea contraseña
-router.post('/:id/reset-password', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/:id/reset-password', requireRole('director'), async (req: Request, res: Response) => {
     const { new_password } = req.body;
     if (!new_password || new_password.length < 6) {
         res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });

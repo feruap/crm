@@ -42,7 +42,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/events
 router.post('/', async (req: Request, res: Response) => {
     const { title, start_at, end_at, customer_id, conversation_id, event_type, notes, all_day = false } = req.body;
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     if (!title || !start_at) {
         res.status(400).json({ error: 'Title and start_at are required' });
@@ -98,7 +98,7 @@ router.get('/templates', async (req: Request, res: Response) => {
 // POST /api/event-templates
 router.post('/templates', async (req: Request, res: Response) => {
     const { title, description, duration_minutes, event_type } = req.body;
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     const result = await db.query(
         `INSERT INTO event_templates (title, description, duration_minutes, event_type, created_by)
@@ -114,7 +114,7 @@ router.post('/templates', async (req: Request, res: Response) => {
 router.post('/from-template/:templateId', async (req: Request, res: Response) => {
     const { templateId } = req.params;
     const { start_at, customer_id, conversation_id } = req.body;
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     const template = await db.query('SELECT * FROM event_templates WHERE id = $1', [templateId]);
     if (template.rows.length === 0) return res.status(404).json({ error: 'Template not found' });

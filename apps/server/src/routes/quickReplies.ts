@@ -6,7 +6,7 @@ const router = Router();
 // GET /api/quick-replies
 // Devuelve las del agente actual (personal + team del agente + global), ordenadas por use_count DESC
 router.get('/', async (req: Request, res: Response) => {
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     // Get agent's teams
     const teamsResult = await db.query(
@@ -36,7 +36,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/quick-replies
 router.post('/', async (req: Request, res: Response) => {
     const { shortcut, title, content, scope = 'personal', team_id } = req.body;
-    const agentId = req.agent?.agentId;
+    const agentId = req.agent?.agent_id;
 
     if (!shortcut || !content) {
         res.status(400).json({ error: 'Shortcut and content are required' });
@@ -57,8 +57,8 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { shortcut, title, content, scope, team_id } = req.body;
-    const agentId = req.agent?.agentId;
-    const isAdmin = req.agent?.role === 'admin';
+    const agentId = req.agent?.agent_id;
+    const isAdmin = req.agent?.role === 'director';
 
     // Check ownership
     const existing = await db.query('SELECT agent_id FROM quick_replies WHERE id = $1', [id]);
@@ -91,8 +91,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE /api/quick-replies/:id
 router.delete('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
-    const agentId = req.agent?.agentId;
-    const isAdmin = req.agent?.role === 'admin';
+    const agentId = req.agent?.agent_id;
+    const isAdmin = req.agent?.role === 'director';
 
     const existing = await db.query('SELECT agent_id FROM quick_replies WHERE id = $1', [id]);
     if (existing.rows.length === 0) {
