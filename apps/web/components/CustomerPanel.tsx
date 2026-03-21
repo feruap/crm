@@ -8,7 +8,9 @@ const {
     Calendar, FileText, RefreshCw, Save, Link2
 } = Lucide as any;
 
-import { apiFetch } from '../hooks/useAuth';
+import { apiFetch, authHeaders } from '../hooks/useAuth';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -688,6 +690,8 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
     const [tab, setTab] = useState<Tab>('perfil');
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [retryKey, setRetryKey] = useState(0);
 
     const [events, setEvents] = useState<any[]>([]);
     const [knowledge, setKnowledge] = useState('');
@@ -706,11 +710,18 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
     useEffect(() => {
         setLoading(true);
         setCustomer(null);
+        setLoadError(null);
 
-        const loadAll = async () => {
+        const loadAll = async (retries = 2) => {
             try {
-                // Customer profile
-                const res = await apiFetch(`/api/conversations/${conversationId}/customer`);
+                // Customer profile — use plain fetch to avoid apiFetch throwing on non-ok
+                const res = await fetch(`${API}/api/conversations/${conversationId}/customer`, {
+                    headers: authHeaders(),
+                });
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                    throw new Error(errBody.error || `HTTP ${res.status}`);
+                }
                 const cust = await res.json();
                 setCustomer(cust);
                 // Populate shipping fields from API response
@@ -718,20 +729,40 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
                     setShipping(cust.shipping);
                 }
 
-                // Events
-                const resEvents = await apiFetch(`/api/events?customer_id=${cust.id}`);
-                setEvents(await resEvents.json());
+                // Events (non-critical — don't let failure break the whole panel)
+                try {
+                    const resEvents = await fetch(`${API}/api/events?customer_id=${cust.id}`, {
+                        headers: authHeaders(),
+                    });
+                    if (resEvents.ok) setEvents(await resEvents.json());
+                } catch { /* events are optional */ }
 
-                // Knowledge/Notes (using customer_attributes)
-                const resMeta = await apiFetch(`/api/customers/${cust.id}/attributes/knowledge`);
-                const meta = await resMeta.json();
-                setKnowledge(meta.value || '');
+                // Knowledge/Notes (non-critical)
+                try {
+                    const resMeta = await fetch(`${API}/api/customers/${cust.id}/attributes/knowledge`, {
+                        headers: authHeaders(),
+                    });
+                    if (resMeta.ok) {
+                        const meta = await resMeta.json();
+                        setKnowledge(meta.value || '');
+                    }
+                } catch { /* knowledge is optional */ }
 
-            } catch (err) { console.error(err); } finally { setLoading(false); }
+            } catch (err: any) {
+                console.error('CustomerPanel load error:', err);
+                if (retries > 0) {
+                    // Retry after a short delay
+                    await new Promise(r => setTimeout(r, 1000));
+                    return loadAll(retries - 1);
+                }
+                setLoadError(err.message || 'Error desconocido');
+            } finally {
+                setLoading(false);
+            }
         };
 
         loadAll();
-    }, [conversationId]);
+    }, [conversationId, retryKey]);
 
     const saveKnowledge = async () => {
         if (!customer) return;
@@ -837,8 +868,16 @@ export default function CustomerPanel({ conversationId }: { conversationId: stri
 
     if (!customer) {
         return (
-            <div className="w-80 shrink-0 border-l bg-white flex items-center justify-center h-full text-slate-400 text-sm">
-                No se pudo cargar el cliente
+            <div className="w-80 shrink-0 border-l bg-white flex flex-col items-center justify-center h-full text-slate-400 text-sm gap-2">
+                <AlertCircle className="w-5 h-5" />
+                <span>No se pudo cargar el cliente</span>
+                {loadError && <span className="text-xs text-red-400">{loadError}</span>}
+                <button
+                    onClick={() => setRetryKey(k => k + 1)}
+                    className="mt-1 text-xs text-blue-500 hover:text-blue-700 underline"
+                >
+                    Reintentar
+                </button>
             </div>
         );
     }

@@ -171,7 +171,7 @@ export default function InboxPage() {
 
     // Context panel
     const [context, setContext] = useState<CustomerContext | null>(null);
-    const [showContext, setShowContext] = useState(false);
+    const [showContext, setShowContext] = useState(true);
     const [loadingContext, setLoadingContext] = useState(false);
 
     // Composer panels
