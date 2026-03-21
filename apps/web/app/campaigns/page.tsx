@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, Users, ShoppingCart, DollarSign, CheckCircle, Clock, RefreshCw, Facebook } from 'lucide-react';
+import { useAuth } from '../../components/AuthProvider';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
@@ -25,6 +26,7 @@ const PLATFORM_STYLE: Record<string, { label: string; bg: string; text: string }
 };
 
 export default function CampaignsPage() {
+    const { authFetch } = useAuth();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
@@ -32,10 +34,7 @@ export default function CampaignsPage() {
 
     const fetchCampaigns = useCallback(async () => {
         try {
-            const token = localStorage.getItem('token') || '';
-            const res = await fetch(`${API_URL}/api/campaigns`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await authFetch(`${API_URL}/api/campaigns`);
             if (res.ok) {
                 const data = await res.json();
                 setCampaigns(data.map((c: any) => ({
@@ -51,7 +50,7 @@ export default function CampaignsPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [authFetch]);
 
     useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
 
@@ -69,10 +68,8 @@ export default function CampaignsPage() {
         setSyncing(true);
         setSyncMsg('');
         try {
-            const token = localStorage.getItem('token') || '';
-            const res = await fetch(`${API_URL}/api/campaigns/sync-facebook`, {
+            const res = await authFetch(`${API_URL}/api/campaigns/sync-facebook`, {
                 method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
             if (res.ok) {
@@ -89,10 +86,8 @@ export default function CampaignsPage() {
     };
 
     const syncWooCommerce = async () => {
-        const token = localStorage.getItem('token') || '';
-        await fetch(`${API_URL}/api/attributions/sync-woocommerce`, {
+        await authFetch(`${API_URL}/api/attributions/sync-woocommerce`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
         });
         setSyncMsg('Sincronizacion enviada a WooCommerce');
     };
