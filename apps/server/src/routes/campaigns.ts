@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
+import axios from 'axios';
 
 const router = Router();
 
@@ -48,6 +49,137 @@ router.get('/:id/attributions', async (req: Request, res: Response) => {
         [req.params.id]
     );
     res.json(result.rows);
+});
+
+// POST /api/campaigns/sync-facebook
+// Imports campaigns from Meta Ads API using the configured access token
+router.post('/sync-facebook', async (_req: Request, res: Response) => {
+    const accessToken = process.env.META_ACCESS_TOKEN;
+    if (!accessToken) {
+        res.status(400).json({ error: 'META_ACCESS_TOKEN not configured' });
+        return;
+    }
+
+    try {
+        // Step 1: Get ad accounts
+        const meResp = await axios.get('https://graph.facebook.com/v19.0/me/adaccounts', {
+            params: {
+                access_token: accessToken,
+                fields: 'id,name,account_id',
+                limit: 50,
+            },
+        });
+
+        const adAccounts = meResp.data?.data || [];
+        if (adAccounts.length === 0) {
+            res.json({ imported: 0, message: 'No ad accounts found' });
+            return;
+        }
+
+        let totalImported = 0;
+
+        for (const account of adAccounts) {
+            // Step 2: Get campaigns for each ad account
+            const campaignsResp = await axios.get(
+                `https://graph.facebook.com/v19.0/${account.id}/campaigns`,
+                {
+                    params: {
+                        access_token: accessToken,
+                        fields: 'id,name,status,objective,start_time,stop_time',
+                        limit: 100,
+                    },
+                }
+            );
+
+            const fbCampaigns = campaignsResp.data?.data || [];
+
+            for (const fbCamp of fbCampaigns) {
+                // Step 3: Get ad sets for each campaign
+                let adSets: any[] = [];
+                try {
+                    const adSetsResp = await axios.get(
+                        `https://graph.facebook.com/v19.0/${fbCamp.id}/adsets`,
+                        {
+                            params: {
+                                access_token: accessToken,
+                                fields: 'id,name,status',
+                                limit: 100,
+                            },
+                        }
+                    );
+                    adSets = adSetsResp.data?.data || [];
+                } catch { /* ignore adset fetch errors */ }
+
+                // Step 4: Get ads for each campaign
+                let ads: any[] = [];
+                try {
+                    const adsResp = await axios.get(
+                        `https://graph.facebook.com/v19.0/${fbCamp.id}/ads`,
+                        {
+                            params: {
+                                access_token: accessToken,
+                                fields: 'id,name,status',
+                                limit: 100,
+                            },
+                        }
+                    );
+                    ads = adsResp.data?.data || [];
+                } catch { /* ignore ad fetch errors */ }
+
+                // Upsert campaign
+                const metadata = {
+                    account_id: account.account_id,
+                    account_name: account.name,
+                    objective: fbCamp.objective,
+                    status: fbCamp.status,
+                    start_time: fbCamp.start_time,
+                    stop_time: fbCamp.stop_time,
+                    ad_sets: adSets.map((s: any) => ({ id: s.id, name: s.name, status: s.status })),
+                    ads: ads.map((a: any) => ({ id: a.id, name: a.name, status: a.status })),
+                };
+
+                await db.query(
+                    `INSERT INTO campaigns (platform, platform_campaign_id, name, metadata)
+                     VALUES ('facebook', $1, $2, $3)
+                     ON CONFLICT (platform, platform_campaign_id) DO UPDATE
+                         SET name = EXCLUDED.name,
+                             metadata = EXCLUDED.metadata`,
+                    [fbCamp.id, fbCamp.name, JSON.stringify(metadata)]
+                );
+                totalImported++;
+
+                // Also upsert individual ads as separate campaign entries for granular tracking
+                for (const ad of ads) {
+                    const adSetForAd = adSets.length > 0 ? adSets[0] : null;
+                    await db.query(
+                        `INSERT INTO campaigns (platform, platform_campaign_id, platform_ad_set_id, platform_ad_id, name, metadata)
+                         VALUES ('facebook', $1, $2, $3, $4, $5)
+                         ON CONFLICT (platform, platform_campaign_id) DO UPDATE
+                             SET name = EXCLUDED.name,
+                                 platform_ad_set_id = EXCLUDED.platform_ad_set_id,
+                                 platform_ad_id = EXCLUDED.platform_ad_id,
+                                 metadata = EXCLUDED.metadata`,
+                        [
+                            `${fbCamp.id}_ad_${ad.id}`,
+                            adSetForAd?.id || null,
+                            ad.id,
+                            `${fbCamp.name} > ${ad.name}`,
+                            JSON.stringify({ ...metadata, ad_name: ad.name, ad_status: ad.status }),
+                        ]
+                    );
+                    totalImported++;
+                }
+            }
+        }
+
+        res.json({ imported: totalImported, message: `Imported ${totalImported} campaigns from Facebook` });
+    } catch (err: any) {
+        console.error('Facebook sync error:', err.response?.data || err.message);
+        res.status(500).json({
+            error: 'Failed to sync from Facebook',
+            details: err.response?.data?.error?.message || err.message,
+        });
+    }
 });
 
 export default router;
