@@ -81,7 +81,9 @@
                 a.onclick = () => {
                     if (!chatIframe) {
                         chatIframe = document.createElement('iframe');
-                        chatIframe.src = 'http://localhost:3000/livechat';
+                        // Derive livechat URL from widget config or apiUrl
+                        const livechatUrl = data.livechat_url || config.apiUrl.replace('api-crm', 'crm').replace(/:\d+$/, '') + '/livechat';
+                        chatIframe.src = livechatUrl;
                         chatIframe.style.width = '350px';
                         chatIframe.style.height = '500px';
                         chatIframe.style.border = 'none';

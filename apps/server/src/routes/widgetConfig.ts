@@ -6,6 +6,10 @@ const router = Router();
 
 // GET /api/widget-config
 router.get('/', async (req: Request, res: Response) => {
+    const livechatUrl = process.env.NEXT_PUBLIC_WEB_URL
+        ? `${process.env.NEXT_PUBLIC_WEB_URL}/livechat`
+        : (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001').replace('api-crm', 'crm').replace(/:\d+$/, '') + '/livechat';
+
     const result = await db.query('SELECT * FROM widget_configs WHERE is_active = TRUE LIMIT 1');
     if (result.rows.length === 0) {
         // Return default config
@@ -16,10 +20,11 @@ router.get('/', async (req: Request, res: Response) => {
             text_color: '#FFFFFF',
             welcome_text: '¿Cómo podemos ayudarte?',
             position: 'right',
-            is_active: true
+            is_active: true,
+            livechat_url: livechatUrl
         });
     }
-    res.json(result.rows[0]);
+    res.json({ ...result.rows[0], livechat_url: livechatUrl });
 });
 
 // PUT /api/widget-config
