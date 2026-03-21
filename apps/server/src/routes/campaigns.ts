@@ -194,4 +194,195 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
     }
 });
 
+// POST /api/campaigns/sync-google — sync campaigns from Google Ads API
+router.post('/sync-google', async (req: Request, res: Response) => {
+    try {
+        const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+        const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+
+        // Get developer token (env > DB)
+        let developerToken: string | null = process.env.GOOGLE_DEVELOPER_TOKEN || null;
+        if (!developerToken) {
+            const dtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_developer_token' LIMIT 1`).catch(() => ({ rows: [] }));
+            developerToken = dtRow.rows[0]?.value ?? null;
+        }
+
+        // Get refresh token
+        const rtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_refresh_token' LIMIT 1`).catch(() => ({ rows: [] }));
+        const refreshToken: string | null = rtRow.rows[0]?.value ?? null;
+
+        if (!refreshToken) {
+            res.status(400).json({ error: 'No hay cuenta de Google Ads conectada', hint: 'Conecta tu cuenta en Settings → Integraciones → Google Ads' });
+            return;
+        }
+        if (!developerToken) {
+            res.status(400).json({ error: 'GOOGLE_DEVELOPER_TOKEN no configurado', hint: 'Agrega GOOGLE_DEVELOPER_TOKEN en .env (Google Ads → Herramientas → Centro de API)' });
+            return;
+        }
+        if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+            res.status(400).json({ error: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET no configurados en .env' });
+            return;
+        }
+
+        // Exchange refresh token for access token
+        const tokenRes = await axios.post('https://oauth2.googleapis.com/token',
+            new URLSearchParams({
+                client_id: GOOGLE_CLIENT_ID!,
+                client_secret: GOOGLE_CLIENT_SECRET!,
+                refresh_token: refreshToken,
+                grant_type: 'refresh_token',
+            }).toString(),
+            { timeout: 10000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        const accessToken = tokenRes.data.access_token;
+
+        // MCC (Manager Account) ID — DB > env
+        const mccRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_ads_mcc_id' LIMIT 1`).catch(() => ({ rows: [] }));
+        const MCC_ID = (mccRow.rows[0]?.value || process.env.GOOGLE_ADS_MCC_ID || '').replace(/-/g, '');
+
+        const authHeaders: Record<string, string> = {
+            Authorization: `Bearer ${accessToken}`,
+            'developer-token': developerToken,
+            ...(MCC_ID ? { 'login-customer-id': MCC_ID } : {}),
+        };
+
+        // Get list of accessible customer accounts
+        const customersRes = await axios.get('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
+            headers: authHeaders,
+            timeout: 15000,
+        });
+        const resourceNames: string[] = customersRes.data.resourceNames ?? [];
+
+        let totalImported = 0;
+        const accountResults: { id: string; name: string; campaigns: number }[] = [];
+        const errors: string[] = [];
+
+        for (const resourceName of resourceNames) {
+            const customerId = resourceName.replace('customers/', '');
+            if (MCC_ID && customerId === MCC_ID) {
+                accountResults.push({ id: customerId, name: 'MCC', campaigns: 0 });
+                continue;
+            }
+            try {
+                let searchRes: any;
+                let successfulLoginId = customerId;
+                const searchQuery = {
+                    query: `SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
+                                   campaign.base_campaign, customer.descriptive_name
+                            FROM campaign
+                            WHERE campaign.status != 'REMOVED'
+                            ORDER BY campaign.id`,
+                };
+                try {
+                    searchRes = await axios.post(
+                        `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
+                        searchQuery,
+                        { headers: { ...authHeaders, 'login-customer-id': customerId }, timeout: 20000 }
+                    );
+                } catch (directErr: any) {
+                    const directStatus = directErr.response?.status;
+                    if ((directStatus === 403 || directStatus === 401) && MCC_ID) {
+                        successfulLoginId = MCC_ID;
+                        searchRes = await axios.post(
+                            `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
+                            searchQuery,
+                            { headers: { ...authHeaders, 'login-customer-id': MCC_ID }, timeout: 20000 }
+                        );
+                    } else {
+                        throw directErr;
+                    }
+                }
+
+                const rows: any[] = searchRes.data?.results ?? [];
+                let accountImported = 0;
+                const customerName = rows[0]?.customer?.descriptiveName || customerId;
+
+                for (const row of rows) {
+                    const camp = row.campaign;
+                    const channelType: string = camp.advertisingChannelType || 'UNKNOWN';
+                    const platform = 'google';
+                    const ai_instructions = `\n# Campaña: ${camp.name}\nEres un asistente de ventas para la campaña "${camp.name}" en Google Ads.\nTu objetivo principal es asistir al usuario que hizo clic en nuestro anuncio de Google.\nDebes ofrecer información clara sobre nuestros productos médicos y pruebas rápidas.\n`;
+                    await db.query(
+                        `INSERT INTO campaigns (platform, platform_campaign_id, name, metadata, is_active, ai_instructions)
+                         VALUES ($1, $2, $3, $4, $5, $6)
+                         ON CONFLICT (platform, platform_campaign_id)
+                         DO UPDATE SET name = EXCLUDED.name, metadata = EXCLUDED.metadata, ai_instructions = COALESCE(campaigns.ai_instructions, EXCLUDED.ai_instructions)`,
+                        [
+                            platform,
+                            String(camp.id),
+                            camp.name,
+                            JSON.stringify({
+                                account_id: customerId,
+                                account_name: customerName,
+                                status: camp.status,
+                                channel_type: channelType,
+                                synced_at: new Date().toISOString(),
+                            }),
+                            camp.status === 'ENABLED',
+                            ai_instructions
+                        ]
+                    );
+                    totalImported++;
+                    accountImported++;
+                }
+
+                // Daily spend tracking
+                try {
+                    const today = new Date();
+                    const from90 = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+                    const dateFrom = from90.toISOString().split('T')[0];
+                    const dateTo = today.toISOString().split('T')[0];
+                    const spendQuery = {
+                        query: `SELECT campaign.id, segments.date, metrics.cost_micros
+                                FROM campaign
+                                WHERE campaign.status != 'REMOVED'
+                                  AND segments.date BETWEEN '${dateFrom}' AND '${dateTo}'
+                                ORDER BY campaign.id, segments.date`,
+                    };
+                    const spendRes = await axios.post(
+                        `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:search`,
+                        spendQuery,
+                        { headers: { ...authHeaders, 'login-customer-id': successfulLoginId }, timeout: 30000 }
+                    );
+                    for (const spendRow of (spendRes.data?.results ?? [])) {
+                        const googleCampaignId = String(spendRow.campaign?.id);
+                        const spendDate = spendRow.segments?.date;
+                        const spendAmount = ((Number(spendRow.metrics?.costMicros) || 0) / 1_000_000).toFixed(6);
+                        if (!spendDate) continue;
+                        await db.query(
+                            `INSERT INTO campaign_daily_spend (campaign_id, spend_date, spend_amount, currency)
+                             SELECT c.id, $2, $3, COALESCE(c.spend_currency, 'MXN')
+                             FROM campaigns c
+                             WHERE c.platform = 'google' AND c.platform_campaign_id = $1
+                             ON CONFLICT (campaign_id, spend_date)
+                             DO UPDATE SET spend_amount = EXCLUDED.spend_amount, synced_at = NOW()`,
+                            [googleCampaignId, spendDate, spendAmount]
+                        );
+                    }
+                } catch (spendErr: any) {
+                    console.warn(`[sync-google] spend query failed for customer ${customerId}:`, spendErr.response?.data?.error?.message || spendErr.message);
+                }
+
+                accountResults.push({ id: customerId, name: customerName, campaigns: accountImported });
+            } catch (custErr: any) {
+                const msg = custErr.response?.data?.error?.message || custErr.message;
+                errors.push(`Customer ${customerId}: ${msg}`);
+            }
+        }
+
+        res.json({ imported: totalImported, accounts: accountResults, errors: errors.length > 0 ? errors : undefined });
+
+    } catch (error: any) {
+        if (error.response) {
+            console.error('Google Ads API Error Status:', error.response.status);
+            console.error('Google Ads API Error Data:', JSON.stringify(error.response.data, null, 2));
+        } else {
+            console.error('sync-google error:', error.message);
+        }
+        res.status(500).json({
+            error: 'Error al sincronizar con Google Ads',
+            detail: error.response?.data?.error?.message || error.message,
+        });
+    }
+});
+
 export default router;
