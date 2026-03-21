@@ -184,7 +184,7 @@ router.get('/conversation', async (req: Request, res: Response) => {
 // ── GET /api/simulator/session ───────────────────────────────────────────────
 // Return the active simulator session for the authenticated agent.
 router.get('/session', async (req: Request, res: Response) => {
-    const agentId = (req as any).agent?.agentId;
+    const agentId = (req as any).agent?.agent_id;
     if (!agentId) { res.status(401).json({ error: 'Not authenticated' }); return; }
 
     const result = await db.query(
@@ -216,7 +216,7 @@ router.get('/session', async (req: Request, res: Response) => {
 // ── POST /api/simulator/session ─────────────────────────────────────────────
 // Save/update the active simulator session for the authenticated agent.
 router.post('/session', async (req: Request, res: Response) => {
-    const agentId = (req as any).agent?.agentId;
+    const agentId = (req as any).agent?.agent_id;
     if (!agentId) { res.status(401).json({ error: 'Not authenticated' }); return; }
 
     const { conversation_id, channel_id, customer_name, customer_phone, campaign_id } = req.body;
@@ -240,7 +240,7 @@ router.post('/session', async (req: Request, res: Response) => {
 // ── DELETE /api/simulator/session ───────────────────────────────────────────
 // Clear the active simulator session (for "New conversation").
 router.delete('/session', async (req: Request, res: Response) => {
-    const agentId = (req as any).agent?.agentId;
+    const agentId = (req as any).agent?.agent_id;
     if (!agentId) { res.status(401).json({ error: 'Not authenticated' }); return; }
 
     await db.query(`DELETE FROM simulator_sessions WHERE agent_id = $1`, [agentId]);
