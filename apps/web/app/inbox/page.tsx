@@ -4,9 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../components/AuthProvider';
 import CatalogPanel from '../../components/CatalogPanel';
 import CustomerPanel from '../../components/CustomerPanel';
+import QuickRepliesPanel from '../../components/QuickRepliesPanel';
+import ScheduleMessageModal from '../../components/ScheduleMessageModal';
 import {
     Search, Send, User, ShoppingBag,
     ChevronRight, MessageSquare, CheckCircle,
+    Zap, Clock, Paperclip, Smile,
 } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
@@ -101,6 +104,8 @@ export default function InboxPage() {
     // Panels
     const [showCustomerPanel, setShowCustomerPanel] = useState(false);
     const [showCatalog, setShowCatalog] = useState(false);
+    const [showQuickReplies, setShowQuickReplies] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
 
     // ─── Fetch conversation list ─────────────────────────────
     const fetchConversations = useCallback(async () => {
@@ -221,6 +226,14 @@ export default function InboxPage() {
         } catch {
             // silent
         }
+    };
+
+    // ─── Quick reply selected ─────────────────────────────────
+    const handleQuickReplySelect = (content: string, id: string) => {
+        setNewMessage(content);
+        setShowQuickReplies(false);
+        // Track usage
+        authFetch(`${API}/api/quick-replies/${id}/use`, { method: 'POST' }).catch(() => {});
     };
 
     // ─── Assign to me ────────────────────────────────────────
@@ -472,7 +485,45 @@ export default function InboxPage() {
                         )}
 
                         {/* Composer */}
-                        <div className="bg-white border-t border-slate-200 p-3">
+                        <div className="bg-white border-t border-slate-200 p-3 relative">
+                            {/* Quick Replies Panel (floats above composer) */}
+                            {showQuickReplies && (
+                                <QuickRepliesPanel
+                                    onSelect={handleQuickReplySelect}
+                                    onClose={() => setShowQuickReplies(false)}
+                                />
+                            )}
+
+                            {/* Action buttons row */}
+                            <div className="flex items-center gap-1 mb-2">
+                                <button
+                                    onClick={() => setShowQuickReplies(prev => !prev)}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                        showQuickReplies ? 'bg-amber-100 text-amber-600' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                                    }`}
+                                    title="Respuestas rapidas"
+                                >
+                                    <Zap className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setShowScheduleModal(true)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                                    title="Programar mensaje"
+                                >
+                                    <Clock className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setShowCatalog(prev => !prev)}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                        showCatalog ? 'bg-purple-100 text-purple-600' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                                    }`}
+                                    title="Catalogo de productos"
+                                >
+                                    <ShoppingBag className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Text input + send */}
                             <div className="flex items-end gap-2">
                                 <textarea
                                     value={newMessage}
@@ -497,6 +548,19 @@ export default function InboxPage() {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Schedule Message Modal */}
+                        {showScheduleModal && selectedId && (
+                            <ScheduleMessageModal
+                                conversationId={selectedId}
+                                initialContent={newMessage}
+                                onClose={() => setShowScheduleModal(false)}
+                                onSuccess={() => {
+                                    setNewMessage('');
+                                    fetchConversations();
+                                }}
+                            />
+                        )}
                     </>
                 )}
             </div>
