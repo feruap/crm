@@ -2964,12 +2964,312 @@ function WooCommerceWebhookSection() {
     );
 }
 
-// ── Knowledge Base Tab (stub) ─────────────────────────────────────────────────
+// ── Knowledge Base Tab ───────────────────────────────────────────────────────
 function KnowledgeBaseTab() {
+    const [products, setProducts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState<string | null>(null);
+    const [search, setSearch] = useState('');
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editForm, setEditForm] = useState<{ answer: string; metadata: any }>({ answer: '', metadata: {} });
+    const [saving, setSaving] = useState(false);
+
+    const fetchProducts = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await apiFetch(`/api/knowledge?type=product`);
+            const data = await res.json();
+            setProducts(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to fetch KB products:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setSyncResult(null);
+        try {
+            const res = await apiFetch('/api/knowledge/sync-wc', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                setSyncResult(`Sincronización exitosa: ${data.synced} nuevos, ${data.updated} actualizados (${data.total} productos total)`);
+                fetchProducts();
+            } else {
+                setSyncResult(`Error: ${data.error || 'Falló la sincronización'}`);
+            }
+        } catch (err: any) {
+            setSyncResult(`Error de conexión: ${err.message}`);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const startEdit = (product: any) => {
+        setEditingId(product.id);
+        const meta = product.metadata || {};
+        setEditForm({
+            answer: product.answer || '',
+            metadata: {
+                ...meta,
+                custom_info: meta.custom_info || '',
+                upsell_names: meta.upsell_names || [],
+                cross_sell_names: meta.cross_sell_names || [],
+            },
+        });
+    };
+
+    const handleSave = async () => {
+        if (!editingId) return;
+        setSaving(true);
+        try {
+            const res = await apiFetch(`/api/knowledge/${editingId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ answer: editForm.answer, metadata: editForm.metadata }),
+            });
+            if (res.ok) {
+                setEditingId(null);
+                fetchProducts();
+            }
+        } catch (err) {
+            console.error('Failed to save KB entry:', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const filtered = products.filter(p => {
+        if (!search) return true;
+        const s = search.toLowerCase();
+        const meta = p.metadata || {};
+        return (
+            (p.question || '').toLowerCase().includes(s) ||
+            (p.answer || '').toLowerCase().includes(s) ||
+            (meta.categories || '').toLowerCase().includes(s) ||
+            (meta.sku || '').toLowerCase().includes(s) ||
+            (meta.tags || '').toLowerCase().includes(s)
+        );
+    });
+
     return (
-        <div className="p-10 max-w-3xl">
-            <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
-            <p className="text-slate-500 text-sm mt-1">Próximamente disponible.</p>
+        <div className="p-6 max-w-6xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento — Productos</h3>
+                    <p className="text-slate-500 text-sm mt-1">
+                        Productos sincronizados de WooCommerce. Edita información de upsells, cross-sells e info personalizada que el bot usará al responder.
+                    </p>
+                </div>
+                <button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 text-sm font-medium"
+                >
+                    {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    {syncing ? 'Sincronizando…' : 'Sincronizar WooCommerce'}
+                </button>
+            </div>
+
+            {syncResult && (
+                <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${syncResult.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                    {syncResult}
+                </div>
+            )}
+
+            {/* Search */}
+            <div className="mb-4">
+                <input
+                    type="text"
+                    placeholder="Buscar por nombre, categoría, SKU, tags…"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-4 mb-4 text-sm text-slate-500">
+                <span>{products.length} productos en base de conocimiento</span>
+                {search && <span>• {filtered.length} resultados</span>}
+            </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                    <span className="ml-2 text-slate-500">Cargando productos…</span>
+                </div>
+            ) : filtered.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                    <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                    <p className="font-medium">No hay productos en la base de conocimiento</p>
+                    <p className="text-sm mt-1">Haz clic en &quot;Sincronizar WooCommerce&quot; para importar tus productos.</p>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {filtered.map(product => {
+                        const meta = product.metadata || {};
+                        const isEditing = editingId === product.id;
+
+                        return (
+                            <div key={product.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                                {/* Product header row */}
+                                <div className="flex items-center gap-4 p-4">
+                                    {/* Image */}
+                                    {meta.image_url ? (
+                                        <img src={meta.image_url} alt={product.question} className="w-14 h-14 rounded-lg object-cover shrink-0 border border-slate-100" />
+                                    ) : (
+                                        <div className="w-14 h-14 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                                            <ShoppingBag className="w-6 h-6 text-slate-300" />
+                                        </div>
+                                    )}
+
+                                    {/* Main info */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <h4 className="font-semibold text-slate-800 truncate">{(product.question || '').replace('¿Qué es ', '').replace('?', '')}</h4>
+                                            {meta.sale_price && parseFloat(meta.sale_price) > 0 && (
+                                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded">OFERTA</span>
+                                            )}
+                                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${meta.stock_status === 'instock' ? 'bg-green-100 text-green-700' : meta.stock_status === 'outofstock' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {meta.stock_status === 'instock' ? 'En stock' : meta.stock_status === 'outofstock' ? 'Agotado' : meta.stock_status || '—'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                                            <span className="font-semibold text-slate-700">${meta.price || '—'} MXN</span>
+                                            {meta.regular_price && meta.sale_price && parseFloat(meta.sale_price) > 0 && (
+                                                <span className="line-through text-slate-400">${meta.regular_price}</span>
+                                            )}
+                                            {meta.sku && <span>SKU: {meta.sku}</span>}
+                                            {meta.categories && <span>{meta.categories}</span>}
+                                            {meta.tags && <span className="text-slate-400">{meta.tags}</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Upsell/cross-sell badges */}
+                                    <div className="flex flex-col gap-1 text-xs shrink-0">
+                                        {(meta.upsell_names || []).length > 0 && (
+                                            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded-md">
+                                                ↑ {meta.upsell_names.length} upsell{meta.upsell_names.length > 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                        {(meta.cross_sell_names || []).length > 0 && (
+                                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
+                                                ↔ {meta.cross_sell_names.length} cross-sell{meta.cross_sell_names.length > 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Edit button */}
+                                    <button
+                                        onClick={() => isEditing ? setEditingId(null) : startEdit(product)}
+                                        className={`p-2 rounded-lg transition-colors ${isEditing ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+                                        title={isEditing ? 'Cerrar editor' : 'Editar información'}
+                                    >
+                                        {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                                    </button>
+                                </div>
+
+                                {/* Inline details (upsells, cross-sells, custom_info) */}
+                                {!isEditing && (meta.custom_info || (meta.upsell_names || []).length > 0 || (meta.cross_sell_names || []).length > 0) && (
+                                    <div className="px-4 pb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 border-t border-slate-100 pt-3">
+                                        {(meta.upsell_names || []).length > 0 && (
+                                            <div><span className="font-medium text-purple-600">Upsells:</span> {meta.upsell_names.join(', ')}</div>
+                                        )}
+                                        {(meta.cross_sell_names || []).length > 0 && (
+                                            <div><span className="font-medium text-blue-600">Cross-sells:</span> {meta.cross_sell_names.join(', ')}</div>
+                                        )}
+                                        {meta.custom_info && (
+                                            <div className="w-full"><span className="font-medium text-slate-600">Info personalizada:</span> {meta.custom_info}</div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Edit panel */}
+                                {isEditing && (
+                                    <div className="border-t border-slate-200 bg-slate-50 p-4 space-y-4">
+                                        {/* Bot answer */}
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Respuesta del bot (lo que el bot dirá sobre este producto)</label>
+                                            <textarea
+                                                value={editForm.answer}
+                                                onChange={e => setEditForm(prev => ({ ...prev, answer: e.target.value }))}
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        {/* Custom info */}
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Información personalizada (tips de venta, detalles técnicos, notas internas)</label>
+                                            <textarea
+                                                value={editForm.metadata.custom_info || ''}
+                                                onChange={e => setEditForm(prev => ({
+                                                    ...prev,
+                                                    metadata: { ...prev.metadata, custom_info: e.target.value }
+                                                }))}
+                                                rows={2}
+                                                placeholder="Ej: Este producto es ideal para clínicas pequeñas. Sugerir el paquete de 100 piezas si pide cotización…"
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+
+                                        {/* Upsells display */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-semibold text-purple-600 mb-1">Upsells (de WooCommerce)</label>
+                                                <div className="text-sm text-slate-600 bg-white rounded-lg border border-slate-200 px-3 py-2 min-h-[38px]">
+                                                    {(editForm.metadata.upsell_names || []).length > 0
+                                                        ? editForm.metadata.upsell_names.join(', ')
+                                                        : <span className="text-slate-400">Sin upsells configurados en WooCommerce</span>}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-semibold text-blue-600 mb-1">Cross-sells (de WooCommerce)</label>
+                                                <div className="text-sm text-slate-600 bg-white rounded-lg border border-slate-200 px-3 py-2 min-h-[38px]">
+                                                    {(editForm.metadata.cross_sell_names || []).length > 0
+                                                        ? editForm.metadata.cross_sell_names.join(', ')
+                                                        : <span className="text-slate-400">Sin cross-sells configurados en WooCommerce</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Product metadata read-only info */}
+                                        <div className="text-xs text-slate-400 flex gap-4">
+                                            <span>WC ID: {editForm.metadata.wc_id || '—'}</span>
+                                            <span>SKU: {editForm.metadata.sku || '—'}</span>
+                                            <span>Precio: ${editForm.metadata.price || '—'}</span>
+                                            {editForm.metadata.sale_price && <span>Oferta: ${editForm.metadata.sale_price}</span>}
+                                        </div>
+
+                                        {/* Save / Cancel */}
+                                        <div className="flex justify-end gap-2 pt-2">
+                                            <button
+                                                onClick={() => setEditingId(null)}
+                                                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={handleSave}
+                                                disabled={saving}
+                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                                            >
+                                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                {saving ? 'Guardando…' : 'Guardar cambios'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
