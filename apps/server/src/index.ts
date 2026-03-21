@@ -15,6 +15,27 @@ import analyticsRouter from './routes/analytics';
 import inventoryRouter from './routes/inventory';
 import agentCommissionsRouter from './routes/agent-commissions';
 import authRouter from './routes/auth';
+import agentsRouter from './routes/agents';
+import agentGroupsRouter from './routes/agent-groups';
+import aiRouter from './routes/ai';
+import alertsRouter from './routes/alerts';
+import assignmentRulesRouter from './routes/assignmentRules';
+import automationsRouter from './routes/automations';
+import botRouter from './routes/bot';
+import bulkCampaignsRouter from './routes/bulkCampaigns';
+import businessHoursRouter from './routes/business-hours';
+import channelsRouter from './routes/channels';
+import customersRouter from './routes/customers';
+import eventsRouter from './routes/events';
+import flowsRouter from './routes/flows';
+import knowledgeRouter from './routes/knowledge';
+import pipelinesRouter from './routes/pipelines';
+import productsRouter from './routes/products';
+import quickRepliesRouter from './routes/quickReplies';
+import scheduledMessagesRouter from './routes/scheduledMessages';
+import simulatorRouter from './routes/simulator';
+import teamsRouter from './routes/teams';
+import widgetConfigRouter from './routes/widgetConfig';
 
 dotenv.config();                          // loads .env
 dotenv.config({ path: '.env.whatsapp' }); // loads WhatsApp credentials (won't override existing)
@@ -48,6 +69,27 @@ app.use('/api/campaign-mappings', requireAuth, campaignMappingsRouter);
 app.use('/api/medical-products',  requireAuth, medicalProductsRouter);
 app.use('/api/inventory',         requireAuth, inventoryRouter);
 app.use('/api/agent-commissions', requireAuth, agentCommissionsRouter);
+app.use('/api/agents',            requireAuth, agentsRouter);
+app.use('/api/agent-groups',      requireAuth, agentGroupsRouter);
+app.use('/api/ai',                requireAuth, aiRouter);
+app.use('/api/alerts',            requireAuth, alertsRouter);
+app.use('/api/assignment-rules',  requireAuth, assignmentRulesRouter);
+app.use('/api/automations',       requireAuth, automationsRouter);
+app.use('/api/bot',               requireAuth, botRouter);
+app.use('/api/bulk-campaigns',    requireAuth, bulkCampaignsRouter);
+app.use('/api/business-hours',    requireAuth, businessHoursRouter);
+app.use('/api/channels',          requireAuth, channelsRouter);
+app.use('/api/customers',         requireAuth, customersRouter);
+app.use('/api/events',            requireAuth, eventsRouter);
+app.use('/api/flows',             requireAuth, flowsRouter);
+app.use('/api/knowledge',         requireAuth, knowledgeRouter);
+app.use('/api/pipelines',         requireAuth, pipelinesRouter);
+app.use('/api/products',          requireAuth, productsRouter);
+app.use('/api/quick-replies',     requireAuth, quickRepliesRouter);
+app.use('/api/scheduled-messages',requireAuth, scheduledMessagesRouter);
+app.use('/api/simulator',         requireAuth, simulatorRouter);
+app.use('/api/teams',             requireAuth, teamsRouter);
+app.use('/api/widget-config',     requireAuth, widgetConfigRouter);
 
 // ─── Manager+ Routes (gerente or director) ───
 app.use('/api/escalation-rules',  requireAuth, requireRole('gerente'), escalationRulesRouter);
