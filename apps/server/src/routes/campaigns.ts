@@ -53,6 +53,7 @@ router.get('/:id/attributions', async (req: Request, res: Response) => {
 
 // POST /api/campaigns/sync-facebook
 // Imports campaigns from Meta Ads API using the configured access token
+// Supports META_AD_ACCOUNT_ID env var for direct ad account access (System User tokens)
 router.post('/sync-facebook', async (_req: Request, res: Response) => {
     const accessToken = process.env.META_ACCESS_TOKEN;
     if (!accessToken) {
@@ -60,19 +61,30 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
         return;
     }
 
-    try {
-        // Step 1: Get ad accounts
-        const meResp = await axios.get('https://graph.facebook.com/v19.0/me/adaccounts', {
-            params: {
-                access_token: accessToken,
-                fields: 'id,name,account_id',
-                limit: 50,
-            },
-        });
+    const GRAPH_VERSION = 'v21.0';
 
-        const adAccounts = meResp.data?.data || [];
+    try {
+        let adAccounts: any[] = [];
+
+        // If META_AD_ACCOUNT_ID is set, use it directly (works with System User tokens)
+        const directAccountId = process.env.META_AD_ACCOUNT_ID;
+        if (directAccountId) {
+            const actId = directAccountId.startsWith('act_') ? directAccountId : `act_${directAccountId}`;
+            adAccounts = [{ id: actId, account_id: directAccountId.replace('act_', ''), name: 'Direct Account' }];
+        } else {
+            // Step 1: Get ad accounts via /me/adaccounts (requires User access token)
+            const meResp = await axios.get(`https://graph.facebook.com/${GRAPH_VERSION}/me/adaccounts`, {
+                params: {
+                    access_token: accessToken,
+                    fields: 'id,name,account_id',
+                    limit: 50,
+                },
+            });
+            adAccounts = meResp.data?.data || [];
+        }
+
         if (adAccounts.length === 0) {
-            res.json({ imported: 0, message: 'No ad accounts found' });
+            res.json({ imported: 0, message: 'No ad accounts found. Set META_AD_ACCOUNT_ID env var if using a System User token.' });
             return;
         }
 
@@ -81,7 +93,7 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
         for (const account of adAccounts) {
             // Step 2: Get campaigns for each ad account
             const campaignsResp = await axios.get(
-                `https://graph.facebook.com/v19.0/${account.id}/campaigns`,
+                `https://graph.facebook.com/${GRAPH_VERSION}/${account.id}/campaigns`,
                 {
                     params: {
                         access_token: accessToken,
@@ -98,7 +110,7 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
                 let adSets: any[] = [];
                 try {
                     const adSetsResp = await axios.get(
-                        `https://graph.facebook.com/v19.0/${fbCamp.id}/adsets`,
+                        `https://graph.facebook.com/${GRAPH_VERSION}/${fbCamp.id}/adsets`,
                         {
                             params: {
                                 access_token: accessToken,
@@ -114,7 +126,7 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
                 let ads: any[] = [];
                 try {
                     const adsResp = await axios.get(
-                        `https://graph.facebook.com/v19.0/${fbCamp.id}/ads`,
+                        `https://graph.facebook.com/${GRAPH_VERSION}/${fbCamp.id}/ads`,
                         {
                             params: {
                                 access_token: accessToken,
