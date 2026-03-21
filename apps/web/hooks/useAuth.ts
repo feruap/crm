@@ -6,14 +6,14 @@ export interface Agent {
     id: string;
     name: string;
     email: string;
-    role: 'admin' | 'supervisor' | 'agent';
+    role: 'director' | 'gerente' | 'operador';
 }
 
-const API = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 export function getToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('myalice_token');
+    return localStorage.getItem('crm_token');
 }
 
 export function authHeaders(): Record<string, string> {
@@ -33,14 +33,14 @@ export function useAuth() {
         fetch(`${API}/api/auth/me`, { headers: authHeaders() })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
-                if (!data) { localStorage.removeItem('myalice_token'); router.replace('/login'); }
+                if (!data) { localStorage.removeItem('crm_token'); router.replace('/login'); }
                 else setAgent(data);
             })
             .finally(() => setLoading(false));
     }, [router]);
 
     const logout = () => {
-        localStorage.removeItem('myalice_token');
+        localStorage.removeItem('crm_token');
         router.replace('/login');
     };
 
@@ -55,7 +55,7 @@ export async function apiFetch(path: string, options?: RequestInit) {
 
     if (res.status === 401) {
         if (typeof window !== 'undefined') {
-            localStorage.removeItem('myalice_token');
+            localStorage.removeItem('crm_token');
             window.location.href = '/login';
         }
         throw new Error('Unauthorized');

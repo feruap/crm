@@ -263,4 +263,182 @@ router.patch('/:id/assign', async (req: Request, res: Response) => {
     res.json({ ok: true });
 });
 
+// GET /api/conversations/:id/customer — full customer profile for panels
+router.get('/:id/customer', async (req: Request, res: Response) => {
+    try {
+        const convResult = await db.query(
+            `SELECT customer_id FROM conversations WHERE id = $1`,
+            [req.params.id]
+        );
+        if (convResult.rows.length === 0) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        const customerId = convResult.rows[0].customer_id;
+
+        const customer = await db.query(
+            `SELECT id, display_name AS name, phone, email, created_at,
+                    wc_customer_id, metadata
+             FROM customers WHERE id = $1`,
+            [customerId]
+        );
+        if (customer.rows.length === 0) {
+            res.status(404).json({ error: 'Customer not found' });
+            return;
+        }
+
+        const c = customer.rows[0];
+
+        // Get shipping from attributes
+        const shippingAttr = await db.query(
+            `SELECT value FROM customer_attributes WHERE customer_id = $1 AND key = 'shipping'`,
+            [customerId]
+        );
+        const shipping = shippingAttr.rows.length > 0
+            ? (typeof shippingAttr.rows[0].value === 'string'
+                ? JSON.parse(shippingAttr.rows[0].value)
+                : shippingAttr.rows[0].value)
+            : null;
+
+        // Get orders
+        const orders = await db.query(
+            `SELECT id, wc_order_id, status, total, created_at
+             FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20`,
+            [customerId]
+        );
+
+        // Get segments
+        const segments = await db.query(
+            `SELECT segment_type, segment_value FROM customer_segments WHERE customer_id = $1`,
+            [customerId]
+        );
+
+        // Get attributes
+        const attributes = await db.query(
+            `SELECT key, value FROM customer_attributes WHERE customer_id = $1 AND key != 'shipping'`,
+            [customerId]
+        );
+        const attrsMap: Record<string, string> = {};
+        attributes.rows.forEach((r: any) => { attrsMap[r.key] = r.value; });
+
+        res.json({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            email: c.email,
+            created_at: c.created_at,
+            wc_customer_id: c.wc_customer_id,
+            shipping,
+            orders: orders.rows,
+            segments: segments.rows,
+            attributes: attrsMap,
+        });
+    } catch (err: any) {
+        console.error('Error fetching customer for conversation:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/conversations/:id/cart-link — create WC draft order & return payment URL
+router.post('/:id/cart-link', async (req: Request, res: Response) => {
+    try {
+        const { line_items, billing, shipping, notes } = req.body;
+
+        // Get customer for this conversation
+        const convResult = await db.query(
+            `SELECT customer_id FROM conversations WHERE id = $1`,
+            [req.params.id]
+        );
+        if (convResult.rows.length === 0) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        const customerId = convResult.rows[0].customer_id;
+
+        const customerResult = await db.query(
+            `SELECT id, wc_customer_id FROM customers WHERE id = $1`,
+            [customerId]
+        );
+        const customer = customerResult.rows[0];
+
+        // Build WooCommerce order payload
+        const WC_URL = process.env.WC_URL || 'https://tst.amunet.com.mx';
+        const WC_KEY = process.env.WC_KEY || '';
+        const WC_SECRET = process.env.WC_SECRET || '';
+
+        const orderPayload: any = {
+            status: 'pending',
+            line_items: line_items || [],
+            set_paid: false,
+        };
+
+        if (customer.wc_customer_id) {
+            orderPayload.customer_id = Number(customer.wc_customer_id);
+        }
+        if (billing) orderPayload.billing = billing;
+        if (shipping) orderPayload.shipping = shipping;
+        if (notes) orderPayload.customer_note = notes;
+
+        // Add agent attribution metadata
+        const agentId = (req as any).agent?.id;
+        if (agentId) {
+            const agentResult = await db.query(`SELECT name, wp_user_id FROM agents WHERE id = $1`, [agentId]);
+            if (agentResult.rows.length > 0) {
+                orderPayload.meta_data = [
+                    { key: '_crm_agent_id', value: agentId },
+                    { key: '_crm_agent_name', value: agentResult.rows[0].name },
+                    { key: '_crm_conversation_id', value: req.params.id },
+                ];
+                if (agentResult.rows[0].wp_user_id) {
+                    orderPayload.meta_data.push(
+                        { key: 'salesking_order_placed_by', value: String(agentResult.rows[0].wp_user_id) },
+                        { key: 'salesking_assigned_agent', value: String(agentResult.rows[0].wp_user_id) }
+                    );
+                }
+            }
+        }
+
+        // Call WooCommerce API to create the order
+        const wcAuth = Buffer.from(`${WC_KEY}:${WC_SECRET}`).toString('base64');
+        const wcResponse = await fetch(`${WC_URL}/wp-json/wc/v3/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${wcAuth}`,
+            },
+            body: JSON.stringify(orderPayload),
+        });
+
+        if (!wcResponse.ok) {
+            const err = await wcResponse.text();
+            res.status(502).json({ error: 'WooCommerce order creation failed', details: err });
+            return;
+        }
+
+        const wcOrder = await wcResponse.json() as any;
+
+        // Save order in CRM database
+        await db.query(
+            `INSERT INTO orders (id, customer_id, wc_order_id, status, total, items, created_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())
+             ON CONFLICT (wc_order_id) DO UPDATE SET status = $3, total = $4`,
+            [customerId, wcOrder.id, wcOrder.status, wcOrder.total, JSON.stringify(wcOrder.line_items)]
+        );
+
+        // Return payment URL
+        const paymentUrl = wcOrder.payment_url || `${WC_URL}/checkout/order-pay/${wcOrder.id}/?pay_for_order=true&key=${wcOrder.order_key}`;
+
+        res.json({
+            wc_order_id: wcOrder.id,
+            order_number: wcOrder.number,
+            total: wcOrder.total,
+            payment_url: paymentUrl,
+            status: wcOrder.status,
+        });
+    } catch (err: any) {
+        console.error('Error creating cart-link:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
