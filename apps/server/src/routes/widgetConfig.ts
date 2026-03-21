@@ -6,9 +6,7 @@ const router = Router();
 
 // GET /api/widget-config
 router.get('/', async (req: Request, res: Response) => {
-    const livechatUrl = process.env.NEXT_PUBLIC_WEB_URL
-        ? `${process.env.NEXT_PUBLIC_WEB_URL}/livechat`
-        : (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001').replace('api-crm', 'crm').replace(/:\d+$/, '') + '/livechat';
+    const livechatUrl = (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000') + '/livechat';
 
     const result = await db.query('SELECT * FROM widget_configs WHERE is_active = TRUE LIMIT 1');
     if (result.rows.length === 0) {
