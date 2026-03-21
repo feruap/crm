@@ -147,10 +147,16 @@ async function handleBotResponse(
                 );
 
                 console.log(`[Smart Bot Escalation] Conv ${conversationId}: ${botReply.routing_decision.reason}`);
-                return;
             } catch (err) {
                 console.error('[Escalation execution error]:', err);
+                // Escalation failed — send just the bot message without agent note
+                await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
+                     VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5, 'escalation')`,
+                    [conversationId, channelId, customerId, botReply.message, botReply.confidence]
+                );
             }
+            return; // Always return after escalation — never fall through to normal reply
         }
 
         // Send normal bot reply

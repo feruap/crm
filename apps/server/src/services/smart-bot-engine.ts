@@ -565,10 +565,12 @@ export async function handleIncomingMessage(params: {
         }
 
         // Step 1: First message from ad? Try campaign response
+        // NOTE: generateCampaignResponse already inserts its welcome message via sendCampaignAutoReply.
+        // We only return the qualification question here — handleBotResponse will insert it once.
         if (isFirstMessage && referralData) {
             const campaignReply = await generateCampaignResponse(referralData, customerId, conversationId);
             if (campaignReply) {
-                // After campaign response, continue with qualification
+                // Campaign auto-reply already sent. Now start qualification flow.
                 const qualReply = await runQualificationFlow(conversationId, customerId, message);
                 return qualReply;
             }
