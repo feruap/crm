@@ -7,9 +7,9 @@ import CustomerPanel from '../../components/CustomerPanel';
 import QuickRepliesPanel from '../../components/QuickRepliesPanel';
 import ScheduleMessageModal from '../../components/ScheduleMessageModal';
 import {
-    Search, Send, User, ShoppingBag,
-    ChevronRight, MessageSquare, CheckCircle,
-    Zap, Clock, Paperclip, Smile,
+    Search, Send, Phone, Mail, User, ShoppingCart, ShoppingBag, Tag, Clock,
+    ChevronRight, MessageSquare, AlertCircle, CheckCircle, XCircle,
+    ArrowUpRight, RefreshCw, Filter, Zap,
 } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
@@ -52,12 +52,12 @@ interface Message {
     id: string;
     conversation_id: string;
     sender_type: 'customer' | 'agent' | 'bot';
-    body: string;
+    sender_id: string | null;
     content_type: string;
+    body: string;
     provider_message_id: string | null;
     status: string;
     created_at: string;
-    media_url: string | null;
 }
 
 // Map raw DB message to frontend Message format
@@ -70,13 +70,48 @@ function mapMessage(raw: RawMessage): Message {
         id: raw.id,
         conversation_id: raw.conversation_id,
         sender_type,
+        sender_id: null,
         body: raw.content || '',
         content_type: raw.message_type || 'text',
         provider_message_id: raw.provider_message_id,
         status: raw.is_read ? 'delivered' : 'sent',
         created_at: raw.created_at,
-        media_url: raw.media_url,
     };
+}
+
+interface CustomerContext {
+    customer: {
+        id: string;
+        name: string;
+        phone: string | null;
+        email: string | null;
+        created_at: string;
+    };
+    attributes: Record<string, string>;
+    orders: Array<{
+        id: string;
+        wc_order_id: number | null;
+        status: string;
+        total: string;
+        created_at: string;
+    }>;
+    profile: {
+        preferred_products: string[];
+        purchase_frequency_days: number | null;
+        lifetime_value: string;
+        last_purchase_at: string | null;
+    } | null;
+    segments: Array<{
+        segment_type: string;
+        segment_value: string;
+    }>;
+    past_conversations: Array<{
+        id: string;
+        status: string;
+        created_at: string;
+        message_count: number;
+    }>;
+    lifetime_value: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -134,11 +169,15 @@ export default function InboxPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // Panels
-    const [showCustomerPanel, setShowCustomerPanel] = useState(false);
-    const [showCatalog, setShowCatalog] = useState(false);
+    // Context panel
+    const [context, setContext] = useState<CustomerContext | null>(null);
+    const [showContext, setShowContext] = useState(false);
+    const [loadingContext, setLoadingContext] = useState(false);
+
+    // Composer panels
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [showCatalog, setShowCatalog] = useState(false);
 
     // ─── Fetch conversation list ─────────────────────────────
     const fetchConversations = useCallback(async () => {
@@ -190,6 +229,8 @@ export default function InboxPage() {
         setSelectedConv(conv);
         setLoadingMessages(true);
         setMessages([]);
+        setContext(null);
+        setShowContext(false);
         setShowCatalog(false);
 
         // Mark as read
@@ -224,6 +265,28 @@ export default function InboxPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // ─── Fetch context ───────────────────────────────────────
+    const fetchContext = useCallback(async (convId: string) => {
+        setLoadingContext(true);
+        try {
+            const res = await authFetch(`${API}/api/conversations/${convId}/context`);
+            if (res.ok) {
+                setContext(await res.json());
+            }
+        } catch {
+            // silent
+        } finally {
+            setLoadingContext(false);
+        }
+    }, [authFetch]);
+
+    const toggleContext = () => {
+        if (!showContext && selectedId && !context) {
+            fetchContext(selectedId);
+        }
+        setShowContext(prev => !prev);
+    };
+
     // ─── Send message ────────────────────────────────────────
     const handleSend = async () => {
         if (!newMessage.trim() || !selectedId || sending) return;
@@ -235,7 +298,7 @@ export default function InboxPage() {
             });
             if (res.ok) {
                 const msg = await res.json();
-                setMessages(prev => [...prev, msg]);
+                setMessages(prev => [...prev, mapMessage(msg)]);
                 setNewMessage('');
             }
         } catch {
@@ -255,7 +318,7 @@ export default function InboxPage() {
             });
             if (res.ok) {
                 const msg = await res.json();
-                setMessages(prev => [...prev, msg]);
+                setMessages(prev => [...prev, mapMessage(msg)]);
             }
         } catch {
             // silent
@@ -266,7 +329,6 @@ export default function InboxPage() {
     const handleQuickReplySelect = (content: string, id: string) => {
         setNewMessage(content);
         setShowQuickReplies(false);
-        // Track usage
         authFetch(`${API}/api/quick-replies/${id}/use`, { method: 'POST' }).catch(() => {});
     };
 
@@ -447,22 +509,13 @@ export default function InboxPage() {
                                     </button>
                                 )}
                                 <button
-                                    onClick={() => setShowCatalog(prev => !prev)}
+                                    onClick={toggleContext}
                                     className={`p-2 rounded-lg transition-colors ${
-                                        showCatalog ? 'bg-purple-100 text-purple-600' : 'text-slate-400 hover:bg-slate-100'
+                                        showContext ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:bg-slate-100'
                                     }`}
-                                    title="Catalogo de productos"
+                                    title="Ver contexto del cliente"
                                 >
-                                    <ShoppingBag className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => setShowCustomerPanel(prev => !prev)}
-                                    className={`p-2 rounded-lg transition-colors ${
-                                        showCustomerPanel ? 'bg-blue-100 text-blue-600' : 'text-slate-400 hover:bg-slate-100'
-                                    }`}
-                                    title="Info del cliente"
-                                >
-                                    <ChevronRight className={`w-4 h-4 transition-transform ${showCustomerPanel ? 'rotate-180' : ''}`} />
+                                    <ChevronRight className={`w-4 h-4 transition-transform ${showContext ? 'rotate-180' : ''}`} />
                                 </button>
                             </div>
                         </div>
@@ -599,10 +652,171 @@ export default function InboxPage() {
                 )}
             </div>
 
-            {/* ─── RIGHT: Customer Panel (with tabs: Perfil, Compras, Historial) ─── */}
-            {showCustomerPanel && selectedId && (
-                <div className="w-96 border-l border-slate-200 bg-white overflow-y-auto shrink-0">
-                    <CustomerPanel conversationId={selectedId} />
+            {/* ─── RIGHT: Context Panel (original inline design) ─── */}
+            {showContext && selectedId && (
+                <div className="w-80 border-l border-slate-200 bg-white overflow-y-auto shrink-0">
+                    {loadingContext ? (
+                        <div className="p-4 text-center text-slate-400 text-sm">Cargando contexto...</div>
+                    ) : context ? (
+                        <div className="p-4 space-y-5">
+                            {/* Customer Info */}
+                            <div>
+                                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cliente</h4>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <User className="w-4 h-4 text-slate-400" />
+                                        <span className="text-slate-800 font-medium">{context.customer.name}</span>
+                                    </div>
+                                    {context.customer.phone && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <Phone className="w-4 h-4 text-slate-400" />
+                                            <span className="text-slate-600">{context.customer.phone}</span>
+                                        </div>
+                                    )}
+                                    {context.customer.email && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <Mail className="w-4 h-4 text-slate-400" />
+                                            <span className="text-slate-600">{context.customer.email}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Clock className="w-4 h-4 text-slate-400" />
+                                        <span className="text-slate-600">
+                                            Cliente desde {new Date(context.customer.created_at).toLocaleDateString('es-MX')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Segments */}
+                            {context.segments.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Segmentos</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {context.segments.map((seg, i) => (
+                                            <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                                                {seg.segment_type}: {seg.segment_value}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Profile */}
+                            {context.profile && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Perfil</h4>
+                                    <div className="bg-slate-50 rounded-lg p-3 space-y-2 text-sm">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Valor de vida</span>
+                                            <span className="font-medium text-slate-800">${context.lifetime_value}</span>
+                                        </div>
+                                        {context.profile.purchase_frequency_days && (
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Frecuencia compra</span>
+                                                <span className="text-slate-800">{context.profile.purchase_frequency_days} dias</span>
+                                            </div>
+                                        )}
+                                        {context.profile.preferred_products?.length > 0 && (
+                                            <div>
+                                                <span className="text-slate-500 text-xs">Productos preferidos:</span>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {context.profile.preferred_products.map((p, i) => (
+                                                        <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                                                            {p}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Orders */}
+                            {context.orders.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                                        Ordenes ({context.orders.length})
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {context.orders.slice(0, 5).map(order => (
+                                            <div key={order.id} className="bg-slate-50 rounded-lg p-2.5 text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-medium text-slate-800">
+                                                        {order.wc_order_id ? `#${order.wc_order_id}` : order.id.slice(0, 8)}
+                                                    </span>
+                                                    <span className="font-medium text-slate-800">${order.total}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded ${statusColor(order.status)}`}>
+                                                        {order.status}
+                                                    </span>
+                                                    <span className="text-xs text-slate-400">
+                                                        {new Date(order.created_at).toLocaleDateString('es-MX')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {context.orders.length > 5 && (
+                                            <p className="text-xs text-slate-400 text-center">
+                                                +{context.orders.length - 5} ordenes mas
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Attributes */}
+                            {Object.keys(context.attributes).length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Atributos</h4>
+                                    <div className="space-y-1">
+                                        {Object.entries(context.attributes).map(([key, val]) => (
+                                            <div key={key} className="flex justify-between text-sm">
+                                                <span className="text-slate-500">{key}</span>
+                                                <span className="text-slate-800 text-right max-w-[60%] truncate">{val}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Past Conversations */}
+                            {context.past_conversations.length > 1 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                                        Historial ({context.past_conversations.length})
+                                    </h4>
+                                    <div className="space-y-1.5">
+                                        {context.past_conversations
+                                            .filter(c => c.id !== selectedId)
+                                            .slice(0, 5)
+                                            .map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => {
+                                                        const conv = conversations.find(x => x.id === c.id);
+                                                        if (conv) selectConversation(conv);
+                                                    }}
+                                                    className="w-full text-left bg-slate-50 rounded p-2 text-xs hover:bg-slate-100 transition-colors"
+                                                >
+                                                    <div className="flex justify-between">
+                                                        <span className={`px-1.5 py-0.5 rounded ${statusColor(c.status)}`}>{c.status}</span>
+                                                        <span className="text-slate-400">{c.message_count} msgs</span>
+                                                    </div>
+                                                    <div className="text-slate-400 mt-1">
+                                                        {new Date(c.created_at).toLocaleDateString('es-MX')}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-4 text-center text-slate-400 text-sm">Sin datos de contexto</div>
+                    )}
                 </div>
             )}
         </div>
