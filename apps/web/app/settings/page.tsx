@@ -2262,6 +2262,13 @@ function IntegrationsTab() {
     const [connecting, setConnecting] = useState(false);
     const [oauthSuccess, setOauthSuccess] = useState(false);
 
+    // Meta Ad Account state
+    const [adAccountId, setAdAccountId] = useState('');
+    const [adAccountConfigured, setAdAccountConfigured] = useState(false);
+    const [adAccountSaving, setAdAccountSaving] = useState(false);
+    const [adAccountError, setAdAccountError] = useState<string | null>(null);
+    const [adAccountSuccess, setAdAccountSuccess] = useState(false);
+
     // Google state
     const [googleStatus, setGoogleStatus] = useState<GoogleTokenStatus | null>(null);
     const [googleLoading, setGoogleLoading] = useState(true);
@@ -2295,7 +2302,18 @@ function IntegrationsTab() {
         finally { setGoogleLoading(false); }
     }, []);
 
-    useEffect(() => { loadStatus(); loadGoogleStatus(); }, [loadStatus, loadGoogleStatus]);
+    const loadAdAccount = useCallback(async () => {
+        try {
+            const res = await apiFetch('/api/campaigns/meta-ad-account');
+            const data = await res.json();
+            if (data.configured && data.account_id) {
+                setAdAccountId(data.account_id);
+                setAdAccountConfigured(true);
+            }
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => { loadStatus(); loadGoogleStatus(); loadAdAccount(); }, [loadStatus, loadGoogleStatus, loadAdAccount]);
 
     // Handle OAuth return params (Meta + Google)
     useEffect(() => {
@@ -2356,6 +2374,26 @@ function IntegrationsTab() {
             await loadStatus();
         } catch { setSaveError('Error al guardar token'); }
         finally { setSaving(false); }
+    };
+
+    const saveAdAccount = async () => {
+        if (!adAccountId.trim()) return;
+        setAdAccountSaving(true);
+        setAdAccountError(null);
+        setAdAccountSuccess(false);
+        try {
+            const res = await apiFetch('/api/campaigns/meta-ad-account', {
+                method: 'POST',
+                body: JSON.stringify({ account_id: adAccountId.trim() }),
+            });
+            const data = await res.json();
+            if (!res.ok) { setAdAccountError(data.error); return; }
+            setAdAccountId(data.account_id);
+            setAdAccountConfigured(true);
+            setAdAccountSuccess(true);
+            setTimeout(() => setAdAccountSuccess(false), 3000);
+        } catch { setAdAccountError('Error al guardar Ad Account ID'); }
+        finally { setAdAccountSaving(false); }
     };
 
     const disconnect = async () => {
@@ -2563,6 +2601,55 @@ function IntegrationsTab() {
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             Guardar y verificar token
                         </button>
+                    </div>
+                )}
+
+                {/* Meta Ad Account ID */}
+                {tokenStatus?.configured && tokenStatus?.valid && (
+                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                Ad Account ID
+                                <span className="ml-2 text-xs text-slate-400 font-normal">
+                                    (ID de la cuenta publicitaria para sincronizar)
+                                </span>
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={adAccountId}
+                                    onChange={e => setAdAccountId(e.target.value)}
+                                    placeholder="Ej: 345453097942209"
+                                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                />
+                                <button
+                                    onClick={saveAdAccount}
+                                    disabled={adAccountSaving || !adAccountId.trim()}
+                                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                                >
+                                    {adAccountSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Guardar
+                                </button>
+                            </div>
+                            {adAccountConfigured && !adAccountSuccess && !adAccountError && (
+                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" /> Configurado: act_{adAccountId}
+                                </p>
+                            )}
+                            {adAccountSuccess && (
+                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" /> Ad Account ID guardado correctamente
+                                </p>
+                            )}
+                            {adAccountError && (
+                                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> {adAccountError}
+                                </p>
+                            )}
+                            <p className="text-xs text-slate-400 mt-1">
+                                Encuéntralo en Meta Business Suite → Configuración → Cuentas publicitarias → ID de la cuenta.
+                            </p>
+                        </div>
                     </div>
                 )}
 
