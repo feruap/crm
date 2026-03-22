@@ -121,7 +121,7 @@ router.post('/meta-token', async (req: Request, res: Response) => {
         // Save to business_settings
         await db.query(
             `INSERT INTO business_settings (key, value) VALUES ('meta_access_token', $1)
-             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
             [token]
         );
         res.json({ ok: true, message: 'Token de Meta guardado correctamente' });
@@ -147,14 +147,14 @@ router.post('/google-config', async (req: Request, res: Response) => {
         if (developer_token) {
             await db.query(
                 `INSERT INTO business_settings (key, value) VALUES ('google_developer_token', $1)
-                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
                 [developer_token]
             );
         }
         if (mcc_id) {
             await db.query(
                 `INSERT INTO business_settings (key, value) VALUES ('google_ads_mcc_id', $1)
-                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
                 [mcc_id]
             );
         }
