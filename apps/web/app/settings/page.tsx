@@ -868,7 +868,7 @@ function CanalesTab() {
         setSaving(true);
         try {
             const provider_config: Record<string, string> = {};
-            (PROVIDER_META as any)[showModal].fields.forEach(f => {
+            (PROVIDER_META as any)[showModal].fields.forEach((f: string) => {
                 if (formFields[f]) provider_config[f] = formFields[f];
             });
 
@@ -1070,14 +1070,14 @@ function CanalesTab() {
                                     </a>
                                 </div>
                                 <div className="space-y-1.5 mt-2">
-                                    {(PROVIDER_META as any)[showModal].setupInstructions.map((step, idx) => (
+                                    {(PROVIDER_META as any)[showModal].setupInstructions.map((step: string, idx: number) => (
                                         <p key={idx} className="text-xs text-slate-600">{step}</p>
                                     ))}
                                 </div>
                             </div>
 
                             {/* Campos de configuración */}
-                            {(PROVIDER_META as any)[showModal].fields.map(field => (
+                            {(PROVIDER_META as any)[showModal].fields.map((field: string) => (
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         {FIELD_LABELS[field] ?? field}
