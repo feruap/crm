@@ -95,17 +95,26 @@ export function buildMedicalPrompt(options: {
 }): string {
     const parts: string[] = [MEDICAL_ADVISOR_BASE_PROMPT];
 
-    // Inject customer profile context
+    // Inject customer profile context — audience-aware
     if (options.customerProfile) {
         const p = options.customerProfile;
+        const isLab = p.business_type === 'laboratorio';
         parts.push(`
 ## Perfil del Cliente Actual
 - Tipo de negocio: ${p.business_type || 'No identificado'}
 - Especialidad: ${p.specialty || 'No identificada'}
 - Volumen estimado: ${p.estimated_monthly_volume || 'No determinado'}
 - Intereses detectados: ${p.detected_interests?.join(', ') || 'Ninguno aún'}
+- **Audiencia detectada: ${isLab ? 'LABORATORIO CLÍNICO' : 'MÉDICO / CONSULTORIO'}**
 
-Adapta tus recomendaciones a este perfil. Si es laboratorio, sugiere paneles completos. Si es farmacia, sugiere pruebas individuales point-of-care. Si es consultorio, enfócate en facilidad de uso.`);
+${isLab ? `## Tono para Laboratorios
+Este cliente es profesional de laboratorio (QFB, laboratorista, director). NO le expliques conceptos básicos.
+Tu pitch es: "amplía tu menú de servicios", "deja de mandar a referencia", "costo por prueba competitivo", "mismo día para tus médicos referentes".
+Habla de throughput, costo unitario, ROI vs referencia, y cómo posicionarse frente a otros laboratorios.` :
+`## Tono para Médicos/Consultorios
+Este cliente es médico o profesional de salud en consultorio/hospital.
+Tu pitch es: "diagnóstico en tu consultorio", "resultado en minutos", "margen de ganancia", "diferenciación frente a la competencia".
+Habla de facilidad de uso, interpretación clínica, ahorro de tiempo vs laboratorio externo, y ROI por consulta.`}`);
     }
 
     // Inject product catalog

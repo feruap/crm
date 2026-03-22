@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ─────────────────────────────────────────────
 
 -- Channels where customers communicate
-CREATE TYPE identity_provider AS ENUM ('whatsapp', 'facebook', 'instagram', 'woocommerce', 'webchat');
+CREATE TYPE identity_provider AS ENUM ('whatsapp', 'facebook', 'instagram', 'woocommerce');
 
 -- Ad platforms that originate traffic (separate from communication channels)
 CREATE TYPE ad_platform AS ENUM ('facebook', 'instagram', 'tiktok', 'google');

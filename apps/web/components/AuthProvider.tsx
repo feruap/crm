@@ -55,6 +55,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
     { href: '/inbox',              label: 'Inbox',            icon: 'MessageSquare' },
+    { href: '/conversations',      label: 'Conversaciones',   icon: 'MessageSquare' },
     { href: '/kanban',             label: 'Seguimiento',      icon: 'LayoutDashboard' },
     { href: '/campaigns',          label: 'Campanas',        icon: 'Megaphone',        minRole: 'gerente' },
     { href: '/campaign-mappings',  label: 'Auto-Respuestas',  icon: 'Zap',              minRole: 'gerente' },

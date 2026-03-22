@@ -12,7 +12,6 @@ RUN npm run build --workspace=apps/server
 FROM base AS runner
 WORKDIR /app
 COPY --from=builder /app/apps/server/dist ./dist
-COPY --from=builder /app/apps/server/public ./public
 COPY --from=builder /app/apps/server/package*.json ./
 RUN npm install --omit=dev
 EXPOSE 3001

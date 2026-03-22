@@ -61,7 +61,7 @@ interface Team {
 interface Channel {
     id: string;
     name: string;
-    provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok' | 'webchat' | string;
+    provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok';
     subtype: string | null;
     is_active: boolean;
     sync_comments: boolean;
@@ -151,28 +151,6 @@ const PROVIDER_META = {
             '5. Configura los Webhooks en el panel de TikTok usando tu URL.'
         ]
     },
-    webchat: {
-        label: 'Chat Web',
-        color: 'bg-indigo-500',
-        icon: '🌐',
-        fields: ['access_token', 'webhook_secret'],
-        subtypes: null,
-        setupLink: '',
-        setupInstructions: [
-            '1. Agrega el widget de chat web a tu sitio.',
-            '2. Usa el token generado para autenticar las conexiones.',
-        ]
-    },
-};
-
-const PROVIDER_META_FALLBACK = {
-    label: 'Canal',
-    color: 'bg-slate-400',
-    icon: '💬',
-    fields: [] as string[],
-    subtypes: null,
-    setupLink: '',
-    setupInstructions: [] as string[],
 };
 
 const SUBTYPE_LABELS: Record<string, string> = {
@@ -814,7 +792,7 @@ function CanalesTab() {
     const [channels, setChannels] = useState<Channel[]>([]);
     const [loading, setLoading] = useState(true);
     const [webhookUrls, setWebhookUrls] = useState<Record<string, string>>({});
-    const [showModal, setShowModal] = useState<string | null>(null);
+    const [showModal, setShowModal] = useState<'whatsapp' | 'facebook' | 'instagram' | 'tiktok' | null>(null);
     const [editChannel, setEditChannel] = useState<Channel | null>(null);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
@@ -838,7 +816,7 @@ function CanalesTab() {
 
     useEffect(() => { load(); }, [load]);
 
-    const openNew = (provider: string) => {
+    const openNew = (provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok') => {
         setEditChannel(null);
         setFormName(''); setFormFields({}); setFormSubtype('');
         setShowModal(provider);
@@ -868,7 +846,7 @@ function CanalesTab() {
         setSaving(true);
         try {
             const provider_config: Record<string, string> = {};
-            (PROVIDER_META as any)[showModal].fields.forEach((f: string) => {
+            PROVIDER_META[showModal].fields.forEach(f => {
                 if (formFields[f]) provider_config[f] = formFields[f];
             });
 
@@ -953,7 +931,7 @@ function CanalesTab() {
                 <div className="space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Canales configurados</h4>
                     {channels.map(ch => {
-                        const meta = (PROVIDER_META as any)[ch.provider] ?? PROVIDER_META_FALLBACK;
+                        const meta = PROVIDER_META[ch.provider];
                         return (
                             <div key={ch.id} className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-4 ${!ch.is_active ? 'opacity-60' : ''}`}>
                                 <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-xl shrink-0`}>
@@ -1023,11 +1001,11 @@ function CanalesTab() {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
                         <div className="flex items-center justify-between p-6 border-b">
                             <div className="flex items-center gap-3">
-                                <div className={`w-9 h-9 rounded-xl ${(PROVIDER_META as any)[showModal].color} flex items-center justify-center text-lg`}>
-                                    {(PROVIDER_META as any)[showModal].icon}
+                                <div className={`w-9 h-9 rounded-xl ${PROVIDER_META[showModal].color} flex items-center justify-center text-lg`}>
+                                    {PROVIDER_META[showModal].icon}
                                 </div>
                                 <h3 className="font-bold text-lg">
-                                    {editChannel ? 'Editar' : 'Conectar'} {(PROVIDER_META as any)[showModal].label}
+                                    {editChannel ? 'Editar' : 'Conectar'} {PROVIDER_META[showModal].label}
                                 </h3>
                             </div>
                             <button onClick={() => setShowModal(null)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
@@ -1038,15 +1016,15 @@ function CanalesTab() {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del canal *</label>
                                 <input value={formName} onChange={e => setFormName(e.target.value)}
-                                    placeholder={`ej: ${(PROVIDER_META as any)[showModal].label} Principal`}
+                                    placeholder={`ej: ${PROVIDER_META[showModal].label} Principal`}
                                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
                             </div>
                             {/* Subtype selector para Facebook e Instagram */}
-                            {(PROVIDER_META as any)[showModal].subtypes && (
+                            {PROVIDER_META[showModal].subtypes && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de canal *</label>
                                     <div className="space-y-2">
-                                        {(PROVIDER_META as any)[showModal].subtypes!.map((st: any) => (
+                                        {PROVIDER_META[showModal].subtypes!.map((st: any) => (
                                             <label key={st.value} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                                                 <input type="radio" name="subtype" value={st.value}
                                                     checked={formSubtype === st.value}
@@ -1064,20 +1042,20 @@ function CanalesTab() {
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                                 <div className="flex items-center justify-between mb-2">
                                     <h4 className="font-semibold text-slate-800 text-sm">Instrucciones de configuración</h4>
-                                    <a href={(PROVIDER_META as any)[showModal].setupLink} target="_blank" rel="noreferrer"
+                                    <a href={PROVIDER_META[showModal].setupLink} target="_blank" rel="noreferrer"
                                         className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
                                         Ir al portal <ExternalLink className="w-3 h-3" />
                                     </a>
                                 </div>
                                 <div className="space-y-1.5 mt-2">
-                                    {(PROVIDER_META as any)[showModal].setupInstructions.map((step: string, idx: number) => (
+                                    {PROVIDER_META[showModal].setupInstructions.map((step, idx) => (
                                         <p key={idx} className="text-xs text-slate-600">{step}</p>
                                     ))}
                                 </div>
                             </div>
 
                             {/* Campos de configuración */}
-                            {(PROVIDER_META as any)[showModal].fields.map((field: string) => (
+                            {PROVIDER_META[showModal].fields.map(field => (
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         {FIELD_LABELS[field] ?? field}
@@ -1099,7 +1077,7 @@ function CanalesTab() {
                         </div>
                         <div className="flex gap-3 p-6 border-t">
                             <button onClick={save}
-                                disabled={saving || !formName.trim() || (!!(PROVIDER_META as any)[showModal].subtypes && !formSubtype)}
+                                disabled={saving || !formName.trim() || (!!PROVIDER_META[showModal].subtypes && !formSubtype)}
                                 className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
                                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {editChannel ? 'Guardar cambios' : 'Conectar canal'}
@@ -2284,14 +2262,6 @@ function IntegrationsTab() {
     const [connecting, setConnecting] = useState(false);
     const [oauthSuccess, setOauthSuccess] = useState(false);
 
-    // Meta Ad Accounts state (multi-account)
-    const [adAccounts, setAdAccounts] = useState<Array<{ id: string; name: string }>>([]);
-    const [newAccountId, setNewAccountId] = useState('');
-    const [newAccountName, setNewAccountName] = useState('');
-    const [adAccountSaving, setAdAccountSaving] = useState(false);
-    const [adAccountError, setAdAccountError] = useState<string | null>(null);
-    const [adAccountSuccess, setAdAccountSuccess] = useState(false);
-
     // Google state
     const [googleStatus, setGoogleStatus] = useState<GoogleTokenStatus | null>(null);
     const [googleLoading, setGoogleLoading] = useState(true);
@@ -2325,17 +2295,7 @@ function IntegrationsTab() {
         finally { setGoogleLoading(false); }
     }, []);
 
-    const loadAdAccounts = useCallback(async () => {
-        try {
-            const res = await apiFetch('/api/campaigns/meta-ad-account');
-            const data = await res.json();
-            if (data.configured && data.accounts) {
-                setAdAccounts(data.accounts);
-            }
-        } catch { /* ignore */ }
-    }, []);
-
-    useEffect(() => { loadStatus(); loadGoogleStatus(); loadAdAccounts(); }, [loadStatus, loadGoogleStatus, loadAdAccounts]);
+    useEffect(() => { loadStatus(); loadGoogleStatus(); }, [loadStatus, loadGoogleStatus]);
 
     // Handle OAuth return params (Meta + Google)
     useEffect(() => {
@@ -2396,48 +2356,6 @@ function IntegrationsTab() {
             await loadStatus();
         } catch { setSaveError('Error al guardar token'); }
         finally { setSaving(false); }
-    };
-
-    const saveAdAccounts = async (accountsList: Array<{ id: string; name: string }>) => {
-        setAdAccountSaving(true);
-        setAdAccountError(null);
-        setAdAccountSuccess(false);
-        try {
-            const res = await apiFetch('/api/campaigns/meta-ad-account', {
-                method: 'POST',
-                body: JSON.stringify({ accounts: accountsList }),
-            });
-            const data = await res.json();
-            if (!res.ok) { setAdAccountError(data.error); return; }
-            setAdAccounts(data.accounts);
-            setAdAccountSuccess(true);
-            setTimeout(() => setAdAccountSuccess(false), 3000);
-        } catch { setAdAccountError('Error al guardar cuentas publicitarias'); }
-        finally { setAdAccountSaving(false); }
-    };
-
-    const addAdAccount = async () => {
-        const cleanId = newAccountId.trim().replace(/^act_/, '');
-        if (!cleanId) return;
-        if (adAccounts.some(a => a.id === cleanId)) {
-            setAdAccountError('Esta cuenta ya está agregada');
-            setTimeout(() => setAdAccountError(null), 3000);
-            return;
-        }
-        const updated = [...adAccounts, { id: cleanId, name: newAccountName.trim() || `Cuenta ${cleanId}` }];
-        await saveAdAccounts(updated);
-        setNewAccountId('');
-        setNewAccountName('');
-    };
-
-    const removeAdAccount = async (accountId: string) => {
-        const updated = adAccounts.filter(a => a.id !== accountId);
-        if (updated.length === 0) {
-            setAdAccountError('Debes mantener al menos una cuenta. Usa "Desconectar" si quieres quitar todo.');
-            setTimeout(() => setAdAccountError(null), 3000);
-            return;
-        }
-        await saveAdAccounts(updated);
     };
 
     const disconnect = async () => {
@@ -2645,80 +2563,6 @@ function IntegrationsTab() {
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             Guardar y verificar token
                         </button>
-                    </div>
-                )}
-
-                {/* Meta Ad Accounts (multi-account) */}
-                {tokenStatus?.configured && tokenStatus?.valid && (
-                    <div className="space-y-3 pt-3 border-t border-slate-100">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">
-                                Cuentas publicitarias
-                                <span className="ml-2 text-xs text-slate-400 font-normal">
-                                    (se sincronizarán todas al presionar &quot;Sincronizar Facebook&quot;)
-                                </span>
-                            </label>
-
-                            {/* List of configured accounts */}
-                            {adAccounts.length > 0 && (
-                                <div className="space-y-1.5 mb-3">
-                                    {adAccounts.map((account) => (
-                                        <div key={account.id} className="flex items-center gap-2 bg-slate-50 border rounded-lg px-3 py-2">
-                                            <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                                            <span className="text-sm text-slate-700 font-medium truncate">{account.name}</span>
-                                            <span className="text-xs text-slate-400 font-mono">act_{account.id}</span>
-                                            <button
-                                                onClick={() => removeAdAccount(account.id)}
-                                                className="ml-auto text-slate-400 hover:text-red-500 transition-colors p-0.5"
-                                                title="Quitar cuenta"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Add new account form */}
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newAccountName}
-                                    onChange={e => setNewAccountName(e.target.value)}
-                                    placeholder="Nombre (ej: Amunet 23)"
-                                    className="w-1/3 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                />
-                                <input
-                                    type="text"
-                                    value={newAccountId}
-                                    onChange={e => setNewAccountId(e.target.value)}
-                                    placeholder="Ad Account ID (ej: 330176359635100)"
-                                    className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                />
-                                <button
-                                    onClick={addAdAccount}
-                                    disabled={adAccountSaving || !newAccountId.trim()}
-                                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
-                                >
-                                    {adAccountSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                                    Agregar
-                                </button>
-                            </div>
-
-                            {adAccountSuccess && (
-                                <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" /> Cuentas publicitarias guardadas correctamente
-                                </p>
-                            )}
-                            {adAccountError && (
-                                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" /> {adAccountError}
-                                </p>
-                            )}
-                            <p className="text-xs text-slate-400 mt-1.5">
-                                Encuéntralo en Meta Business Suite → Configuración → Cuentas publicitarias → ID de la cuenta. Puedes agregar todas las cuentas que necesites.
-                            </p>
-                        </div>
                     </div>
                 )}
 
@@ -3120,312 +2964,12 @@ function WooCommerceWebhookSection() {
     );
 }
 
-// ── Knowledge Base Tab ───────────────────────────────────────────────────────
+// ── Knowledge Base Tab (stub) ─────────────────────────────────────────────────
 function KnowledgeBaseTab() {
-    const [products, setProducts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [syncing, setSyncing] = useState(false);
-    const [syncResult, setSyncResult] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [editForm, setEditForm] = useState<{ answer: string; metadata: any }>({ answer: '', metadata: {} });
-    const [saving, setSaving] = useState(false);
-
-    const fetchProducts = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await apiFetch(`/api/knowledge?type=product`);
-            const data = await res.json();
-            setProducts(Array.isArray(data) ? data : []);
-        } catch (err) {
-            console.error('Failed to fetch KB products:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { fetchProducts(); }, [fetchProducts]);
-
-    const handleSync = async () => {
-        setSyncing(true);
-        setSyncResult(null);
-        try {
-            const res = await apiFetch('/api/knowledge/sync-wc', { method: 'POST' });
-            const data = await res.json();
-            if (data.ok) {
-                setSyncResult(`Sincronización exitosa: ${data.synced} nuevos, ${data.updated} actualizados (${data.total} productos total)`);
-                fetchProducts();
-            } else {
-                setSyncResult(`Error: ${data.error || 'Falló la sincronización'}`);
-            }
-        } catch (err: any) {
-            setSyncResult(`Error de conexión: ${err.message}`);
-        } finally {
-            setSyncing(false);
-        }
-    };
-
-    const startEdit = (product: any) => {
-        setEditingId(product.id);
-        const meta = product.metadata || {};
-        setEditForm({
-            answer: product.answer || '',
-            metadata: {
-                ...meta,
-                custom_info: meta.custom_info || '',
-                upsell_names: meta.upsell_names || [],
-                cross_sell_names: meta.cross_sell_names || [],
-            },
-        });
-    };
-
-    const handleSave = async () => {
-        if (!editingId) return;
-        setSaving(true);
-        try {
-            const res = await apiFetch(`/api/knowledge/${editingId}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ answer: editForm.answer, metadata: editForm.metadata }),
-            });
-            if (res.ok) {
-                setEditingId(null);
-                fetchProducts();
-            }
-        } catch (err) {
-            console.error('Failed to save KB entry:', err);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const filtered = products.filter(p => {
-        if (!search) return true;
-        const s = search.toLowerCase();
-        const meta = p.metadata || {};
-        return (
-            (p.question || '').toLowerCase().includes(s) ||
-            (p.answer || '').toLowerCase().includes(s) ||
-            (meta.categories || '').toLowerCase().includes(s) ||
-            (meta.sku || '').toLowerCase().includes(s) ||
-            (meta.tags || '').toLowerCase().includes(s)
-        );
-    });
-
     return (
-        <div className="p-6 max-w-6xl">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento — Productos</h3>
-                    <p className="text-slate-500 text-sm mt-1">
-                        Productos sincronizados de WooCommerce. Edita información de upsells, cross-sells e info personalizada que el bot usará al responder.
-                    </p>
-                </div>
-                <button
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 text-sm font-medium"
-                >
-                    {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    {syncing ? 'Sincronizando…' : 'Sincronizar WooCommerce'}
-                </button>
-            </div>
-
-            {syncResult && (
-                <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${syncResult.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                    {syncResult}
-                </div>
-            )}
-
-            {/* Search */}
-            <div className="mb-4">
-                <input
-                    type="text"
-                    placeholder="Buscar por nombre, categoría, SKU, tags…"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    className="w-full max-w-md px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-            </div>
-
-            {/* Stats */}
-            <div className="flex gap-4 mb-4 text-sm text-slate-500">
-                <span>{products.length} productos en base de conocimiento</span>
-                {search && <span>• {filtered.length} resultados</span>}
-            </div>
-
-            {loading ? (
-                <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                    <span className="ml-2 text-slate-500">Cargando productos…</span>
-                </div>
-            ) : filtered.length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                    <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-40" />
-                    <p className="font-medium">No hay productos en la base de conocimiento</p>
-                    <p className="text-sm mt-1">Haz clic en &quot;Sincronizar WooCommerce&quot; para importar tus productos.</p>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {filtered.map(product => {
-                        const meta = product.metadata || {};
-                        const isEditing = editingId === product.id;
-
-                        return (
-                            <div key={product.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                                {/* Product header row */}
-                                <div className="flex items-center gap-4 p-4">
-                                    {/* Image */}
-                                    {meta.image_url ? (
-                                        <img src={meta.image_url} alt={product.question} className="w-14 h-14 rounded-lg object-cover shrink-0 border border-slate-100" />
-                                    ) : (
-                                        <div className="w-14 h-14 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                                            <ShoppingBag className="w-6 h-6 text-slate-300" />
-                                        </div>
-                                    )}
-
-                                    {/* Main info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="font-semibold text-slate-800 truncate">{(product.question || '').replace('¿Qué es ', '').replace('?', '')}</h4>
-                                            {meta.sale_price && parseFloat(meta.sale_price) > 0 && (
-                                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-semibold rounded">OFERTA</span>
-                                            )}
-                                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${meta.stock_status === 'instock' ? 'bg-green-100 text-green-700' : meta.stock_status === 'outofstock' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {meta.stock_status === 'instock' ? 'En stock' : meta.stock_status === 'outofstock' ? 'Agotado' : meta.stock_status || '—'}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                                            <span className="font-semibold text-slate-700">${meta.price || '—'} MXN</span>
-                                            {meta.regular_price && meta.sale_price && parseFloat(meta.sale_price) > 0 && (
-                                                <span className="line-through text-slate-400">${meta.regular_price}</span>
-                                            )}
-                                            {meta.sku && <span>SKU: {meta.sku}</span>}
-                                            {meta.categories && <span>{meta.categories}</span>}
-                                            {meta.tags && <span className="text-slate-400">{meta.tags}</span>}
-                                        </div>
-                                    </div>
-
-                                    {/* Upsell/cross-sell badges */}
-                                    <div className="flex flex-col gap-1 text-xs shrink-0">
-                                        {(meta.upsell_names || []).length > 0 && (
-                                            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded-md">
-                                                ↑ {meta.upsell_names.length} upsell{meta.upsell_names.length > 1 ? 's' : ''}
-                                            </span>
-                                        )}
-                                        {(meta.cross_sell_names || []).length > 0 && (
-                                            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md">
-                                                ↔ {meta.cross_sell_names.length} cross-sell{meta.cross_sell_names.length > 1 ? 's' : ''}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Edit button */}
-                                    <button
-                                        onClick={() => isEditing ? setEditingId(null) : startEdit(product)}
-                                        className={`p-2 rounded-lg transition-colors ${isEditing ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}
-                                        title={isEditing ? 'Cerrar editor' : 'Editar información'}
-                                    >
-                                        {isEditing ? <X className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-                                    </button>
-                                </div>
-
-                                {/* Inline details (upsells, cross-sells, custom_info) */}
-                                {!isEditing && (meta.custom_info || (meta.upsell_names || []).length > 0 || (meta.cross_sell_names || []).length > 0) && (
-                                    <div className="px-4 pb-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500 border-t border-slate-100 pt-3">
-                                        {(meta.upsell_names || []).length > 0 && (
-                                            <div><span className="font-medium text-purple-600">Upsells:</span> {meta.upsell_names.join(', ')}</div>
-                                        )}
-                                        {(meta.cross_sell_names || []).length > 0 && (
-                                            <div><span className="font-medium text-blue-600">Cross-sells:</span> {meta.cross_sell_names.join(', ')}</div>
-                                        )}
-                                        {meta.custom_info && (
-                                            <div className="w-full"><span className="font-medium text-slate-600">Info personalizada:</span> {meta.custom_info}</div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Edit panel */}
-                                {isEditing && (
-                                    <div className="border-t border-slate-200 bg-slate-50 p-4 space-y-4">
-                                        {/* Bot answer */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Respuesta del bot (lo que el bot dirá sobre este producto)</label>
-                                            <textarea
-                                                value={editForm.answer}
-                                                onChange={e => setEditForm(prev => ({ ...prev, answer: e.target.value }))}
-                                                rows={3}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                        </div>
-
-                                        {/* Custom info */}
-                                        <div>
-                                            <label className="block text-xs font-semibold text-slate-600 mb-1">Información personalizada (tips de venta, detalles técnicos, notas internas)</label>
-                                            <textarea
-                                                value={editForm.metadata.custom_info || ''}
-                                                onChange={e => setEditForm(prev => ({
-                                                    ...prev,
-                                                    metadata: { ...prev.metadata, custom_info: e.target.value }
-                                                }))}
-                                                rows={2}
-                                                placeholder="Ej: Este producto es ideal para clínicas pequeñas. Sugerir el paquete de 100 piezas si pide cotización…"
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            />
-                                        </div>
-
-                                        {/* Upsells display */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-semibold text-purple-600 mb-1">Upsells (de WooCommerce)</label>
-                                                <div className="text-sm text-slate-600 bg-white rounded-lg border border-slate-200 px-3 py-2 min-h-[38px]">
-                                                    {(editForm.metadata.upsell_names || []).length > 0
-                                                        ? editForm.metadata.upsell_names.join(', ')
-                                                        : <span className="text-slate-400">Sin upsells configurados en WooCommerce</span>}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-semibold text-blue-600 mb-1">Cross-sells (de WooCommerce)</label>
-                                                <div className="text-sm text-slate-600 bg-white rounded-lg border border-slate-200 px-3 py-2 min-h-[38px]">
-                                                    {(editForm.metadata.cross_sell_names || []).length > 0
-                                                        ? editForm.metadata.cross_sell_names.join(', ')
-                                                        : <span className="text-slate-400">Sin cross-sells configurados en WooCommerce</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Product metadata read-only info */}
-                                        <div className="text-xs text-slate-400 flex gap-4">
-                                            <span>WC ID: {editForm.metadata.wc_id || '—'}</span>
-                                            <span>SKU: {editForm.metadata.sku || '—'}</span>
-                                            <span>Precio: ${editForm.metadata.price || '—'}</span>
-                                            {editForm.metadata.sale_price && <span>Oferta: ${editForm.metadata.sale_price}</span>}
-                                        </div>
-
-                                        {/* Save / Cancel */}
-                                        <div className="flex justify-end gap-2 pt-2">
-                                            <button
-                                                onClick={() => setEditingId(null)}
-                                                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
-                                            >
-                                                Cancelar
-                                            </button>
-                                            <button
-                                                onClick={handleSave}
-                                                disabled={saving}
-                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-60"
-                                            >
-                                                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                {saving ? 'Guardando…' : 'Guardar cambios'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+        <div className="p-10 max-w-3xl">
+            <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
+            <p className="text-slate-500 text-sm mt-1">Próximamente disponible.</p>
         </div>
     );
 }

@@ -45,11 +45,13 @@ export async function findBestAnswer(
 // ─────────────────────────────────────────────
 export async function findMedicalContext(
     embedding: number[],
-    limit: number = 3
-): Promise<string | null> {
+    limit: number = 3,
+    audienceType?: 'medico' | 'laboratorio'
+): Promise<{ context: string | null; products: any[]; hasGap: boolean }> {
     const vectorLiteral = `[${embedding.join(',')}]`;
 
-    const result = await db.query(
+    // Search knowledge chunks (existing RAG)
+    const chunkResult = await db.query(
         `SELECT mkc.content, mkc.chunk_type, mp.name AS product_name,
                 1 - (mkc.embedding <=> $1::vector) AS similarity
          FROM medical_knowledge_chunks mkc
@@ -60,14 +62,91 @@ export async function findMedicalContext(
         [vectorLiteral, limit]
     );
 
-    if (result.rows.length === 0) return null;
+    // Also search product-level embeddings for rich KB data
+    const productResult = await db.query(
+        `SELECT id, name, diagnostic_category, analito, result_time,
+                sensitivity, specificity, precio_publico, presentaciones,
+                pitch_medico, pitch_laboratorio, ventaja_vs_lab, roi_medico,
+                porque_agregarlo_lab, objeciones_medico, objeciones_laboratorio,
+                cross_sells, proposito_clinico, escenarios_uso, url_tienda,
+                target_audience,
+                1 - (embedding <=> $1::vector) AS similarity
+         FROM medical_products
+         WHERE is_active = TRUE AND embedding IS NOT NULL
+         ORDER BY embedding <=> $1::vector
+         LIMIT $2`,
+        [vectorLiteral, limit]
+    );
 
-    const relevantChunks = result.rows.filter((r: { similarity: number }) => r.similarity > 0.3);
-    if (relevantChunks.length === 0) return null;
+    const relevantChunks = chunkResult.rows.filter((r: any) => r.similarity > 0.3);
+    const relevantProducts = productResult.rows.filter((r: any) => r.similarity > 0.3);
 
-    return relevantChunks.map((c: { product_name: string; chunk_type: string; content: string }) =>
-        `[${c.product_name} — ${c.chunk_type}]: ${c.content}`
-    ).join('\n\n');
+    // Determine if we have a knowledge gap
+    const hasGap = relevantChunks.length === 0 && relevantProducts.length === 0;
+
+    if (hasGap) {
+        return { context: null, products: [], hasGap: true };
+    }
+
+    // Build context string — audience-aware
+    const parts: string[] = [];
+
+    for (const p of relevantProducts) {
+        let entry = `## ${p.name} (${p.diagnostic_category})`;
+        if (p.analito) entry += `\nAnalito: ${p.analito}`;
+        if (p.result_time) entry += `\nTiempo de resultado: ${p.result_time}`;
+        if (p.sensitivity) entry += `\nSensibilidad: ${p.sensitivity}%`;
+        if (p.specificity) entry += `\nEspecificidad: ${p.specificity}%`;
+        if (p.proposito_clinico) entry += `\nPropósito clínico: ${p.proposito_clinico}`;
+
+        // Audience-specific pitch
+        if (audienceType === 'laboratorio' && p.pitch_laboratorio) {
+            entry += `\n\n**Pitch para laboratorio:** ${p.pitch_laboratorio}`;
+            if (p.porque_agregarlo_lab) entry += `\n**Por qué agregarlo:** ${p.porque_agregarlo_lab}`;
+            if (p.objeciones_laboratorio && p.objeciones_laboratorio.length > 0) {
+                entry += `\n**Objeciones frecuentes:**`;
+                for (const obj of p.objeciones_laboratorio) {
+                    entry += `\n  - "${obj.pregunta}": ${obj.respuesta}`;
+                }
+            }
+        } else if (p.pitch_medico) {
+            entry += `\n\n**Pitch para médico:** ${p.pitch_medico}`;
+            if (p.ventaja_vs_lab) entry += `\n**Ventaja vs laboratorio:** ${p.ventaja_vs_lab}`;
+            if (p.roi_medico) entry += `\n**ROI:** ${p.roi_medico}`;
+            if (p.objeciones_medico && p.objeciones_medico.length > 0) {
+                entry += `\n**Objeciones frecuentes:**`;
+                for (const obj of p.objeciones_medico) {
+                    entry += `\n  - "${obj.pregunta}": ${obj.respuesta}`;
+                }
+            }
+        }
+
+        // Pricing info
+        if (p.precio_publico) entry += `\nPrecio desde: $${p.precio_publico} MXN`;
+        if (p.presentaciones && p.presentaciones.length > 0) {
+            entry += `\nPresentaciones: ${p.presentaciones.map((pr: any) => `Caja con ${pr.cantidad} ($${pr.precio})`).join(', ')}`;
+        }
+
+        // Cross-sells
+        if (p.cross_sells && p.cross_sells.length > 0) {
+            entry += `\nPruebas complementarias: ${p.cross_sells.map((cs: any) => cs.name).join(', ')}`;
+        }
+
+        if (p.url_tienda) entry += `\nURL: ${p.url_tienda}`;
+
+        parts.push(entry);
+    }
+
+    // Add chunk context
+    for (const c of relevantChunks) {
+        parts.push(`[${c.product_name} — ${c.chunk_type}]: ${c.content}`);
+    }
+
+    return {
+        context: parts.join('\n\n') || null,
+        products: relevantProducts,
+        hasGap
+    };
 }
 
 // ─────────────────────────────────────────────
