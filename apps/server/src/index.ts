@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { db } from './db';
-import { requireAuth, requireRole } from './middleware/auth';
+import { requireAuth, requireRole, normalizeRole, hashPassword } from './middleware/auth';
 import conversationsRouter from './routes/conversations';
 import campaignsRouter from './routes/campaigns';
 import attributionsRouter from './routes/attributions';
@@ -36,6 +36,80 @@ app.get('/health', async (_req, res) => {
 
 // ─── Auth (public) ───────────────────────────
 app.use('/api/auth', authRouter);
+
+// ─── Agents management (frontend uses /api/agents) ─
+
+// GET /api/agents — list all agents (gerente+)
+app.get('/api/agents', requireAuth, requireRole('gerente'), async (_req, res) => {
+    const result = await db.query(
+        `SELECT id, name, email, role, is_active, created_at FROM agents ORDER BY created_at ASC`
+    );
+    const agents = result.rows.map(a => ({ ...a, role: normalizeRole(a.role) }));
+    res.json(agents);
+});
+
+// POST /api/agents — create new agent (director+)
+app.post('/api/agents', requireAuth, requireRole('director'), async (req, res) => {
+    const { name, email, password, role = 'operador', salesking_agent_code } = req.body;
+    if (!name || !email || !password) {
+        res.status(400).json({ error: 'name, email y password requeridos' }); return;
+    }
+    const existing = await db.query('SELECT id FROM agents WHERE email = $1', [email.toLowerCase().trim()]);
+    if (existing.rows.length > 0) {
+        res.status(409).json({ error: 'Ya existe un agente con ese email' }); return;
+    }
+    // Map normalized role to DB role
+    const dbRole = role === 'superadmin' ? 'superadmin' : role === 'director' ? 'admin' : role === 'gerente' ? 'supervisor' : 'agent';
+    const hashed = hashPassword(password);
+    const result = await db.query(
+        `INSERT INTO agents (name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, name, email, role, is_active`,
+        [name, email.toLowerCase().trim(), hashed, dbRole]
+    );
+    const a = result.rows[0];
+    res.status(201).json({ ...a, role: normalizeRole(a.role) });
+});
+
+// PUT /api/agents/:id — update agent (director+)
+app.put('/api/agents/:id', requireAuth, requireRole('gerente'), async (req, res) => {
+    const { name, role, is_active, salesking_agent_code } = req.body;
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    if (name !== undefined) { params.push(name); updates.push(`name = $${params.length}`); }
+    if (role !== undefined) {
+        if (req.agent!.role !== 'director' && req.agent!.role !== 'superadmin') {
+            res.status(403).json({ error: 'Solo director o superadmin pueden cambiar roles' }); return;
+        }
+        const dbRole = role === 'superadmin' ? 'superadmin' : role === 'director' ? 'admin' : role === 'gerente' ? 'supervisor' : 'agent';
+        params.push(dbRole); updates.push(`role = $${params.length}`);
+    }
+    if (is_active !== undefined) { params.push(is_active); updates.push(`is_active = $${params.length}`); }
+    if (updates.length === 0) { res.status(400).json({ error: 'Nada que actualizar' }); return; }
+    params.push(req.params.id);
+    const result = await db.query(
+        `UPDATE agents SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING id, name, email, role, is_active`,
+        params
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: 'Agente no encontrado' }); return; }
+    const a = result.rows[0];
+    res.json({ ...a, role: normalizeRole(a.role) });
+});
+
+// DELETE /api/agents/:id — deactivate agent
+app.delete('/api/agents/:id', requireAuth, requireRole('director'), async (req, res) => {
+    await db.query('UPDATE agents SET is_active = FALSE WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+});
+
+// POST /api/agents/:id/reset-password — reset agent password (director+)
+app.post('/api/agents/:id/reset-password', requireAuth, requireRole('director'), async (req, res) => {
+    const { new_password } = req.body;
+    if (!new_password || new_password.length < 6) {
+        res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' }); return;
+    }
+    const hashed = hashPassword(new_password);
+    await db.query('UPDATE agents SET password_hash = $1 WHERE id = $2', [hashed, req.params.id]);
+    res.json({ ok: true });
+});
 
 // ─── Webhooks (public — validated by signature) ──
 app.use('/api/webhooks', webhooksRouter);

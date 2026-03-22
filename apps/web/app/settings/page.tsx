@@ -1424,9 +1424,13 @@ function AITab() {
 
 // ── Usuarios Tab ──────────────────────────────────────────────────────────────
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-    admin: { label: 'Admin', color: 'bg-red-100 text-red-700' },
-    supervisor: { label: 'Supervisor', color: 'bg-amber-100 text-amber-700' },
-    agent: { label: 'Agente', color: 'bg-blue-100 text-blue-700' },
+    superadmin: { label: 'Super Admin', color: 'bg-purple-100 text-purple-700' },
+    admin: { label: 'Director', color: 'bg-red-100 text-red-700' },
+    director: { label: 'Director', color: 'bg-red-100 text-red-700' },
+    supervisor: { label: 'Gerente', color: 'bg-amber-100 text-amber-700' },
+    gerente: { label: 'Gerente', color: 'bg-amber-100 text-amber-700' },
+    agent: { label: 'Operador', color: 'bg-blue-100 text-blue-700' },
+    operador: { label: 'Operador', color: 'bg-blue-100 text-blue-700' },
 };
 
 function UsuariosTab() {
@@ -1630,9 +1634,10 @@ function UsuariosTab() {
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
                                     <select value={iRole} onChange={e => setIRole(e.target.value)}
                                         className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
-                                        <option value="agent">Agente</option>
-                                        <option value="supervisor">Supervisor</option>
-                                        <option value="admin">Admin</option>
+                                        <option value="operador">Operador</option>
+                                        <option value="gerente">Gerente</option>
+                                        <option value="director">Director</option>
+                                        <option value="superadmin">Super Admin</option>
                                     </select>
                                 </div>
                             </div>
@@ -1682,9 +1687,10 @@ function UsuariosTab() {
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
                                 <select value={eRole} onChange={e => setERole(e.target.value)}
                                     className="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
-                                    <option value="agent">Agente</option>
-                                    <option value="supervisor">Supervisor</option>
-                                    <option value="admin">Admin</option>
+                                    <option value="operador">Operador</option>
+                                    <option value="gerente">Gerente</option>
+                                    <option value="director">Director</option>
+                                    <option value="superadmin">Super Admin</option>
                                 </select>
                             </div>
                             <div>
