@@ -121,8 +121,9 @@ router.get('/:id/context', async (req: Request, res: Response) => {
     const { customer_id } = conv.rows[0];
 
     // Fetch all context in parallel
-    const [customer, attributes, orders, profile, segments, pastConversations] = await Promise.all([
+    const [customer, identities, attributes, orders, profile, segments, pastConversations] = await Promise.all([
         db.query(`SELECT * FROM customers WHERE id = $1`, [customer_id]),
+        db.query(`SELECT provider, provider_id, metadata FROM external_identities WHERE customer_id = $1`, [customer_id]),
         db.query(`SELECT key, value FROM customer_attributes WHERE customer_id = $1`, [customer_id]),
         db.query(
             `SELECT id, external_order_id, total_amount, currency, status, items, order_date
@@ -132,7 +133,7 @@ router.get('/:id/context', async (req: Request, res: Response) => {
         db.query(
             `SELECT * FROM customer_profiles WHERE customer_id = $1 LIMIT 1`,
             [customer_id]
-        ).catch(() => ({ rows: [] })), // Table might not exist yet
+        ).catch(() => ({ rows: [] })),
         db.query(
             `SELECT segment_type, segment_value FROM customer_segments WHERE customer_id = $1`,
             [customer_id]
@@ -147,15 +148,45 @@ router.get('/:id/context', async (req: Request, res: Response) => {
         ),
     ]);
 
+    // Extract phone/email from external identities
+    const idRows = identities.rows as Array<{ provider: string; provider_id: string; metadata: any }>;
+    const phoneIdentity = idRows.find((i) => i.provider === 'whatsapp' || i.provider === 'phone');
+    const emailIdentity = idRows.find((i) => i.provider === 'email');
+    const emailFromAttrs = (attributes.rows as Array<{ key: string; value: string }>).find((a) => a.key === 'email');
+    const phoneFromAttrs = (attributes.rows as Array<{ key: string; value: string }>).find((a) => a.key === 'phone');
+
+    // Build customer object mapping display_name -> name
+    const cust = customer.rows[0];
+    const customerData = cust ? {
+        id: cust.id,
+        name: cust.display_name || cust.name || 'Sin nombre',
+        phone: phoneIdentity?.provider_id || phoneFromAttrs?.value || cust.phone || null,
+        email: emailIdentity?.provider_id || emailFromAttrs?.value || cust.email || null,
+        created_at: cust.created_at,
+    } : null;
+
+    // Map orders to frontend expected format
+    const mappedOrders = orders.rows.map((o: any) => ({
+        id: o.id,
+        wc_order_id: o.external_order_id || null,
+        status: o.status,
+        total: o.total_amount || '0',
+        created_at: o.order_date || o.created_at,
+    }));
+
     // Calculate lifetime value
     const lifetimeValue = orders.rows.reduce(
         (sum: number, o: { total_amount: string }) => sum + parseFloat(o.total_amount || '0'), 0
     );
 
+    // Map attributes array to object
+    const attrsObj: Record<string, string> = {};
+    (attributes.rows as Array<{ key: string; value: string }>).forEach((a) => { attrsObj[a.key] = a.value; });
+
     res.json({
-        customer: customer.rows[0] || null,
-        attributes: attributes.rows,
-        orders: orders.rows,
+        customer: customerData,
+        attributes: attrsObj,
+        orders: mappedOrders,
         profile: profile.rows[0] || null,
         segments: segments.rows,
         past_conversations: pastConversations.rows,
