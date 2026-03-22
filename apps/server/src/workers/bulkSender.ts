@@ -58,11 +58,11 @@ const worker = new Worker('bulkCampaigns', async (job: Job) => {
     }
 }, { connection: connection as any });
 
-worker.on('completed', job => {
+worker.on('completed', (job: any) => {
     console.log(`Job ${job.id} completed`);
 });
 
-worker.on('failed', (job, err) => {
+worker.on('failed', (job: any, err: any) => {
     console.error(`Job ${job?.id} failed: ${err.message}`);
 });
 
