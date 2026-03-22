@@ -294,4 +294,380 @@ router.patch('/:id/assign', async (req: Request, res: Response) => {
     res.json({ ok: true });
 });
 
+// GET /api/conversations/:id/customer — full customer profile for panels
+router.get('/:id/customer', async (req: Request, res: Response) => {
+    try {
+        const convResult = await db.query(
+            `SELECT customer_id FROM conversations WHERE id = $1`,
+            [req.params.id]
+        );
+        if (convResult.rows.length === 0) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        const customerId = convResult.rows[0].customer_id;
+
+        const customer = await db.query(
+            `SELECT id, display_name AS name, avatar_url, created_at
+             FROM customers WHERE id = $1`,
+            [customerId]
+        );
+        if (customer.rows.length === 0) {
+            res.status(404).json({ error: 'Customer not found' });
+            return;
+        }
+
+        const c = customer.rows[0];
+
+        // Get phone and email from external_identities
+        const identities = await db.query(
+            `SELECT provider, provider_id, metadata FROM external_identities WHERE customer_id = $1`,
+            [customerId]
+        );
+        let phone: string | null = null;
+        let email: string | null = null;
+        let wc_customer_id: string | null = null;
+        for (const ident of identities.rows) {
+            if (ident.provider === 'whatsapp' && !phone) phone = ident.provider_id;
+            if (ident.provider === 'webchat' && ident.metadata?.email && !email) email = ident.metadata.email;
+            if (ident.provider === 'webchat' && ident.metadata?.phone && !phone) phone = ident.metadata.phone;
+            if (ident.provider === 'woocommerce') wc_customer_id = ident.provider_id;
+        }
+
+        // Get shipping from attributes
+        const shippingAttr = await db.query(
+            `SELECT value FROM customer_attributes WHERE customer_id = $1 AND key = 'shipping'`,
+            [customerId]
+        );
+        const shipping = shippingAttr.rows.length > 0
+            ? (typeof shippingAttr.rows[0].value === 'string'
+                ? JSON.parse(shippingAttr.rows[0].value)
+                : shippingAttr.rows[0].value)
+            : null;
+
+        // Get orders
+        const orders = await db.query(
+            `SELECT id, external_order_id AS wc_order_id, status, total_amount AS total, created_at
+             FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20`,
+            [customerId]
+        );
+
+        // Get segments
+        const segments = await db.query(
+            `SELECT segment_type, segment_value FROM customer_segments WHERE customer_id = $1`,
+            [customerId]
+        );
+
+        // Get attributes
+        const attributes = await db.query(
+            `SELECT key, value FROM customer_attributes WHERE customer_id = $1 AND key != 'shipping'`,
+            [customerId]
+        );
+        const attrsMap: Record<string, string> = {};
+        attributes.rows.forEach((r: any) => { attrsMap[r.key] = r.value; });
+
+        // Also check attributes for phone/email if not found in identities
+        if (!phone && attrsMap['phone']) phone = attrsMap['phone'];
+        if (!email && attrsMap['email']) email = attrsMap['email'];
+
+        // If already linked via attributes, use that
+        if (!wc_customer_id && attrsMap['wc_customer_id']) {
+            wc_customer_id = attrsMap['wc_customer_id'];
+        }
+
+        // ── Auto-lookup WooCommerce customer by phone (WhatsApp) ──
+        // If we have a phone but no WC link, search WooCommerce automatically
+        let wcAutoLinked = false;
+        if (!wc_customer_id && phone) {
+            try {
+                const wcUrl = process.env.WC_URL;
+                const wcKey = process.env.WC_KEY;
+                const wcSecret = process.env.WC_SECRET;
+
+                if (wcUrl && wcKey && wcSecret) {
+                    const wcAuth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+                    const headers = { Authorization: `Basic ${wcAuth}` };
+                    let wcCustomer: any = null;
+
+                    // 1. Normalize phone: extract the 10-digit local number
+                    const phoneDigits = phone.replace(/\D/g, '');
+                    let phoneLocal = phoneDigits;
+
+                    if (phoneDigits.startsWith('521') && phoneDigits.length === 13) {
+                        phoneLocal = phoneDigits.slice(3);
+                    } else if (phoneDigits.startsWith('52') && phoneDigits.length === 12) {
+                        phoneLocal = phoneDigits.slice(2);
+                    } else if (phoneDigits.length > 10) {
+                        phoneLocal = phoneDigits.slice(-10);
+                    }
+
+                    const phoneVariants = new Set([phoneLocal, phoneDigits, phone]);
+                    if (phoneLocal.length === 10) {
+                        phoneVariants.add(`52${phoneLocal}`);
+                        phoneVariants.add(`521${phoneLocal}`);
+                    }
+
+                    // Strategy A: Search WC customers by phone (search= only checks name/email,
+                    // but we try anyway in case there's a name match, then verify phone)
+                    for (const pv of phoneVariants) {
+                        if (wcCustomer) break;
+                        const searchResp = await fetch(
+                            `${wcUrl}/wp-json/wc/v3/customers?search=${encodeURIComponent(pv)}&per_page=10`,
+                            { headers }
+                        );
+                        if (searchResp.ok) {
+                            const results = await searchResp.json();
+                            if (Array.isArray(results)) {
+                                wcCustomer = results.find((wc: any) => {
+                                    const wcBillingLocal = wc.billing?.phone?.replace(/\D/g, '').slice(-10);
+                                    const wcShippingLocal = wc.shipping?.phone?.replace(/\D/g, '').slice(-10);
+                                    return wcBillingLocal === phoneLocal || wcShippingLocal === phoneLocal;
+                                }) || null;
+                            }
+                        }
+                    }
+
+                    // Strategy B: Search WC ORDERS by phone (orders search= DOES search billing phone)
+                    // Then extract billing/shipping data from the most recent matching order
+                    let wcOrderData: any = null;
+                    if (!wcCustomer) {
+                        for (const pv of phoneVariants) {
+                            if (wcCustomer || wcOrderData) break;
+                            const orderResp = await fetch(
+                                `${wcUrl}/wp-json/wc/v3/orders?search=${encodeURIComponent(pv)}&per_page=5&orderby=date&order=desc`,
+                                { headers }
+                            );
+                            if (orderResp.ok) {
+                                const orders = await orderResp.json();
+                                if (Array.isArray(orders)) {
+                                    const matchingOrder = orders.find((o: any) => {
+                                        const obLocal = o.billing?.phone?.replace(/\D/g, '').slice(-10);
+                                        return obLocal === phoneLocal;
+                                    });
+                                    if (matchingOrder) {
+                                        // If order has a real customer_id (not 0 = guest), fetch the WC customer
+                                        if (matchingOrder.customer_id && matchingOrder.customer_id > 1) {
+                                            const custResp = await fetch(
+                                                `${wcUrl}/wp-json/wc/v3/customers/${matchingOrder.customer_id}`,
+                                                { headers }
+                                            );
+                                            if (custResp.ok) {
+                                                wcCustomer = await custResp.json();
+                                            }
+                                        }
+                                        // Always save order billing/shipping as fallback data
+                                        wcOrderData = matchingOrder;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Strategy C: If not found by phone but we have email, try email on customers
+                    if (!wcCustomer && !wcOrderData && email) {
+                        const emailResp = await fetch(
+                            `${wcUrl}/wp-json/wc/v3/customers?email=${encodeURIComponent(email)}&per_page=1`,
+                            { headers }
+                        );
+                        if (emailResp.ok) {
+                            const results = await emailResp.json();
+                            if (Array.isArray(results) && results.length > 0) {
+                                wcCustomer = results[0];
+                            }
+                        }
+                    }
+
+                    // Import data: prefer WC customer profile, fall back to order billing data
+                    const wcSource = wcCustomer || wcOrderData;
+                    if (wcSource) {
+                        if (wcCustomer) {
+                            wc_customer_id = String(wcCustomer.id);
+                        } else if (wcOrderData?.customer_id && wcOrderData.customer_id > 1) {
+                            wc_customer_id = String(wcOrderData.customer_id);
+                        } else {
+                            // Guest order — use order ID as reference with prefix
+                            wc_customer_id = `order_${wcOrderData.id}`;
+                        }
+                        wcAutoLinked = true;
+
+                        // Save wc_customer_id in attributes
+                        await db.query(
+                            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                             VALUES ($1, 'wc_customer_id', $2, 'string')
+                             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                            [customerId, wc_customer_id]
+                        );
+
+                        // Import shipping/billing data (prefer customer profile, then order data)
+                        // Try customer profile first, then fall back to order billing/shipping
+                        let wcData: any = {};
+                        if (wcCustomer) {
+                            wcData = wcCustomer.shipping?.first_name ? wcCustomer.shipping
+                                   : wcCustomer.billing?.first_name ? wcCustomer.billing
+                                   : {};
+                        }
+                        // If customer profile had no data, fall back to order billing/shipping
+                        if (!wcData.first_name && wcOrderData) {
+                            wcData = wcOrderData.shipping?.first_name ? wcOrderData.shipping
+                                   : wcOrderData.billing?.first_name ? wcOrderData.billing
+                                   : {};
+                        }
+                        const importFields = ['first_name', 'last_name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone'];
+                        for (const key of importFields) {
+                            if (wcData[key]) {
+                                await db.query(
+                                    `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                                     VALUES ($1, $2, $3, 'string')
+                                     ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                                    [customerId, key, wcData[key]]
+                                );
+                                attrsMap[key] = wcData[key];
+                            }
+                        }
+
+                        // Import email from WC if we didn't have one
+                        const wcEmail = wcCustomer?.email || wcSource?.billing?.email;
+                        if (!email && wcEmail && !wcEmail.includes('@placeholder')) {
+                            email = wcEmail;
+                            await db.query(
+                                `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                                 VALUES ($1, 'email', $2, 'string')
+                                 ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                                [customerId, email]
+                            );
+                            attrsMap['email'] = email!;
+                        }
+
+                        console.log(`[WC Auto-Link] Customer ${customerId} linked to WC #${wc_customer_id} via phone ${phone} (source: ${wcCustomer ? 'customer' : 'order'})`);
+                    } else {
+                        console.log(`[WC Auto-Link] No WC match found for phone ${phone} (local: ${phoneLocal})`);
+                    }
+                }
+            } catch (wcErr) {
+                // Non-critical: log but don't fail the response
+                console.error('[WC Auto-Link] Error searching WooCommerce:', wcErr);
+            }
+        }
+
+        res.json({
+            id: c.id,
+            name: c.name,
+            phone,
+            email,
+            created_at: c.created_at,
+            wc_customer_id,
+            wc_auto_linked: wcAutoLinked,
+            shipping,
+            orders: orders.rows,
+            segments: segments.rows,
+            attributes: attrsMap,
+        });
+    } catch (err: any) {
+        console.error('Error fetching customer for conversation:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/conversations/:id/cart-link — create WC draft order & return payment URL
+router.post('/:id/cart-link', async (req: Request, res: Response) => {
+    try {
+        const { line_items, billing, shipping, notes } = req.body;
+
+        // Get customer for this conversation
+        const convResult = await db.query(
+            `SELECT customer_id FROM conversations WHERE id = $1`,
+            [req.params.id]
+        );
+        if (convResult.rows.length === 0) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        const customerId = convResult.rows[0].customer_id;
+
+        const customerResult = await db.query(
+            `SELECT id, wc_customer_id FROM customers WHERE id = $1`,
+            [customerId]
+        );
+        const customer = customerResult.rows[0];
+
+        // Build WooCommerce order payload
+        const WC_URL = process.env.WC_URL || 'https://tst.amunet.com.mx';
+        const WC_KEY = process.env.WC_KEY || '';
+        const WC_SECRET = process.env.WC_SECRET || '';
+
+        const orderPayload: any = {
+            status: 'pending',
+            line_items: line_items || [],
+            set_paid: false,
+        };
+
+        if (customer.wc_customer_id) {
+            orderPayload.customer_id = Number(customer.wc_customer_id);
+        }
+        if (billing) orderPayload.billing = billing;
+        if (shipping) orderPayload.shipping = shipping;
+        if (notes) orderPayload.customer_note = notes;
+
+        // Add agent attribution metadata
+        const agentId = (req as any).agent?.id;
+        if (agentId) {
+            const agentResult = await db.query(`SELECT name, wp_user_id FROM agents WHERE id = $1`, [agentId]);
+            if (agentResult.rows.length > 0) {
+                orderPayload.meta_data = [
+                    { key: '_crm_agent_id', value: agentId },
+                    { key: '_crm_agent_name', value: agentResult.rows[0].name },
+                    { key: '_crm_conversation_id', value: req.params.id },
+                ];
+                if (agentResult.rows[0].wp_user_id) {
+                    orderPayload.meta_data.push(
+                        { key: 'salesking_order_placed_by', value: String(agentResult.rows[0].wp_user_id) },
+                        { key: 'salesking_assigned_agent', value: String(agentResult.rows[0].wp_user_id) }
+                    );
+                }
+            }
+        }
+
+        // Call WooCommerce API to create the order
+        const wcAuth = Buffer.from(`${WC_KEY}:${WC_SECRET}`).toString('base64');
+        const wcResponse = await fetch(`${WC_URL}/wp-json/wc/v3/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Basic ${wcAuth}`,
+            },
+            body: JSON.stringify(orderPayload),
+        });
+
+        if (!wcResponse.ok) {
+            const err = await wcResponse.text();
+            res.status(502).json({ error: 'WooCommerce order creation failed', details: err });
+            return;
+        }
+
+        const wcOrder = await wcResponse.json() as any;
+
+        // Save order in CRM database
+        await db.query(
+            `INSERT INTO orders (id, customer_id, wc_order_id, status, total, items, created_at)
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, NOW())
+             ON CONFLICT (wc_order_id) DO UPDATE SET status = $3, total = $4`,
+            [customerId, wcOrder.id, wcOrder.status, wcOrder.total, JSON.stringify(wcOrder.line_items)]
+        );
+
+        // Return payment URL
+        const paymentUrl = wcOrder.payment_url || `${WC_URL}/checkout/order-pay/${wcOrder.id}/?pay_for_order=true&key=${wcOrder.order_key}`;
+
+        res.json({
+            wc_order_id: wcOrder.id,
+            order_number: wcOrder.number,
+            total: wcOrder.total,
+            payment_url: paymentUrl,
+            status: wcOrder.status,
+        });
+    } catch (err: any) {
+        console.error('Error creating cart-link:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;

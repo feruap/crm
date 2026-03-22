@@ -86,7 +86,7 @@ async function resolveOrCreateConversation(
     return { conversationId: conv.rows[0].id, isNew: true };
 }
 
-export async function handleBotResponse(
+async function handleBotResponse(
     conversationId: string,
     channelId: string,
     customerId: string,
@@ -147,10 +147,16 @@ export async function handleBotResponse(
                 );
 
                 console.log(`[Smart Bot Escalation] Conv ${conversationId}: ${botReply.routing_decision.reason}`);
-                return;
             } catch (err) {
                 console.error('[Escalation execution error]:', err);
+                // Escalation failed — send just the bot message without agent note
+                await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
+                     VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5, 'escalation')`,
+                    [conversationId, channelId, customerId, botReply.message, botReply.confidence]
+                );
             }
+            return; // Always return after escalation — never fall through to normal reply
         }
 
         // Send normal bot reply
@@ -441,6 +447,80 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// Webchat — Receive messages from livechat widget
+// ─────────────────────────────────────────────
+router.post('/webchat', async (req: Request, res: Response) => {
+    try {
+        const { contact_id, name, message } = req.body;
+
+        if (!contact_id || !message) {
+            res.status(400).json({ error: 'contact_id and message are required' });
+            return;
+        }
+
+        // Find or create webchat channel
+        let channel = await db.query(
+            `SELECT id FROM channels WHERE provider = 'webchat' AND is_active = TRUE LIMIT 1`
+        );
+        if (channel.rows.length === 0) {
+            // Auto-create webchat channel
+            channel = await db.query(
+                `INSERT INTO channels (name, provider, is_active)
+                 VALUES ('Chat Web', 'webchat', TRUE)
+                 RETURNING id`
+            );
+        }
+        const channelId = channel.rows[0].id;
+
+        // Resolve or create customer from contact_id
+        const customerId = await resolveOrCreateCustomer('webchat', contact_id, name || 'Usuario Web');
+
+        // Resolve or create conversation
+        const { conversationId, isNew } = await resolveOrCreateConversation(customerId, channelId);
+
+        // Save inbound message
+        const msgResult = await db.query(
+            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content)
+             VALUES ($1, $2, $3, 'inbound', $4) RETURNING id`,
+            [conversationId, channelId, customerId, message]
+        );
+
+        // Emit via Socket.io so CRM inbox updates in real-time
+        try {
+            const { emitNewMessage, emitAlert } = await import('../socket');
+            emitNewMessage(conversationId, {
+                conversation_id: conversationId,
+                message: {
+                    id: msgResult.rows[0].id,
+                    content: message,
+                    direction: 'inbound',
+                    handled_by: null,
+                }
+            });
+            // Also emit a general alert for the inbox
+            emitAlert({
+                type: 'new_conversation',
+                conversation_id: conversationId,
+                customer_name: name || 'Usuario Web',
+                channel: 'webchat',
+            });
+        } catch (socketErr) {
+            console.error('[Webchat] Socket emit error:', socketErr);
+        }
+
+        console.log(`[Webchat] Message from ${name || contact_id} in conv ${conversationId}`);
+
+        // Send bot response asynchronously
+        handleBotResponse(conversationId, channelId, customerId, message).catch(console.error);
+
+        res.json({ ok: true, conversationId });
+    } catch (err) {
+        console.error('Webchat webhook error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─────────────────────────────────────────────
 // Webchat — Receive UTM data from chat widget
 // Called when a webchat session starts with UTM params
 // ─────────────────────────────────────────────
@@ -472,3 +552,4 @@ router.post('/webchat-utm', async (req: Request, res: Response) => {
 });
 
 export default router;
+export { handleBotResponse };

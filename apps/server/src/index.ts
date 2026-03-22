@@ -155,8 +155,19 @@ app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     res.json(result.rows);
 });
 
+// ─── Auto-migrate missing columns ────────────
+async function ensureSchema() {
+    try {
+        await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_last_sync TIMESTAMP WITH TIME ZONE`);
+        await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[] DEFAULT '{}'`);
+        console.log('[schema] ensured medical_products columns');
+    } catch (e: any) { console.error('[schema] migration error:', e.message); }
+}
+
 // ─── Start ────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+ensureSchema().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
 });
