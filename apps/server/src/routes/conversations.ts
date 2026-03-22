@@ -277,8 +277,7 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
         const customerId = convResult.rows[0].customer_id;
 
         const customer = await db.query(
-            `SELECT id, display_name AS name, phone, email, created_at,
-                    wc_customer_id, metadata
+            `SELECT id, display_name AS name, avatar_url, created_at
              FROM customers WHERE id = $1`,
             [customerId]
         );
@@ -288,6 +287,21 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
         }
 
         const c = customer.rows[0];
+
+        // Get phone and email from external_identities
+        const identities = await db.query(
+            `SELECT provider, provider_id, metadata FROM external_identities WHERE customer_id = $1`,
+            [customerId]
+        );
+        let phone: string | null = null;
+        let email: string | null = null;
+        let wc_customer_id: string | null = null;
+        for (const ident of identities.rows) {
+            if (ident.provider === 'whatsapp' && !phone) phone = ident.provider_id;
+            if (ident.provider === 'webchat' && ident.metadata?.email && !email) email = ident.metadata.email;
+            if (ident.provider === 'webchat' && ident.metadata?.phone && !phone) phone = ident.metadata.phone;
+            if (ident.provider === 'woocommerce') wc_customer_id = ident.provider_id;
+        }
 
         // Get shipping from attributes
         const shippingAttr = await db.query(
@@ -321,13 +335,17 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
         const attrsMap: Record<string, string> = {};
         attributes.rows.forEach((r: any) => { attrsMap[r.key] = r.value; });
 
+        // Also check attributes for phone/email if not found in identities
+        if (!phone && attrsMap['phone']) phone = attrsMap['phone'];
+        if (!email && attrsMap['email']) email = attrsMap['email'];
+
         res.json({
             id: c.id,
             name: c.name,
-            phone: c.phone,
-            email: c.email,
+            phone,
+            email,
             created_at: c.created_at,
-            wc_customer_id: c.wc_customer_id,
+            wc_customer_id,
             shipping,
             orders: orders.rows,
             segments: segments.rows,
