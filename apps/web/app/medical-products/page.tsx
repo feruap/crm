@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart, Package } from 'lucide-react';
 import { useAuth } from '../../components/AuthProvider';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
@@ -91,6 +91,25 @@ interface FormData {
     roi_medico: string;
     palabras_clave: string;
     target_audience: string;
+    presentaciones: string; // format: "cantidad:precio, cantidad:precio"
+}
+
+function formatPresentaciones(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
+    if (!pres || pres.length === 0) return '—';
+    return pres.map(p => `Caja ${p.cantidad} pruebas: ${formatMXN(p.precio)}`).join(', ');
+}
+
+function parsePresentaciones(str: string): Array<{ cantidad: number; precio: number }> {
+    if (!str.trim()) return [];
+    return str.split(',').map(s => {
+        const parts = s.trim().split(':');
+        return { cantidad: Number(parts[0]?.trim()) || 0, precio: Number(parts[1]?.trim()) || 0 };
+    }).filter(p => p.cantidad > 0);
+}
+
+function presentacionesToString(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
+    if (!pres || pres.length === 0) return '';
+    return pres.map(p => `${p.cantidad}:${p.precio}`).join(', ');
 }
 
 const CATEGORIES = [
@@ -124,6 +143,7 @@ const emptyForm: FormData = {
     punto_corte: '', vida_util: '', registro_sanitario: '',
     pitch_venta: '', ventaja_competitiva: '', roi_medico: '',
     palabras_clave: '', target_audience: 'ambos',
+    presentaciones: '',
 };
 
 function CategoryBadge({ category }: { category: string }) {
@@ -237,6 +257,7 @@ export default function MedicalProductsPage() {
             roi_medico: p.roi_medico || '',
             palabras_clave: (p.palabras_clave || []).join(', '),
             target_audience: p.target_audience || 'ambos',
+            presentaciones: presentacionesToString(p.presentaciones),
         });
         setEditingId(p.id);
         setShowForm(true);
@@ -262,6 +283,7 @@ export default function MedicalProductsPage() {
             precio_laboratorio: form.precio_laboratorio ? Number(form.precio_laboratorio) : null,
             precio_distribuidor: form.precio_distribuidor ? Number(form.precio_distribuidor) : null,
             palabras_clave: form.palabras_clave.split(',').map((s: string) => s.trim()).filter(Boolean),
+            presentaciones: parsePresentaciones(form.presentaciones),
         };
 
         try {
@@ -297,6 +319,7 @@ export default function MedicalProductsPage() {
             sensitivity: p.sensitivity || '',
             specificity: p.specificity || '',
             target_audience: p.target_audience || 'ambos',
+            presentaciones: presentacionesToString(p.presentaciones),
         });
     }
 
@@ -310,6 +333,7 @@ export default function MedicalProductsPage() {
             if (inlineValues.sensitivity !== undefined) body.sensitivity = inlineValues.sensitivity ? Number(inlineValues.sensitivity) : null;
             if (inlineValues.specificity !== undefined) body.specificity = inlineValues.specificity ? Number(inlineValues.specificity) : null;
             if (inlineValues.target_audience !== undefined) body.target_audience = inlineValues.target_audience;
+            if (inlineValues.presentaciones !== undefined) body.presentaciones = parsePresentaciones(inlineValues.presentaciones);
 
             await authFetch(`${API_URL}/api/medical-products/${id}`, {
                 method: 'PUT',
@@ -473,6 +497,31 @@ export default function MedicalProductsPage() {
                                         className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Presentaciones */}
+                    <div className="mb-6">
+                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
+                            <Package size={14} /> Presentaciones (Cajas)
+                        </h3>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">
+                                Formato: cantidad:precio separados por coma (ej: 2:400, 5:900, 10:1600)
+                            </label>
+                            <input type="text" value={form.presentaciones}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, presentaciones: e.target.value})}
+                                placeholder="2:400, 5:900, 10:1600"
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            {form.presentaciones && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {parsePresentaciones(form.presentaciones).map((p, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 px-2.5 py-1 rounded-full text-xs font-medium">
+                                            <Package size={10} /> Caja {p.cantidad} pruebas: {formatMXN(p.precio)}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -659,6 +708,7 @@ export default function MedicalProductsPage() {
                                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Público</th>
                                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Lab</th>
                                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Dist.</th>
+                                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Presentaciones</th>
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Sensib.</th>
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Especif.</th>
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Resultado</th>
@@ -671,7 +721,7 @@ export default function MedicalProductsPage() {
                             <tbody>
                                 {filtered.length === 0 && (
                                     <tr>
-                                        <td colSpan={12} className="px-4 py-12 text-center text-slate-400">
+                                        <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
                                             No hay productos. Crea uno con el botón &quot;Nuevo Producto&quot;.
                                         </td>
                                     </tr>
@@ -721,6 +771,35 @@ export default function MedicalProductsPage() {
                                                         className="w-24 text-right border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
                                                 ) : (
                                                     <span className={p.precio_distribuidor ? 'text-orange-700' : 'text-slate-300'}>{formatMXN(p.precio_distribuidor)}</span>
+                                                )}
+                                            </td>
+                                            {/* Presentaciones */}
+                                            <td className="px-3 py-2.5 text-left text-xs">
+                                                {isInline ? (
+                                                    <div>
+                                                        <input type="text" value={inlineValues.presentaciones || ''}
+                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInlineValues({...inlineValues, presentaciones: e.target.value})}
+                                                            placeholder="2:400, 5:900"
+                                                            title="Formato: cantidad:precio, cantidad:precio"
+                                                            className="w-36 border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                        <div className="text-[10px] text-slate-400 mt-0.5">qty:precio, ...</div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="min-w-[120px]">
+                                                        {p.presentaciones && p.presentaciones.length > 0 ? (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {p.presentaciones.map((pr: { cantidad: number; precio: number }, idx: number) => (
+                                                                    <span key={idx} className="inline-flex items-center gap-1 text-xs">
+                                                                        <Package size={10} className="text-violet-400" />
+                                                                        <span className="text-slate-700">Caja {pr.cantidad}:</span>
+                                                                        <span className="font-medium text-violet-700">{formatMXN(pr.precio)}</span>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-300">—</span>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </td>
                                             {/* Sensitivity */}
@@ -885,6 +964,18 @@ export default function MedicalProductsPage() {
                                                 <div className="flex justify-between"><span className="text-slate-500">Laboratorio:</span><span className="font-medium text-emerald-700">{formatMXN(p.precio_laboratorio)}</span></div>
                                                 <div className="flex justify-between"><span className="text-slate-500">Distribuidor:</span><span className="font-medium text-orange-700">{formatMXN(p.precio_distribuidor)}</span></div>
                                             </div>
+                                            {p.presentaciones && p.presentaciones.length > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-slate-200">
+                                                    <span className="text-xs text-slate-500 font-medium">Presentaciones:</span>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {p.presentaciones.map((pr: { cantidad: number; precio: number }, idx: number) => (
+                                                            <span key={idx} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full text-xs">
+                                                                <Package size={10} /> Caja {pr.cantidad}: {formatMXN(pr.precio)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                             {p.pitch_venta && <p className="text-xs text-blue-700 italic mt-2">{p.pitch_venta}</p>}
                                         </div>
                                         {/* Technical column */}
