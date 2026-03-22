@@ -814,7 +814,7 @@ function CanalesTab() {
     const [channels, setChannels] = useState<Channel[]>([]);
     const [loading, setLoading] = useState(true);
     const [webhookUrls, setWebhookUrls] = useState<Record<string, string>>({});
-    const [showModal, setShowModal] = useState<'whatsapp' | 'facebook' | 'instagram' | 'tiktok' | null>(null);
+    const [showModal, setShowModal] = useState<string | null>(null);
     const [editChannel, setEditChannel] = useState<Channel | null>(null);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
@@ -838,7 +838,7 @@ function CanalesTab() {
 
     useEffect(() => { load(); }, [load]);
 
-    const openNew = (provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok') => {
+    const openNew = (provider: string) => {
         setEditChannel(null);
         setFormName(''); setFormFields({}); setFormSubtype('');
         setShowModal(provider);
@@ -868,7 +868,7 @@ function CanalesTab() {
         setSaving(true);
         try {
             const provider_config: Record<string, string> = {};
-            PROVIDER_META[showModal].fields.forEach(f => {
+            (PROVIDER_META as any)[showModal].fields.forEach(f => {
                 if (formFields[f]) provider_config[f] = formFields[f];
             });
 
@@ -1023,11 +1023,11 @@ function CanalesTab() {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
                         <div className="flex items-center justify-between p-6 border-b">
                             <div className="flex items-center gap-3">
-                                <div className={`w-9 h-9 rounded-xl ${PROVIDER_META[showModal].color} flex items-center justify-center text-lg`}>
-                                    {PROVIDER_META[showModal].icon}
+                                <div className={`w-9 h-9 rounded-xl ${(PROVIDER_META as any)[showModal].color} flex items-center justify-center text-lg`}>
+                                    {(PROVIDER_META as any)[showModal].icon}
                                 </div>
                                 <h3 className="font-bold text-lg">
-                                    {editChannel ? 'Editar' : 'Conectar'} {PROVIDER_META[showModal].label}
+                                    {editChannel ? 'Editar' : 'Conectar'} {(PROVIDER_META as any)[showModal].label}
                                 </h3>
                             </div>
                             <button onClick={() => setShowModal(null)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
@@ -1038,15 +1038,15 @@ function CanalesTab() {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del canal *</label>
                                 <input value={formName} onChange={e => setFormName(e.target.value)}
-                                    placeholder={`ej: ${PROVIDER_META[showModal].label} Principal`}
+                                    placeholder={`ej: ${(PROVIDER_META as any)[showModal].label} Principal`}
                                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
                             </div>
                             {/* Subtype selector para Facebook e Instagram */}
-                            {PROVIDER_META[showModal].subtypes && (
+                            {(PROVIDER_META as any)[showModal].subtypes && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de canal *</label>
                                     <div className="space-y-2">
-                                        {PROVIDER_META[showModal].subtypes!.map((st: any) => (
+                                        {(PROVIDER_META as any)[showModal].subtypes!.map((st: any) => (
                                             <label key={st.value} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                                                 <input type="radio" name="subtype" value={st.value}
                                                     checked={formSubtype === st.value}
@@ -1064,20 +1064,20 @@ function CanalesTab() {
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                                 <div className="flex items-center justify-between mb-2">
                                     <h4 className="font-semibold text-slate-800 text-sm">Instrucciones de configuración</h4>
-                                    <a href={PROVIDER_META[showModal].setupLink} target="_blank" rel="noreferrer"
+                                    <a href={(PROVIDER_META as any)[showModal].setupLink} target="_blank" rel="noreferrer"
                                         className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium">
                                         Ir al portal <ExternalLink className="w-3 h-3" />
                                     </a>
                                 </div>
                                 <div className="space-y-1.5 mt-2">
-                                    {PROVIDER_META[showModal].setupInstructions.map((step, idx) => (
+                                    {(PROVIDER_META as any)[showModal].setupInstructions.map((step, idx) => (
                                         <p key={idx} className="text-xs text-slate-600">{step}</p>
                                     ))}
                                 </div>
                             </div>
 
                             {/* Campos de configuración */}
-                            {PROVIDER_META[showModal].fields.map(field => (
+                            {(PROVIDER_META as any)[showModal].fields.map(field => (
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         {FIELD_LABELS[field] ?? field}
@@ -1099,7 +1099,7 @@ function CanalesTab() {
                         </div>
                         <div className="flex gap-3 p-6 border-t">
                             <button onClick={save}
-                                disabled={saving || !formName.trim() || (!!PROVIDER_META[showModal].subtypes && !formSubtype)}
+                                disabled={saving || !formName.trim() || (!!(PROVIDER_META as any)[showModal].subtypes && !formSubtype)}
                                 className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
                                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                                 {editChannel ? 'Guardar cambios' : 'Conectar canal'}
