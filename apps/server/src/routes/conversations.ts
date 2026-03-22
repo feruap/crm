@@ -358,12 +358,31 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                     const headers = { Authorization: `Basic ${wcAuth}` };
                     let wcCustomer: any = null;
 
-                    // 1. Search by phone number
-                    const phoneClean = phone.replace(/\D/g, ''); // strip non-digits
-                    const phoneVariants = [phone, phoneClean];
-                    // Also try without country code (e.g. 5212225051752 → 2225051752)
-                    if (phoneClean.length > 10) {
-                        phoneVariants.push(phoneClean.slice(-10));
+                    // 1. Normalize phone: extract the 10-digit local number
+                    // Mexican formats:
+                    //   WhatsApp: +5212225051752 (country 52 + mobile prefix 1 + 10 digits)
+                    //             +522225051752  (country 52 + 10 digits, no mobile prefix)
+                    //   WooCommerce: 2225051752   (just 10 local digits)
+                    const phoneDigits = phone.replace(/\D/g, '');
+                    let phoneLocal = phoneDigits; // fallback: use as-is
+
+                    if (phoneDigits.startsWith('521') && phoneDigits.length === 13) {
+                        // +52 1 XXXXXXXXXX → remove country code + mobile prefix
+                        phoneLocal = phoneDigits.slice(3);
+                    } else if (phoneDigits.startsWith('52') && phoneDigits.length === 12) {
+                        // +52 XXXXXXXXXX → remove country code
+                        phoneLocal = phoneDigits.slice(2);
+                    } else if (phoneDigits.length > 10) {
+                        // Other international: just take last 10
+                        phoneLocal = phoneDigits.slice(-10);
+                    }
+
+                    // Search WC with different variants (most specific first)
+                    const phoneVariants = new Set([phoneLocal, phoneDigits, phone]);
+                    // Also add common WC storage formats
+                    if (phoneLocal.length === 10) {
+                        phoneVariants.add(`52${phoneLocal}`);     // 522225051752
+                        phoneVariants.add(`521${phoneLocal}`);    // 5212225051752
                     }
 
                     for (const pv of phoneVariants) {
@@ -375,10 +394,12 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         if (searchResp.ok) {
                             const results = await searchResp.json();
                             if (Array.isArray(results)) {
-                                wcCustomer = results.find((wc: any) =>
-                                    wc.billing?.phone?.replace(/\D/g, '').endsWith(phoneClean.slice(-10)) ||
-                                    wc.shipping?.phone?.replace(/\D/g, '').endsWith(phoneClean.slice(-10))
-                                ) || null;
+                                // Compare last 10 digits of both sides to match regardless of format
+                                wcCustomer = results.find((wc: any) => {
+                                    const wcBillingLocal = wc.billing?.phone?.replace(/\D/g, '').slice(-10);
+                                    const wcShippingLocal = wc.shipping?.phone?.replace(/\D/g, '').slice(-10);
+                                    return wcBillingLocal === phoneLocal || wcShippingLocal === phoneLocal;
+                                }) || null;
                             }
                         }
                     }

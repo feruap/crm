@@ -284,15 +284,32 @@ router.post('/:id/wc-sync', async (req, res) => {
     }
     
     if (!wcCustomer && phone) {
-        // WC REST API doesn't support phone search directly ? search all recent and filter
-        const searchResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers?search=${encodeURIComponent(phone)}&per_page=5`, {
-            headers: { Authorization: `Basic ${wcAuth}` }
-        });
-        const results = await searchResp.json();
-        if (Array.isArray(results)) {
-            wcCustomer = results.find(c => 
-                c.billing?.phone === phone || c.shipping?.phone === phone
-            ) || null;
+        // Normalize phone: extract 10-digit local number (handles MX formats)
+        const phoneDigits = phone.replace(/\D/g, '');
+        let phoneLocal = phoneDigits;
+        if (phoneDigits.startsWith('521') && phoneDigits.length === 13) {
+            phoneLocal = phoneDigits.slice(3); // +52 1 XXXXXXXXXX
+        } else if (phoneDigits.startsWith('52') && phoneDigits.length === 12) {
+            phoneLocal = phoneDigits.slice(2); // +52 XXXXXXXXXX
+        } else if (phoneDigits.length > 10) {
+            phoneLocal = phoneDigits.slice(-10);
+        }
+
+        // Search with multiple phone variants
+        const phoneVariants = new Set([phoneLocal, phoneDigits, phone]);
+        for (const pv of phoneVariants) {
+            if (wcCustomer) break;
+            const searchResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers?search=${encodeURIComponent(pv)}&per_page=10`, {
+                headers: { Authorization: `Basic ${wcAuth}` }
+            });
+            const results = await searchResp.json();
+            if (Array.isArray(results)) {
+                wcCustomer = results.find((c: any) => {
+                    const billingLocal = c.billing?.phone?.replace(/\D/g, '').slice(-10);
+                    const shippingLocal = c.shipping?.phone?.replace(/\D/g, '').slice(-10);
+                    return billingLocal === phoneLocal || shippingLocal === phoneLocal;
+                }) || null;
+            }
         }
     }
     
