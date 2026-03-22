@@ -21,7 +21,7 @@ import { db } from '../db';
 // Types
 // ─────────────────────────────────────────────
 
-export type UserRole = 'director' | 'gerente' | 'operador';
+export type UserRole = 'superadmin' | 'director' | 'gerente' | 'operador';
 
 export interface AuthPayload {
     agent_id: string;
@@ -40,7 +40,7 @@ declare global {
 }
 
 // Role hierarchy: higher index = more permissions
-const ROLE_HIERARCHY: UserRole[] = ['operador', 'gerente', 'director'];
+const ROLE_HIERARCHY: UserRole[] = ['operador', 'gerente', 'director', 'superadmin'];
 
 function roleLevel(role: UserRole): number {
     return ROLE_HIERARCHY.indexOf(role);
@@ -55,6 +55,7 @@ function normalizeRole(dbRole: string): UserRole {
         director: 'director',
         gerente: 'gerente',
         operador: 'operador',
+        superadmin: 'superadmin',
     };
     return map[dbRole] || 'operador';
 }
@@ -158,8 +159,8 @@ export function requireRole(minimumRole: UserRole) {
 export function scopeToAgent(req: Request, _res: Response, next: NextFunction): void {
     if (!req.agent) { next(); return; }
 
-    // Directors see everything
-    if (req.agent.role === 'director') {
+    // Superadmins and Directors see everything
+    if (req.agent.role === 'superadmin' || req.agent.role === 'director') {
         next();
         return;
     }

@@ -217,6 +217,7 @@ export default function SettingsPage() {
                         { key: 'respuestas', label: 'Respuestas Rápidas', icon: <Zap className="w-4 h-4" /> },
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
                         { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
+                        { key: 'mail', label: 'Correo del Sistema', icon: <Globe className="w-4 h-4" /> },
                     ].map(t => (
                         <button
                             key={t.key}
@@ -244,6 +245,7 @@ export default function SettingsPage() {
                 {activeTab === 'asignacion' && <AssignmentRulesPage />}
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
+                {activeTab === 'mail' && <MailConfigTab />}
             </div>
         </div>
     );
@@ -2970,6 +2972,240 @@ function KnowledgeBaseTab() {
         <div className="p-10 max-w-3xl">
             <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
             <p className="text-slate-500 text-sm mt-1">Próximamente disponible.</p>
+        </div>
+    );
+}
+
+// ── Mail Config Tab ─────────────────────────────────────────────────────────
+function MailConfigTab() {
+    const [config, setConfig] = useState({
+        email: '',
+        password: '',
+        smtp_host: '',
+        smtp_port: 465,
+        smtp_encryption: 'SSL/TLS',
+        imap_host: '',
+        imap_port: 993,
+        imap_encryption: 'SSL/TLS',
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await apiFetch('/api/auth/settings/mail');
+                const data = await res.json();
+                if (data.ok && data.data) {
+                    setConfig(prev => ({
+                        ...prev,
+                        email: data.data.email || '',
+                        smtp_host: data.data.smtp_host || '',
+                        smtp_port: data.data.smtp_port || 465,
+                        smtp_encryption: data.data.smtp_encryption || 'SSL/TLS',
+                        imap_host: data.data.imap_host || '',
+                        imap_port: data.data.imap_port || 993,
+                        imap_encryption: data.data.imap_encryption || 'SSL/TLS',
+                        // Don't overwrite password field with masked value
+                    }));
+                }
+            } catch { /* first time — no config yet */ }
+            setLoading(false);
+        })();
+    }, []);
+
+    async function handleSave() {
+        setSaving(true);
+        setMsg(null);
+        try {
+            const res = await apiFetch('/api/auth/settings/mail', {
+                method: 'POST',
+                body: JSON.stringify(config),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                setMsg({ type: 'ok', text: 'Configuracion guardada correctamente' });
+            } else {
+                setMsg({ type: 'err', text: data.error || 'Error al guardar' });
+            }
+        } catch {
+            setMsg({ type: 'err', text: 'Error de conexion' });
+        }
+        setSaving(false);
+    }
+
+    async function handleTest() {
+        setTesting(true);
+        setMsg(null);
+        try {
+            const res = await apiFetch('/api/auth/settings/mail/test', { method: 'POST' });
+            const data = await res.json();
+            if (data.ok) {
+                setMsg({ type: 'ok', text: 'Conexion SMTP exitosa' });
+            } else {
+                setMsg({ type: 'err', text: data.error || 'Error de conexion SMTP' });
+            }
+        } catch {
+            setMsg({ type: 'err', text: 'Error de conexion' });
+        }
+        setTesting(false);
+    }
+
+    if (loading) return <div className="p-10 flex items-center gap-2 text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /> Cargando...</div>;
+
+    return (
+        <div className="p-10 max-w-2xl">
+            <h3 className="text-2xl font-bold text-slate-800">Correo del Sistema</h3>
+            <p className="text-slate-500 text-sm mt-1 mb-6">
+                Configura la cuenta de correo que el CRM usara para enviar notificaciones, recuperacion de contrasena y alertas.
+            </p>
+
+            {msg && (
+                <div className={`mb-4 p-3 rounded-lg text-sm ${msg.type === 'ok' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                    {msg.text}
+                </div>
+            )}
+
+            {/* Account */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
+                <h4 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <Globe className="w-4 h-4" /> Cuenta de Correo
+                </h4>
+                <div className="grid grid-cols-1 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Correo electronico</label>
+                        <input
+                            type="email"
+                            value={config.email}
+                            onChange={e => setConfig(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="crm-master@amunet.com.mx"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena</label>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={config.password}
+                                onChange={e => setConfig(prev => ({ ...prev, password: e.target.value }))}
+                                placeholder="Contrasena de la cuenta de correo"
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* SMTP */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
+                <h4 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <Share2 className="w-4 h-4" /> Servidor de Salida (SMTP)
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Servidor</label>
+                        <input
+                            type="text"
+                            value={config.smtp_host}
+                            onChange={e => setConfig(prev => ({ ...prev, smtp_host: e.target.value }))}
+                            placeholder="mail.amunet.com.mx"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Puerto</label>
+                        <input
+                            type="number"
+                            value={config.smtp_port}
+                            onChange={e => setConfig(prev => ({ ...prev, smtp_port: parseInt(e.target.value) || 465 }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Cifrado</label>
+                        <select
+                            value={config.smtp_encryption}
+                            onChange={e => setConfig(prev => ({ ...prev, smtp_encryption: e.target.value }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="SSL/TLS">SSL/TLS</option>
+                            <option value="STARTTLS">STARTTLS</option>
+                            <option value="None">Sin cifrado</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* IMAP */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 mb-4">
+                <h4 className="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                    <Share2 className="w-4 h-4" /> Servidor de Entrada (IMAP)
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Servidor</label>
+                        <input
+                            type="text"
+                            value={config.imap_host}
+                            onChange={e => setConfig(prev => ({ ...prev, imap_host: e.target.value }))}
+                            placeholder="mail.amunet.com.mx"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Puerto</label>
+                        <input
+                            type="number"
+                            value={config.imap_port}
+                            onChange={e => setConfig(prev => ({ ...prev, imap_port: parseInt(e.target.value) || 993 }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Cifrado</label>
+                        <select
+                            value={config.imap_encryption}
+                            onChange={e => setConfig(prev => ({ ...prev, imap_encryption: e.target.value }))}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="SSL/TLS">SSL/TLS</option>
+                            <option value="STARTTLS">STARTTLS</option>
+                            <option value="None">Sin cifrado</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+                <button
+                    onClick={handleSave}
+                    disabled={saving || !config.email || !config.password || !config.smtp_host}
+                    className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+                >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Guardar Configuracion
+                </button>
+                <button
+                    onClick={handleTest}
+                    disabled={testing}
+                    className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg hover:bg-slate-200 transition-colors font-medium disabled:opacity-50 flex items-center gap-2"
+                >
+                    {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    Probar Conexion
+                </button>
+            </div>
         </div>
     );
 }
