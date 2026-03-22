@@ -17,8 +17,9 @@
 ALTER TABLE agents DROP CONSTRAINT IF EXISTS agents_role_check;
 
 -- Luego, añadimos el nuevo constraint con 'superadmin' incluido
+-- Incluye tanto nombres legacy (admin/supervisor/agent) como normalizados (director/gerente/operador)
 ALTER TABLE agents ADD CONSTRAINT agents_role_check
-    CHECK (role IN ('superadmin', 'admin', 'supervisor', 'agent'));
+    CHECK (role IN ('superadmin', 'admin', 'supervisor', 'agent', 'director', 'gerente', 'operador'));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Agregar columnas de password reset a agents
