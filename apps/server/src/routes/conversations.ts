@@ -455,7 +455,7 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                                  ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
                                 [customerId, email]
                             );
-                            attrsMap['email'] = email;
+                            attrsMap['email'] = email!;
                         }
 
                         console.log(`[WC Auto-Link] Customer ${customerId} linked to WC #${wc_customer_id} via phone ${phone}`);
