@@ -88,6 +88,12 @@ export default function Sidebar() {
                     <LogOut className="w-5 h-5 shrink-0" />
                     <span className="hidden md:inline text-sm font-medium">Cerrar sesión</span>
                 </button>
+                {/* Build version indicator */}
+                <div className="mt-2 px-2 hidden md:block">
+                    <span className="text-[10px] text-slate-600 font-mono">
+                        v{process.env.NEXT_PUBLIC_BUILD_VERSION || 'dev'}
+                    </span>
+                </div>
             </div>
         </aside>
     );

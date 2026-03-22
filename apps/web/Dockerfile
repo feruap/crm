@@ -3,6 +3,10 @@ FROM node:20-alpine AS base
 
 FROM base AS builder
 WORKDIR /app
+
+ARG BUILD_VERSION=dev
+ENV NEXT_PUBLIC_BUILD_VERSION=$BUILD_VERSION
+
 COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
 RUN npm install
