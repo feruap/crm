@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { MulterError } from 'multer';
 import { db } from '../db';
 import { requireAuth } from '../middleware/auth';
 import multer from 'multer';
@@ -174,7 +175,7 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
 
     fs.createReadStream(req.file.path)
         .pipe(csv())
-        .on('data', (data) => results.push(data))
+        .on('data', (data: any) => results.push(data))
         .on('end', async () => {
             try {
                 for (const row of results) {
@@ -211,7 +212,7 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
 
 
 // PUT /api/customers/:id/shipping ? bulk-save WooCommerce shipping fields
-router.put('/:id/shipping', async (req, res) => {
+router.put('/:id/shipping', async (req: Request, res: Response) => {
     const { id } = req.params;
     const fields = req.body; // { first_name, last_name, address_1, ... }
     const ALLOWED = ['first_name','last_name','email','phone','address_1','address_2','city','state','postcode','country','wc_customer_id'];
@@ -240,7 +241,7 @@ router.put('/:id/shipping', async (req, res) => {
 });
 
 // POST /api/customers/:id/wc-sync ? search or create WooCommerce customer
-router.post('/:id/wc-sync', async (req, res) => {
+router.post('/:id/wc-sync', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { shipping } = req.body; // WC shipping fields from frontend
     

@@ -1,5 +1,5 @@
 import { Server as HttpServer } from 'http';
-import { Server as SocketServer } from 'socket.io';
+import { Server as SocketServer, Socket } from 'socket.io';
 
 let io: SocketServer;
 
@@ -8,7 +8,7 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string): SocketSe
         cors: { origin: corsOrigin, methods: ['GET', 'POST'] },
     });
 
-    io.on('connection', (socket) => {
+    io.on('connection', (socket: Socket) => {
         console.log(`Socket connected: ${socket.id}`);
 
         // Agent joins their personal room and their conversations

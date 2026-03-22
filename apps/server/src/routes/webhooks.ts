@@ -86,7 +86,7 @@ async function resolveOrCreateConversation(
     return { conversationId: conv.rows[0].id, isNew: true };
 }
 
-async function handleBotResponse(
+export async function handleBotResponse(
     conversationId: string,
     channelId: string,
     customerId: string,

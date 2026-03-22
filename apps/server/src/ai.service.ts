@@ -250,7 +250,7 @@ export async function getMedicalBotResponse(
         productCatalog: catalog.rows,
         customerProfile,
         recommendations,
-        knowledgeContext: medicalContext || undefined,
+        knowledgeContext: medicalContext?.context || undefined,
     });
 
     // 8. Generate response with full medical context
