@@ -60,6 +60,15 @@ async function getMetaAccessToken(): Promise<string | null> {
     return process.env.META_ACCESS_TOKEN || null;
 }
 
+// Helper: get Meta Ad Account ID (DB takes priority, then env)
+async function getMetaAdAccountId(): Promise<string | null> {
+    try {
+        const row = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_ad_account_id' LIMIT 1`);
+        if (row.rows[0]?.value) return row.rows[0].value;
+    } catch { /* ignore */ }
+    return process.env.META_AD_ACCOUNT_ID || null;
+}
+
 // GET /api/campaigns/meta-token — check token status
 router.get('/meta-token', async (_req: Request, res: Response) => {
     try {
@@ -125,6 +134,37 @@ router.post('/meta-token', async (req: Request, res: Response) => {
             [token]
         );
         res.json({ ok: true, message: 'Token de Meta guardado correctamente' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/campaigns/meta-ad-account — get configured ad account ID
+router.get('/meta-ad-account', async (_req: Request, res: Response) => {
+    try {
+        const accountId = await getMetaAdAccountId();
+        res.json({ configured: !!accountId, account_id: accountId || null });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/campaigns/meta-ad-account — save ad account ID
+router.post('/meta-ad-account', async (req: Request, res: Response) => {
+    try {
+        const { account_id } = req.body;
+        if (!account_id || typeof account_id !== 'string') {
+            res.status(400).json({ error: 'account_id es requerido' });
+            return;
+        }
+        // Strip act_ prefix if present for storage
+        const cleanId = account_id.replace(/^act_/, '');
+        await db.query(
+            `INSERT INTO business_settings (key, value) VALUES ('meta_ad_account_id', $1)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [cleanId]
+        );
+        res.json({ ok: true, message: 'Meta Ad Account ID guardado correctamente', account_id: cleanId });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -211,8 +251,8 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
     try {
         let adAccounts: any[] = [];
 
-        // If META_AD_ACCOUNT_ID is set, use it directly (works with System User tokens)
-        const directAccountId = process.env.META_AD_ACCOUNT_ID;
+        // If meta_ad_account_id is configured (DB or env), use it directly (works with System User tokens)
+        const directAccountId = await getMetaAdAccountId();
         if (directAccountId) {
             const actId = directAccountId.startsWith('act_') ? directAccountId : `act_${directAccountId}`;
             adAccounts = [{ id: actId, account_id: directAccountId.replace('act_', ''), name: 'Direct Account' }];
@@ -229,7 +269,7 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
         }
 
         if (adAccounts.length === 0) {
-            res.json({ imported: 0, message: 'No ad accounts found. Set META_AD_ACCOUNT_ID env var if using a System User token.' });
+            res.json({ imported: 0, message: 'No se encontraron cuentas de anuncios. Configura el Ad Account ID en Ajustes → Integraciones → Meta.' });
             return;
         }
 
