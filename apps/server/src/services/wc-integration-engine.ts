@@ -13,6 +13,7 @@
  */
 
 import { db } from '../db';
+import { createWCOrder as wcCreateOrder, type CreateOrderRequest } from './woocommerce';
 
 // ─────────────────────────────────────────────
 // Types
@@ -185,6 +186,145 @@ export function generateWCCartLink(params: GenerateCartLinkParams): string {
     }
 
     return url.toString();
+}
+
+// ─────────────────────────────────────────────
+// Order Creation from Bot / CRM
+// ─────────────────────────────────────────────
+
+export interface BotOrderParams {
+    items: Array<{
+        productId: number;          // CRM medical_products.id
+        wcProductId: number;        // WooCommerce product ID
+        quantity: number;
+        unitPrice?: number;         // Override price (B2B)
+    }>;
+    customer: {
+        email?: string;
+        name?: string;
+        phone?: string;
+        company?: string;
+    };
+    agentId?: string;
+    campaignId?: string;
+    conversationId?: string;
+    couponCode?: string;
+}
+
+export interface BotOrderResult {
+    success: boolean;
+    wcOrderId?: number;
+    total?: string;
+    paymentUrl?: string;
+    message: string;
+    error?: string;
+}
+
+/**
+ * Create a WooCommerce order from the bot or CRM agent.
+ * Maps CRM product IDs → WC product IDs and calls WC REST API.
+ * Returns a payment URL the customer can use to complete the purchase.
+ */
+export async function createOrderFromBot(params: BotOrderParams): Promise<BotOrderResult> {
+    try {
+        const WC_STORE_URL = process.env.WC_STORE_URL || 'http://testamunet.local';
+
+        // Validate items have WC product IDs
+        const invalidItems = params.items.filter(i => !i.wcProductId);
+        if (invalidItems.length > 0) {
+            return {
+                success: false,
+                message: 'Algunos productos no tienen ID de WooCommerce configurado. No se puede crear la orden.',
+                error: `Missing wcProductId for ${invalidItems.length} items`,
+            };
+        }
+
+        // Build WC order request
+        const orderRequest: CreateOrderRequest = {
+            line_items: params.items.map(item => ({
+                product_id: item.wcProductId,
+                quantity: item.quantity,
+                ...(item.unitPrice !== undefined ? { price: item.unitPrice } : {}),
+            })),
+            meta_data: [
+                { key: '_crm_source', value: 'bot' },
+                ...(params.campaignId ? [{ key: '_crm_campaign_id', value: params.campaignId }] : []),
+                ...(params.conversationId ? [{ key: '_crm_conversation_id', value: params.conversationId }] : []),
+            ],
+            agent_id: params.agentId,
+        };
+
+        // Add billing info if available
+        if (params.customer.email || params.customer.name || params.customer.phone) {
+            const nameParts = (params.customer.name || '').split(' ');
+            orderRequest.billing = {
+                first_name: nameParts[0] || '',
+                last_name: nameParts.slice(1).join(' ') || '',
+                email: params.customer.email || '',
+                phone: params.customer.phone || '',
+                company: params.customer.company || '',
+                country: 'MX',
+            };
+        }
+
+        // Add coupon if provided
+        if (params.couponCode) {
+            orderRequest.coupon_lines = [{ code: params.couponCode }];
+        }
+
+        // Call the lower-level WC service
+        const result = await wcCreateOrder(orderRequest);
+
+        if (!result.ok) {
+            return {
+                success: false,
+                message: 'Error creando la orden en WooCommerce. Por favor intenta de nuevo.',
+                error: result.error,
+            };
+        }
+
+        // Generate payment URL
+        const paymentUrl = `${WC_STORE_URL}/checkout/order-pay/${result.wc_order_id}/?pay_for_order=true&key=`;
+
+        // Track attribution if we have conversation context
+        if (params.conversationId && params.customer.email) {
+            try {
+                await attributeOrderToConversation({
+                    orderId: String(result.wc_order_id),
+                    orderEmail: params.customer.email,
+                    orderPhone: params.customer.phone || '',
+                    orderTotal: parseFloat(result.total || '0'),
+                    orderMeta: {
+                        utm_source: 'crm_bot',
+                        utm_campaign: params.campaignId || '',
+                        salesking_agent: params.agentId || '',
+                    },
+                });
+            } catch (err) {
+                console.error('[Order Attribution Error]', err);
+            }
+        }
+
+        // Build summary for bot response
+        const itemsSummary = params.items
+            .map(i => `${i.quantity}x producto #${i.wcProductId}`)
+            .join(', ');
+
+        return {
+            success: true,
+            wcOrderId: result.wc_order_id,
+            total: result.total,
+            paymentUrl,
+            message: `Orden #${result.wc_order_id} creada exitosamente por $${result.total} MXN (${itemsSummary}). El cliente puede completar el pago en la tienda.`,
+        };
+    } catch (err) {
+        console.error('[Create Order From Bot Error]', err);
+        return {
+            success: false,
+            message: 'Error inesperado al crear la orden. Un agente humano te asistirá.',
+            error: String(err),
+        };
+    }
 }
 
 // ─────────────────────────────────────────────
