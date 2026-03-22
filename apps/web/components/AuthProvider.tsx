@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.
 // Types
 // ─────────────────────────────────────────────
 
-export type UserRole = 'director' | 'gerente' | 'operador';
+export type UserRole = 'superadmin' | 'director' | 'gerente' | 'operador';
 
 interface Agent {
     id: string;
@@ -35,7 +35,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Role Helpers
 // ─────────────────────────────────────────────
 
-const ROLE_LEVELS: Record<UserRole, number> = { operador: 0, gerente: 1, director: 2 };
+const ROLE_LEVELS: Record<UserRole, number> = { operador: 0, gerente: 1, director: 2, superadmin: 3 };
 
 function checkRole(agentRole: UserRole | undefined, minimumRole: UserRole): boolean {
     if (!agentRole) return false;
