@@ -29,6 +29,7 @@ import {
     getOrderWithKanbanState,
     mapWCStatusToKanban,
     requestSKDiscount,
+    createOrderFromBot,
     CustomerWCContext,
 } from './wc-integration-engine';
 
@@ -745,6 +746,66 @@ export async function handleIncomingMessage(params: {
             const orderProducts = await findMatchingProducts(message);
             const clientInfo = await getClientClassification(customerId);
 
+            // Check if the message contains order-ready data (email, quantity)
+            const emailMatch = message.match(/[\w.-]+@[\w.-]+\.\w+/);
+            const qtyMatch = message.match(/(\d+)\s*(cajas?|piezas?|unidades?|paquetes?)/i);
+            const phoneMatch = message.match(/\b\d{10,13}\b/);
+
+            // If we have a product + email (minimal data to create order)
+            if (orderProducts.length > 0 && emailMatch) {
+                const p = orderProducts[0];
+                const quantity = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+
+                if (p.wc_product_id) {
+                    try {
+                        const unitPrice = clientInfo.classification === 'laboratorio' && p.precio_laboratorio
+                            ? p.precio_laboratorio
+                            : p.precio_publico || undefined;
+
+                        const orderResult = await createOrderFromBot({
+                            items: [{
+                                productId: p.id,
+                                wcProductId: p.wc_product_id,
+                                quantity,
+                                unitPrice: unitPrice ?? undefined,
+                            }],
+                            customer: {
+                                email: emailMatch[0],
+                                phone: phoneMatch ? phoneMatch[0] : undefined,
+                                name: '', // Will be filled by WC checkout
+                            },
+                            agentId: undefined,
+                            conversationId: conversationId || undefined,
+                            campaignId: undefined,
+                        });
+
+                        if (orderResult.success) {
+                            return {
+                                message: `¡Orden creada exitosamente!\n\nOrden #${orderResult.wcOrderId}\nProducto: ${p.name}\nCantidad: ${quantity}\nTotal: $${orderResult.total} MXN\n\nPuede completar su pago en nuestra tienda en línea. ¿Necesita algo más?`,
+                                confidence: 0.95,
+                                intent_type: 'ORDER_CREATE',
+                                action_type: 'reply',
+                            };
+                        } else {
+                            // Fall back to cart link
+                            const cartLink = generateWCCartLink({
+                                productIds: [{ wcProductId: p.wc_product_id, quantity }],
+                                agentId: '',
+                            });
+                            return {
+                                message: `No pude crear la orden automáticamente, pero aquí tiene un link directo para su compra:\n\n${cartLink}\n\nProducto: ${p.name} x${quantity}\n\n¿Necesita ayuda con algo más?`,
+                                confidence: 0.85,
+                                intent_type: 'ORDER_CREATE',
+                                action_type: 'reply',
+                            };
+                        }
+                    } catch (err) {
+                        console.error('[ORDER_CREATE auto-create error]', err);
+                    }
+                }
+            }
+
+            // If we have a product but no email yet — ask for data
             if (orderProducts.length > 0) {
                 const p = orderProducts[0];
                 const price = clientInfo.classification === 'laboratorio' && p.precio_laboratorio
@@ -753,8 +814,13 @@ export async function handleIncomingMessage(params: {
                         ? `$${p.precio_publico}`
                         : 'disponible en nuestra tienda';
 
+                // If product has WC ID, also offer cart link
+                const cartLinkNote = p.wc_product_id
+                    ? `\n\nTambién puede comprar directamente aquí:\n${generateWCCartLink({ productIds: [{ wcProductId: p.wc_product_id, quantity: 1 }], agentId: '' })}`
+                    : '';
+
                 return {
-                    message: `¡Perfecto! Para la ${p.name} (${price}), necesito los siguientes datos para crear su pedido:\n\n1. Nombre completo\n2. Email\n3. Teléfono\n4. Dirección de envío\n5. Cantidad de cajas\n\nO si prefiere, un asesor puede preparar un carrito personalizado con link de pago directo. ¿Cómo desea proceder?`,
+                    message: `¡Perfecto! Para la ${p.name} (${price}), necesito los siguientes datos para crear su pedido:\n\n1. Nombre completo\n2. Email\n3. Teléfono\n4. Cantidad de cajas\n\nO si prefiere, un asesor puede preparar un carrito personalizado con link de pago directo.${cartLinkNote}`,
                     confidence: 0.9,
                     intent_type: 'ORDER_CREATE',
                     action_type: 'reply',
