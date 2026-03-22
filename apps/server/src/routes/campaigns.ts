@@ -51,13 +51,158 @@ router.get('/:id/attributions', async (req: Request, res: Response) => {
     res.json(result.rows);
 });
 
+// Helper: get Meta access token (DB takes priority, then env)
+async function getMetaAccessToken(): Promise<string | null> {
+    try {
+        const row = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_access_token' LIMIT 1`);
+        if (row.rows[0]?.value) return row.rows[0].value;
+    } catch { /* ignore */ }
+    return process.env.META_ACCESS_TOKEN || null;
+}
+
+// GET /api/campaigns/meta-token — check token status
+router.get('/meta-token', async (_req: Request, res: Response) => {
+    try {
+        const token = await getMetaAccessToken();
+        if (!token) {
+            res.json({ configured: false, valid: false, source: null });
+            return;
+        }
+        // Check if DB or env
+        const dbRow = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_access_token' LIMIT 1`).catch(() => ({ rows: [] }));
+        const source = dbRow.rows[0]?.value ? 'database' : 'env';
+        // Validate token with a lightweight Graph API call
+        try {
+            const resp = await axios.get(`https://graph.facebook.com/v21.0/me`, {
+                params: { access_token: token, fields: 'id,name' },
+                timeout: 10000,
+            });
+            const masked = token.substring(0, 10) + '...' + token.substring(token.length - 6);
+            res.json({
+                configured: true,
+                valid: true,
+                source,
+                masked_token: masked,
+                meta_user: resp.data?.name || resp.data?.id || null,
+            });
+        } catch (apiErr: any) {
+            const masked = token.substring(0, 10) + '...' + token.substring(token.length - 6);
+            res.json({
+                configured: true,
+                valid: false,
+                source,
+                masked_token: masked,
+                error: apiErr.response?.data?.error?.message || 'Token validation failed',
+            });
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/campaigns/meta-token — save token manually
+router.post('/meta-token', async (req: Request, res: Response) => {
+    try {
+        const { token } = req.body;
+        if (!token || typeof token !== 'string' || !token.startsWith('EAA')) {
+            res.status(400).json({ error: 'Token inválido. Debe iniciar con EAA...' });
+            return;
+        }
+        // Validate before saving
+        try {
+            await axios.get(`https://graph.facebook.com/v21.0/me`, {
+                params: { access_token: token, fields: 'id,name' },
+                timeout: 10000,
+            });
+        } catch (apiErr: any) {
+            res.status(400).json({ error: `Token no válido: ${apiErr.response?.data?.error?.message || apiErr.message}` });
+            return;
+        }
+        // Save to business_settings
+        await db.query(
+            `INSERT INTO business_settings (key, value) VALUES ('meta_access_token', $1)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [token]
+        );
+        res.json({ ok: true, message: 'Token de Meta guardado correctamente' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/campaigns/meta-token — remove saved token
+router.delete('/meta-token', async (_req: Request, res: Response) => {
+    try {
+        await db.query(`DELETE FROM business_settings WHERE key = 'meta_access_token'`);
+        res.json({ ok: true, message: 'Token de Meta eliminado' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/campaigns/google-config — save Google Ads developer token & MCC ID
+router.post('/google-config', async (req: Request, res: Response) => {
+    try {
+        const { developer_token, mcc_id } = req.body;
+        if (developer_token) {
+            await db.query(
+                `INSERT INTO business_settings (key, value) VALUES ('google_developer_token', $1)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                [developer_token]
+            );
+        }
+        if (mcc_id) {
+            await db.query(
+                `INSERT INTO business_settings (key, value) VALUES ('google_ads_mcc_id', $1)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+                [mcc_id]
+            );
+        }
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/campaigns/google-token — check Google token status
+router.get('/google-token', async (_req: Request, res: Response) => {
+    try {
+        const rtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_refresh_token' LIMIT 1`).catch(() => ({ rows: [] }));
+        const dtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_developer_token' LIMIT 1`).catch(() => ({ rows: [] }));
+        const mccRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_ads_mcc_id' LIMIT 1`).catch(() => ({ rows: [] }));
+
+        const hasRefresh = !!(rtRow.rows[0]?.value || process.env.GOOGLE_ADS_REFRESH_TOKEN);
+        const hasDev = !!(dtRow.rows[0]?.value || process.env.GOOGLE_DEVELOPER_TOKEN);
+        const mccId = mccRow.rows[0]?.value || process.env.GOOGLE_ADS_MCC_ID || null;
+
+        res.json({
+            configured: hasRefresh && hasDev,
+            connected: hasRefresh,
+            developer_token_set: hasDev,
+            mcc_id: mccId,
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/campaigns/google-token — disconnect Google
+router.delete('/google-token', async (_req: Request, res: Response) => {
+    try {
+        await db.query(`DELETE FROM business_settings WHERE key IN ('google_refresh_token', 'google_developer_token', 'google_ads_mcc_id')`);
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/campaigns/sync-facebook
 // Imports campaigns from Meta Ads API using the configured access token
 // Supports META_AD_ACCOUNT_ID env var for direct ad account access (System User tokens)
 router.post('/sync-facebook', async (_req: Request, res: Response) => {
-    const accessToken = process.env.META_ACCESS_TOKEN;
+    const accessToken = await getMetaAccessToken();
     if (!accessToken) {
-        res.status(400).json({ error: 'META_ACCESS_TOKEN not configured' });
+        res.status(400).json({ error: 'META_ACCESS_TOKEN no configurado. Ve a Ajustes → Integraciones para agregar tu token.' });
         return;
     }
 
