@@ -339,6 +339,113 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
         if (!phone && attrsMap['phone']) phone = attrsMap['phone'];
         if (!email && attrsMap['email']) email = attrsMap['email'];
 
+        // If already linked via attributes, use that
+        if (!wc_customer_id && attrsMap['wc_customer_id']) {
+            wc_customer_id = attrsMap['wc_customer_id'];
+        }
+
+        // ── Auto-lookup WooCommerce customer by phone (WhatsApp) ──
+        // If we have a phone but no WC link, search WooCommerce automatically
+        let wcAutoLinked = false;
+        if (!wc_customer_id && phone) {
+            try {
+                const wcUrl = process.env.WC_URL;
+                const wcKey = process.env.WC_KEY;
+                const wcSecret = process.env.WC_SECRET;
+
+                if (wcUrl && wcKey && wcSecret) {
+                    const wcAuth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+                    const headers = { Authorization: `Basic ${wcAuth}` };
+                    let wcCustomer: any = null;
+
+                    // 1. Search by phone number
+                    const phoneClean = phone.replace(/\D/g, ''); // strip non-digits
+                    const phoneVariants = [phone, phoneClean];
+                    // Also try without country code (e.g. 5212225051752 → 2225051752)
+                    if (phoneClean.length > 10) {
+                        phoneVariants.push(phoneClean.slice(-10));
+                    }
+
+                    for (const pv of phoneVariants) {
+                        if (wcCustomer) break;
+                        const searchResp = await fetch(
+                            `${wcUrl}/wp-json/wc/v3/customers?search=${encodeURIComponent(pv)}&per_page=10`,
+                            { headers }
+                        );
+                        if (searchResp.ok) {
+                            const results = await searchResp.json();
+                            if (Array.isArray(results)) {
+                                wcCustomer = results.find((wc: any) =>
+                                    wc.billing?.phone?.replace(/\D/g, '').endsWith(phoneClean.slice(-10)) ||
+                                    wc.shipping?.phone?.replace(/\D/g, '').endsWith(phoneClean.slice(-10))
+                                ) || null;
+                            }
+                        }
+                    }
+
+                    // 2. If not found by phone but we have email, try email
+                    if (!wcCustomer && email) {
+                        const emailResp = await fetch(
+                            `${wcUrl}/wp-json/wc/v3/customers?email=${encodeURIComponent(email)}&per_page=1`,
+                            { headers }
+                        );
+                        if (emailResp.ok) {
+                            const results = await emailResp.json();
+                            if (Array.isArray(results) && results.length > 0) {
+                                wcCustomer = results[0];
+                            }
+                        }
+                    }
+
+                    // 3. If found, link and import data
+                    if (wcCustomer) {
+                        wc_customer_id = String(wcCustomer.id);
+                        wcAutoLinked = true;
+
+                        // Save wc_customer_id in attributes
+                        await db.query(
+                            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                             VALUES ($1, 'wc_customer_id', $2, 'string')
+                             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                            [customerId, wc_customer_id]
+                        );
+
+                        // Import WC shipping/billing data
+                        const wcData = wcCustomer.shipping?.first_name ? wcCustomer.shipping : wcCustomer.billing || {};
+                        const importFields = ['first_name', 'last_name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone'];
+                        for (const key of importFields) {
+                            if (wcData[key]) {
+                                await db.query(
+                                    `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                                     VALUES ($1, $2, $3, 'string')
+                                     ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                                    [customerId, key, wcData[key]]
+                                );
+                                attrsMap[key] = wcData[key];
+                            }
+                        }
+
+                        // Import email from WC if we didn't have one
+                        if (!email && wcCustomer.email && !wcCustomer.email.includes('@placeholder')) {
+                            email = wcCustomer.email;
+                            await db.query(
+                                `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                                 VALUES ($1, 'email', $2, 'string')
+                                 ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                                [customerId, email]
+                            );
+                            attrsMap['email'] = email;
+                        }
+
+                        console.log(`[WC Auto-Link] Customer ${customerId} linked to WC #${wc_customer_id} via phone ${phone}`);
+                    }
+                }
+            } catch (wcErr) {
+                // Non-critical: log but don't fail the response
+                console.error('[WC Auto-Link] Error searching WooCommerce:', wcErr);
+            }
+        }
+
         res.json({
             id: c.id,
             name: c.name,
@@ -346,6 +453,7 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
             email,
             created_at: c.created_at,
             wc_customer_id,
+            wc_auto_linked: wcAutoLinked,
             shipping,
             orders: orders.rows,
             segments: segments.rows,
