@@ -122,13 +122,17 @@ router.post('/message', async (req: Request, res: Response) => {
     );
     const message = msgResult.rows[0];
 
-    // Emit via Socket.io — inbox sees it instantly
-    emitNewMessage(conversationId, message);
-    emitConversationUpdated(conversationId, {
-        last_message: content,
-        last_message_at: message.created_at,
-    });
-    getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+    // Emit via Socket.io — inbox sees it instantly (non-critical, don't fail if not initialized)
+    try {
+        emitNewMessage(conversationId, message);
+        emitConversationUpdated(conversationId, {
+            last_message: content,
+            last_message_at: message.created_at,
+        });
+        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+    } catch (socketErr) {
+        console.warn('[Simulator] Socket.io not available, skipping real-time emit:', (socketErr as Error).message);
+    }
 
     res.json({ conversation_id: conversationId, customer_id: customerId, message });
 
