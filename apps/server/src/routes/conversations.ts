@@ -359,32 +359,25 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                     let wcCustomer: any = null;
 
                     // 1. Normalize phone: extract the 10-digit local number
-                    // Mexican formats:
-                    //   WhatsApp: +5212225051752 (country 52 + mobile prefix 1 + 10 digits)
-                    //             +522225051752  (country 52 + 10 digits, no mobile prefix)
-                    //   WooCommerce: 2225051752   (just 10 local digits)
                     const phoneDigits = phone.replace(/\D/g, '');
-                    let phoneLocal = phoneDigits; // fallback: use as-is
+                    let phoneLocal = phoneDigits;
 
                     if (phoneDigits.startsWith('521') && phoneDigits.length === 13) {
-                        // +52 1 XXXXXXXXXX → remove country code + mobile prefix
                         phoneLocal = phoneDigits.slice(3);
                     } else if (phoneDigits.startsWith('52') && phoneDigits.length === 12) {
-                        // +52 XXXXXXXXXX → remove country code
                         phoneLocal = phoneDigits.slice(2);
                     } else if (phoneDigits.length > 10) {
-                        // Other international: just take last 10
                         phoneLocal = phoneDigits.slice(-10);
                     }
 
-                    // Search WC with different variants (most specific first)
                     const phoneVariants = new Set([phoneLocal, phoneDigits, phone]);
-                    // Also add common WC storage formats
                     if (phoneLocal.length === 10) {
-                        phoneVariants.add(`52${phoneLocal}`);     // 522225051752
-                        phoneVariants.add(`521${phoneLocal}`);    // 5212225051752
+                        phoneVariants.add(`52${phoneLocal}`);
+                        phoneVariants.add(`521${phoneLocal}`);
                     }
 
+                    // Strategy A: Search WC customers by phone (search= only checks name/email,
+                    // but we try anyway in case there's a name match, then verify phone)
                     for (const pv of phoneVariants) {
                         if (wcCustomer) break;
                         const searchResp = await fetch(
@@ -394,7 +387,6 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         if (searchResp.ok) {
                             const results = await searchResp.json();
                             if (Array.isArray(results)) {
-                                // Compare last 10 digits of both sides to match regardless of format
                                 wcCustomer = results.find((wc: any) => {
                                     const wcBillingLocal = wc.billing?.phone?.replace(/\D/g, '').slice(-10);
                                     const wcShippingLocal = wc.shipping?.phone?.replace(/\D/g, '').slice(-10);
@@ -404,8 +396,44 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         }
                     }
 
-                    // 2. If not found by phone but we have email, try email
-                    if (!wcCustomer && email) {
+                    // Strategy B: Search WC ORDERS by phone (orders search= DOES search billing phone)
+                    // Then extract billing/shipping data from the most recent matching order
+                    let wcOrderData: any = null;
+                    if (!wcCustomer) {
+                        for (const pv of phoneVariants) {
+                            if (wcCustomer || wcOrderData) break;
+                            const orderResp = await fetch(
+                                `${wcUrl}/wp-json/wc/v3/orders?search=${encodeURIComponent(pv)}&per_page=5&orderby=date&order=desc`,
+                                { headers }
+                            );
+                            if (orderResp.ok) {
+                                const orders = await orderResp.json();
+                                if (Array.isArray(orders)) {
+                                    const matchingOrder = orders.find((o: any) => {
+                                        const obLocal = o.billing?.phone?.replace(/\D/g, '').slice(-10);
+                                        return obLocal === phoneLocal;
+                                    });
+                                    if (matchingOrder) {
+                                        // If order has a real customer_id (not 0 = guest), fetch the WC customer
+                                        if (matchingOrder.customer_id && matchingOrder.customer_id > 1) {
+                                            const custResp = await fetch(
+                                                `${wcUrl}/wp-json/wc/v3/customers/${matchingOrder.customer_id}`,
+                                                { headers }
+                                            );
+                                            if (custResp.ok) {
+                                                wcCustomer = await custResp.json();
+                                            }
+                                        }
+                                        // Always save order billing/shipping as fallback data
+                                        wcOrderData = matchingOrder;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Strategy C: If not found by phone but we have email, try email on customers
+                    if (!wcCustomer && !wcOrderData && email) {
                         const emailResp = await fetch(
                             `${wcUrl}/wp-json/wc/v3/customers?email=${encodeURIComponent(email)}&per_page=1`,
                             { headers }
@@ -418,9 +446,17 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         }
                     }
 
-                    // 3. If found, link and import data
-                    if (wcCustomer) {
-                        wc_customer_id = String(wcCustomer.id);
+                    // Import data: prefer WC customer profile, fall back to order billing data
+                    const wcSource = wcCustomer || wcOrderData;
+                    if (wcSource) {
+                        if (wcCustomer) {
+                            wc_customer_id = String(wcCustomer.id);
+                        } else if (wcOrderData?.customer_id && wcOrderData.customer_id > 1) {
+                            wc_customer_id = String(wcOrderData.customer_id);
+                        } else {
+                            // Guest order — use order ID as reference with prefix
+                            wc_customer_id = `order_${wcOrderData.id}`;
+                        }
                         wcAutoLinked = true;
 
                         // Save wc_customer_id in attributes
@@ -431,8 +467,10 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                             [customerId, wc_customer_id]
                         );
 
-                        // Import WC shipping/billing data
-                        const wcData = wcCustomer.shipping?.first_name ? wcCustomer.shipping : wcCustomer.billing || {};
+                        // Import shipping/billing data (prefer customer profile, then order data)
+                        const wcData = wcCustomer
+                            ? (wcCustomer.shipping?.first_name ? wcCustomer.shipping : wcCustomer.billing || {})
+                            : (wcSource.shipping?.first_name ? wcSource.shipping : wcSource.billing || {});
                         const importFields = ['first_name', 'last_name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone'];
                         for (const key of importFields) {
                             if (wcData[key]) {
@@ -447,8 +485,9 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         }
 
                         // Import email from WC if we didn't have one
-                        if (!email && wcCustomer.email && !wcCustomer.email.includes('@placeholder')) {
-                            email = wcCustomer.email;
+                        const wcEmail = wcCustomer?.email || wcSource?.billing?.email;
+                        if (!email && wcEmail && !wcEmail.includes('@placeholder')) {
+                            email = wcEmail;
                             await db.query(
                                 `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
                                  VALUES ($1, 'email', $2, 'string')
@@ -458,7 +497,9 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                             attrsMap['email'] = email!;
                         }
 
-                        console.log(`[WC Auto-Link] Customer ${customerId} linked to WC #${wc_customer_id} via phone ${phone}`);
+                        console.log(`[WC Auto-Link] Customer ${customerId} linked to WC #${wc_customer_id} via phone ${phone} (source: ${wcCustomer ? 'customer' : 'order'})`);
+                    } else {
+                        console.log(`[WC Auto-Link] No WC match found for phone ${phone} (local: ${phoneLocal})`);
                     }
                 }
             } catch (wcErr) {
