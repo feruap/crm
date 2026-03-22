@@ -205,7 +205,9 @@ export default function MedicalProductsPage() {
     const [audienceFilter, setAudienceFilter] = useState<'all' | 'medico' | 'laboratorio'>('all');
     const [search, setSearch] = useState('');
     const [syncing, setSyncing] = useState(false);
+    const [syncingProducts, setSyncingProducts] = useState(false);
     const [syncResult, setSyncResult] = useState<any>(null);
+    const [prepFilter, setPrepFilter] = useState<'all' | 'prepared' | 'unprepared'>('all');
     const [activeTab, setActiveTab] = useState<'products' | 'gaps'>('products');
     const [gaps, setGaps] = useState<KnowledgeGap[]>([]);
     const [expandedDetail, setExpandedDetail] = useState<'clinical' | 'pitch' | 'pricing' | null>(null);
@@ -240,6 +242,18 @@ export default function MedicalProductsPage() {
             fetchProducts();
         } catch { setSyncResult({ error: 'Error de conexión' }); }
         finally { setSyncing(false); }
+    }
+
+    async function handleSyncProducts() {
+        setSyncingProducts(true);
+        setSyncResult(null);
+        try {
+            const res = await authFetch(`${API_URL}/api/medical-products/sync-products`, { method: 'POST' });
+            const data = await res.json();
+            setSyncResult({ productSync: true, ...data });
+            fetchProducts();
+        } catch { setSyncResult({ error: 'Error al importar productos de WC' }); }
+        finally { setSyncingProducts(false); }
     }
 
     async function resolveGap(gapId: number, status: string) {
@@ -322,10 +336,32 @@ export default function MedicalProductsPage() {
         fetchProducts();
     }
 
+    // Preparation status check
+    function isPrepared(p: MedicalProduct): boolean {
+        return !!(p.clinical_indications?.length > 0 && p.sample_type && p.precio_publico && parseInt(p.chunk_count || '0') > 0);
+    }
+    function prepScore(p: MedicalProduct): { score: number; total: number; missing: string[] } {
+        const checks = [
+            { ok: !!p.precio_publico, label: 'Precio' },
+            { ok: !!(p.clinical_indications?.length > 0), label: 'Indicaciones' },
+            { ok: !!p.sample_type, label: 'Muestra' },
+            { ok: parseInt(p.chunk_count || '0') > 0, label: 'KB/PDF' },
+            { ok: !!p.pitch_medico || !!p.pitch_laboratorio, label: 'Pitch' },
+            { ok: !!p.sensitivity, label: 'Sensibilidad' },
+        ];
+        return {
+            score: checks.filter(c => c.ok).length,
+            total: checks.length,
+            missing: checks.filter(c => !c.ok).map(c => c.label),
+        };
+    }
+
     // Filter products
     const filtered = products.filter(p => {
         if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (audienceFilter !== 'all' && p.target_audience && !p.target_audience.includes(audienceFilter)) return false;
+        if (prepFilter === 'prepared' && !isPrepared(p)) return false;
+        if (prepFilter === 'unprepared' && isPrepared(p)) return false;
         return true;
     });
 
@@ -336,6 +372,8 @@ export default function MedicalProductsPage() {
         lab: products.filter(p => p.target_audience?.includes('laboratorio')).length,
         withPrice: products.filter(p => p.precio_publico).length,
         withPitch: products.filter(p => p.pitch_medico || p.pitch_laboratorio).length,
+        prepared: products.filter(p => isPrepared(p)).length,
+        unprepared: products.filter(p => !isPrepared(p)).length,
     };
 
     return (
@@ -349,10 +387,15 @@ export default function MedicalProductsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button onClick={handleSyncProducts} disabled={syncingProducts}
+                        className="flex items-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-200 transition-colors font-medium text-sm disabled:opacity-50">
+                        <RefreshCw size={16} className={syncingProducts ? 'animate-spin' : ''} />
+                        {syncingProducts ? 'Importando...' : 'Sync Productos WC'}
+                    </button>
                     <button onClick={handleSync} disabled={syncing}
                         className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors font-medium text-sm disabled:opacity-50">
                         <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-                        {syncing ? 'Sincronizando...' : 'Sync WC Precios'}
+                        {syncing ? 'Sincronizando...' : 'Sync Precios'}
                     </button>
                     <button onClick={openCreate}
                         className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
@@ -366,7 +409,9 @@ export default function MedicalProductsPage() {
                 <div className={`mb-4 p-3 rounded-lg text-sm ${syncResult.error ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700'}`}>
                     {syncResult.error
                         ? `Error: ${syncResult.error}`
-                        : `Sync completado: ${syncResult.synced} productos revisados, ${syncResult.updated} actualizados, ${syncResult.changes?.length || 0} cambios`
+                        : syncResult.productSync
+                            ? `Importación completada: ${syncResult.imported} nuevos productos importados de WC, ${syncResult.skipped} ya existían`
+                            : `Sync completado: ${syncResult.synced} productos revisados, ${syncResult.updated} actualizados, ${syncResult.changes?.length || 0} cambios`
                     }
                     <button onClick={() => setSyncResult(null)} className="ml-2 underline">cerrar</button>
                 </div>
@@ -413,6 +458,23 @@ export default function MedicalProductsPage() {
                             <option value="">Todas las categorías</option>
                             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
+                        {/* Preparation filter */}
+                        <div className="flex rounded-lg border border-slate-300 overflow-hidden">
+                            {[
+                                { key: 'all' as const, label: `Todos (${stats.total})` },
+                                { key: 'prepared' as const, label: `Listos (${stats.prepared})` },
+                                { key: 'unprepared' as const, label: `Sin preparar (${stats.unprepared})` },
+                            ].map(({ key, label }) => (
+                                <button key={key} onClick={() => setPrepFilter(key)}
+                                    className={`px-3 py-2 text-xs font-medium transition-colors ${
+                                        prepFilter === key
+                                            ? key === 'unprepared' ? 'bg-orange-500 text-white' : 'bg-blue-600 text-white'
+                                            : 'bg-white text-slate-600 hover:bg-slate-50'
+                                    }`}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                         {/* Audience filter */}
                         <div className="flex rounded-lg border border-slate-300 overflow-hidden">
                             {[
@@ -567,6 +629,15 @@ export default function MedicalProductsPage() {
                                             <span className="text-sm font-semibold text-slate-800">{p.name}</span>
                                             <CategoryBadge category={p.diagnostic_category} />
                                             <AudienceBadges audiences={p.target_audience} />
+                                            {(() => {
+                                                const ps = prepScore(p);
+                                                if (ps.score === ps.total) return <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Listo</span>;
+                                                return (
+                                                    <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium" title={`Falta: ${ps.missing.join(', ')}`}>
+                                                        {ps.score}/{ps.total} — faltan: {ps.missing.join(', ')}
+                                                    </span>
+                                                );
+                                            })()}
                                             {!p.is_active && <span className="text-xs text-red-500 font-medium">Inactivo</span>}
                                         </div>
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5 flex-wrap">

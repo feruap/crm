@@ -322,6 +322,102 @@ router.post('/sync-prices', async (_req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// POST /api/medical-products/sync-products
+// Import new products from WooCommerce that don't exist in CRM
+// ─────────────────────────────────────────────
+router.post('/sync-products', async (_req: Request, res: Response) => {
+    try {
+        const wcUrl = process.env.WC_URL || 'https://tst.amunet.com.mx';
+        const wcKey = process.env.WC_KEY;
+        const wcSecret = process.env.WC_SECRET;
+
+        if (!wcKey || !wcSecret) {
+            res.status(500).json({ error: 'WC_KEY and WC_SECRET not configured' });
+            return;
+        }
+
+        const authHeader = 'Basic ' + Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+
+        // Fetch all WC products (paginated)
+        const allWCProducts: any[] = [];
+        let page = 1;
+        while (true) {
+            const url = new URL(`/wp-json/wc/v3/products`, wcUrl);
+            url.searchParams.set('per_page', '100');
+            url.searchParams.set('page', String(page));
+            url.searchParams.set('status', 'publish');
+
+            const resp = await fetch(url.toString(), {
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' }
+            });
+            if (!resp.ok) throw new Error(`WC API error: ${resp.status}`);
+            const products = await resp.json();
+            if (!products || products.length === 0) break;
+            allWCProducts.push(...products);
+            if (products.length < 100) break;
+            page++;
+        }
+
+        // Get existing wc_product_ids in CRM
+        const existing = await db.query(`SELECT wc_product_id FROM medical_products WHERE wc_product_id IS NOT NULL`);
+        const existingIds = new Set(existing.rows.map((r: any) => r.wc_product_id));
+
+        // Import new products
+        let imported = 0;
+        let skipped = 0;
+        const importedNames: string[] = [];
+
+        for (const wc of allWCProducts) {
+            if (existingIds.has(wc.id)) {
+                skipped++;
+                continue;
+            }
+
+            // Determine category from WC categories
+            const wcCats = (wc.categories || []).map((c: any) => c.name?.toLowerCase() || '');
+            let category = 'otros';
+            for (const cat of wcCats) {
+                if (cat.includes('infeccios') || cat.includes('rapid')) category = 'infecciosas';
+                else if (cat.includes('embarazo') || cat.includes('fertil')) category = 'embarazo';
+                else if (cat.includes('droga')) category = 'drogas';
+                else if (cat.includes('metabol') || cat.includes('diabet')) category = 'metabolicas';
+                else if (cat.includes('cardiac') || cat.includes('cardio')) category = 'cardiologicas';
+                else if (cat.includes('ets') || cat.includes('sexual')) category = 'ets';
+                else if (cat.includes('respirat') || cat.includes('covid') || cat.includes('influenz')) category = 'respiratorias';
+                else if (cat.includes('gastro') || cat.includes('h. pylori')) category = 'gastrointestinal';
+                else if (cat.includes('oncol') || cat.includes('tumor')) category = 'oncologicas';
+                else if (cat.includes('molecular') || cat.includes('pcr')) category = 'molecular';
+                else if (cat.includes('equipo')) category = 'equipos';
+                else if (cat.includes('consumib')) category = 'consumibles';
+            }
+
+            const price = parseFloat(wc.price) || null;
+
+            await db.query(`
+                INSERT INTO medical_products (
+                    wc_product_id, name, sku, diagnostic_category,
+                    url_tienda, precio_publico, is_active, wc_last_sync,
+                    clinical_indications, recommended_profiles, complementary_product_ids
+                ) VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW(), '{}', '{}', '{}')
+            `, [wc.id, wc.name, wc.sku || null, category, wc.permalink, price]);
+
+            imported++;
+            importedNames.push(wc.name);
+        }
+
+        res.json({
+            success: true,
+            total_wc: allWCProducts.length,
+            imported,
+            skipped,
+            imported_names: importedNames
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
 // GET /api/medical-products/knowledge-gaps
 // List unanswered questions for admin
 // ─────────────────────────────────────────────

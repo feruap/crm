@@ -14,13 +14,6 @@ interface CustomerProfile {
     phone: string | null;
     email: string | null;
     address: string | null;
-    shipping?: {
-        first_name: string; last_name: string;
-        address_1: string; address_2: string;
-        city: string; state: string; postcode: string; country: string;
-        email: string; phone: string;
-    };
-    wc_customer_id?: string | null;
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -87,8 +80,8 @@ function VariationModal({ product, onSelect, onCancel }: {
                             className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-all
                                 ${outOfStock ? 'opacity-40 cursor-not-allowed border-slate-200' : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'}`}
                         >
-                            {false && v.image ? (
-                                <img src={v.image!} className="w-10 h-10 rounded-lg object-cover border shrink-0" />
+                            {v.image ? (
+                                <img src={v.image} className="w-10 h-10 rounded-lg object-cover border shrink-0" />
                             ) : (
                                 <div className="w-10 h-10 rounded-lg border bg-slate-50 flex items-center justify-center shrink-0">
                                     <ImageIcon className="w-4 h-4 text-slate-300" />
@@ -103,7 +96,7 @@ function VariationModal({ product, onSelect, onCancel }: {
                                     <><span className="text-xs line-through text-slate-400">${v.regular_price}</span>
                                     <span className="text-sm font-bold text-red-600 ml-1">${v.sale_price}</span></>
                                 ) : (
-                                       <span className="text-sm font-bold text-slate-800">${v.price}</span>
+                                    <span className="text-sm font-bold text-slate-800">${v.price}</span>
                                 )}
                             </div>
                         </button>
@@ -155,21 +148,14 @@ export default function CatalogPanel({
     // Re-fetch customer when switching to cart (agent may have updated profile in CustomerPanel)
     useEffect(() => { if (view === 'cart') fetchCustomer(); }, [view]);
 
-    // Shipping validation from customer profile (WooCommerce fields)
-    const s = customer?.shipping;
-    const hasName = !!(s?.first_name?.trim());
-    const hasAddress = !!(s?.address_1?.trim());
-    const hasCity = !!(s?.city?.trim());
-    const hasState = !!(s?.state?.trim());
-    const hasPostcode = !!(s?.postcode?.trim());
-    const hasContact = !!(s?.phone?.trim()) || !!(s?.email?.trim());
-    const shippingValid = hasName && hasAddress && hasCity && hasState && hasPostcode && hasContact;
+    // Shipping validation from customer profile
+    const hasName = !!(customer?.name?.trim());
+    const hasAddress = !!(customer?.address?.trim());
+    const hasContact = !!(customer?.phone?.trim()) || !!(customer?.email?.trim());
+    const shippingValid = hasName && hasAddress && hasContact;
     const missingFields: string[] = [];
     if (!hasName) missingFields.push('Nombre');
     if (!hasAddress) missingFields.push('Dirección');
-    if (!hasCity) missingFields.push('Ciudad');
-    if (!hasState) missingFields.push('Estado');
-    if (!hasPostcode) missingFields.push('C.P.');
     if (!hasContact) missingFields.push('Teléfono o Email');
 
     // Load categories once
@@ -267,9 +253,7 @@ export default function CatalogPanel({
         setError(null);
         try {
             // Split customer name for billing
-            const nameParts = customer.shipping?.first_name 
-                ? [customer.shipping.first_name, customer.shipping.last_name || ''] 
-                : (customer.name || '').trim().split(/\s+/);
+            const nameParts = (customer.name || '').trim().split(/\s+/);
             const firstName = nameParts[0] || '';
             const lastName = nameParts.slice(1).join(' ') || '';
 
@@ -292,14 +276,10 @@ export default function CatalogPanel({
                     billing: {
                         first_name: firstName,
                         last_name: lastName,
-                        email: customer.shipping?.email || customer.email || undefined,
-                        phone: customer.shipping?.phone || customer.phone || undefined,
-                        address_1: customer.shipping?.address_1 || customer.address || undefined,
-                        address_2: customer.shipping?.address_2 || undefined,
-                        city: customer.shipping?.city || undefined,
-                        state: customer.shipping?.state || undefined,
-                        postcode: customer.shipping?.postcode || undefined,
-                        country: customer.shipping?.country || 'MX',
+                        email: customer.email || undefined,
+                        phone: customer.phone || undefined,
+                        address_1: customer.address || undefined,
+                        country: 'MX',
                     },
                 }),
             });
@@ -421,20 +401,27 @@ export default function CatalogPanel({
                                     return (
                                         <div key={p.id} className={`group relative flex flex-col bg-white border rounded-xl overflow-hidden transition-all hover:shadow-md
                                             ${inCart ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-slate-200'}`}>
-                                            {/* Badges row - no image */}
-                                            <div className="flex items-center gap-1 px-2.5 pt-2">
+                                            {/* Image */}
+                                            <div className="relative h-28 bg-slate-50 shrink-0">
+                                                {p.image ? (
+                                                    <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <ImageIcon className="w-8 h-8 text-slate-200" />
+                                                    </div>
+                                                )}
                                                 {isVariable && (
-                                                    <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                                    <span className="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                                                         <Layers className="w-2.5 h-2.5 inline -mt-0.5 mr-0.5" />Variable
                                                     </span>
                                                 )}
                                                 {inCart && (
-                                                    <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                                                        <Check className="w-2.5 h-2.5" /> En carrito
+                                                    <span className="absolute top-1.5 right-1.5 bg-indigo-600 text-white p-0.5 rounded-full">
+                                                        <Check className="w-3 h-3" />
                                                     </span>
                                                 )}
                                                 {p.sale_price && p.sale_price !== p.regular_price && (
-                                                    <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                                    <span className="absolute bottom-1.5 left-1.5 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                                                         OFERTA
                                                     </span>
                                                 )}
@@ -521,7 +508,13 @@ export default function CatalogPanel({
                                         <X className="w-3 h-3" />
                                     </button>
 
-                                    {/* Compact - no image */}
+                                    {(item.variation?.image || item.product.image) ? (
+                                        <img src={item.variation?.image || item.product.image!} className="w-14 h-14 object-cover rounded-lg border shrink-0" />
+                                    ) : (
+                                        <div className="w-14 h-14 bg-white rounded-lg border flex items-center justify-center shrink-0">
+                                            <ImageIcon className="w-5 h-5 text-slate-300" />
+                                        </div>
+                                    )}
 
                                     <div className="flex-1 min-w-0">
                                         <h4 className="text-xs font-semibold text-slate-800 truncate">{item.product.name}</h4>

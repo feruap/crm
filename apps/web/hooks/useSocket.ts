@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
+const SERVER_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
 let globalSocket: Socket | null = null;
 
@@ -45,11 +45,6 @@ export function useSocket() {
         return () => { socketRef.current.off('conversation_updated', handler); };
     }, []);
 
-    const onConversationListUpdated = useCallback((handler: (data: any) => void) => {
-        socketRef.current.on('conversation_list_updated', handler);
-        return () => { socketRef.current.off('conversation_list_updated', handler); };
-    }, []);
 
-
-    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated, onConversationListUpdated };
+    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated };
 }
