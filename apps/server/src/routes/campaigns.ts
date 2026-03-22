@@ -60,13 +60,24 @@ async function getMetaAccessToken(): Promise<string | null> {
     return process.env.META_ACCESS_TOKEN || null;
 }
 
-// Helper: get Meta Ad Account ID (DB takes priority, then env)
-async function getMetaAdAccountId(): Promise<string | null> {
+// Helper: get Meta Ad Account IDs (DB takes priority, then env)
+// Returns array of account objects: [{ id: "123", name: "My Account" }, ...]
+async function getMetaAdAccountIds(): Promise<Array<{ id: string; name: string }>> {
+    try {
+        const row = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_ad_account_ids' LIMIT 1`);
+        if (row.rows[0]?.value) {
+            const parsed = JSON.parse(row.rows[0].value);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch { /* ignore */ }
+    // Fallback: check legacy single account key
     try {
         const row = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_ad_account_id' LIMIT 1`);
-        if (row.rows[0]?.value) return row.rows[0].value;
+        if (row.rows[0]?.value) return [{ id: row.rows[0].value, name: 'Cuenta principal' }];
     } catch { /* ignore */ }
-    return process.env.META_AD_ACCOUNT_ID || null;
+    // Fallback: env var
+    if (process.env.META_AD_ACCOUNT_ID) return [{ id: process.env.META_AD_ACCOUNT_ID, name: 'Cuenta (env)' }];
+    return [];
 }
 
 // GET /api/campaigns/meta-token — check token status
@@ -139,32 +150,42 @@ router.post('/meta-token', async (req: Request, res: Response) => {
     }
 });
 
-// GET /api/campaigns/meta-ad-account — get configured ad account ID
+// GET /api/campaigns/meta-ad-accounts — get all configured ad account IDs
 router.get('/meta-ad-account', async (_req: Request, res: Response) => {
     try {
-        const accountId = await getMetaAdAccountId();
-        res.json({ configured: !!accountId, account_id: accountId || null });
+        const accounts = await getMetaAdAccountIds();
+        res.json({ configured: accounts.length > 0, accounts });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// POST /api/campaigns/meta-ad-account — save ad account ID
+// POST /api/campaigns/meta-ad-account — save ad account IDs (supports single or multiple)
 router.post('/meta-ad-account', async (req: Request, res: Response) => {
     try {
-        const { account_id } = req.body;
-        if (!account_id || typeof account_id !== 'string') {
-            res.status(400).json({ error: 'account_id es requerido' });
+        const { accounts } = req.body;
+        // Accepts: { accounts: [{ id: "123", name: "Mi cuenta" }, ...] }
+        if (!accounts || !Array.isArray(accounts) || accounts.length === 0) {
+            res.status(400).json({ error: 'Se requiere al menos una cuenta. Envía { accounts: [{ id, name }] }' });
             return;
         }
-        // Strip act_ prefix if present for storage
-        const cleanId = account_id.replace(/^act_/, '');
+        // Clean and validate each account
+        const cleaned = accounts.map((a: any) => ({
+            id: String(a.id || '').replace(/^act_/, '').trim(),
+            name: String(a.name || '').trim() || `Cuenta ${String(a.id || '').replace(/^act_/, '').trim()}`,
+        })).filter((a: any) => a.id.length > 0);
+
+        if (cleaned.length === 0) {
+            res.status(400).json({ error: 'Ninguna cuenta válida proporcionada' });
+            return;
+        }
+
         await db.query(
-            `INSERT INTO business_settings (key, value) VALUES ('meta_ad_account_id', $1)
+            `INSERT INTO business_settings (key, value) VALUES ('meta_ad_account_ids', $1)
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-            [cleanId]
+            [JSON.stringify(cleaned)]
         );
-        res.json({ ok: true, message: 'Meta Ad Account ID guardado correctamente', account_id: cleanId });
+        res.json({ ok: true, message: `${cleaned.length} cuenta(s) publicitaria(s) guardadas`, accounts: cleaned });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -251,11 +272,13 @@ router.post('/sync-facebook', async (_req: Request, res: Response) => {
     try {
         let adAccounts: any[] = [];
 
-        // If meta_ad_account_id is configured (DB or env), use it directly (works with System User tokens)
-        const directAccountId = await getMetaAdAccountId();
-        if (directAccountId) {
-            const actId = directAccountId.startsWith('act_') ? directAccountId : `act_${directAccountId}`;
-            adAccounts = [{ id: actId, account_id: directAccountId.replace('act_', ''), name: 'Direct Account' }];
+        // If meta_ad_account_ids are configured (DB or env), use them directly (works with System User tokens)
+        const configuredAccounts = await getMetaAdAccountIds();
+        if (configuredAccounts.length > 0) {
+            adAccounts = configuredAccounts.map(a => {
+                const cleanId = a.id.replace(/^act_/, '');
+                return { id: `act_${cleanId}`, account_id: cleanId, name: a.name || `Cuenta ${cleanId}` };
+            });
         } else {
             // Step 1: Get ad accounts via /me/adaccounts (requires User access token)
             const meResp = await axios.get(`https://graph.facebook.com/${GRAPH_VERSION}/me/adaccounts`, {

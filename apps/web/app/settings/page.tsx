@@ -2262,9 +2262,10 @@ function IntegrationsTab() {
     const [connecting, setConnecting] = useState(false);
     const [oauthSuccess, setOauthSuccess] = useState(false);
 
-    // Meta Ad Account state
-    const [adAccountId, setAdAccountId] = useState('');
-    const [adAccountConfigured, setAdAccountConfigured] = useState(false);
+    // Meta Ad Accounts state (multi-account)
+    const [adAccounts, setAdAccounts] = useState<Array<{ id: string; name: string }>>([]);
+    const [newAccountId, setNewAccountId] = useState('');
+    const [newAccountName, setNewAccountName] = useState('');
     const [adAccountSaving, setAdAccountSaving] = useState(false);
     const [adAccountError, setAdAccountError] = useState<string | null>(null);
     const [adAccountSuccess, setAdAccountSuccess] = useState(false);
@@ -2302,18 +2303,17 @@ function IntegrationsTab() {
         finally { setGoogleLoading(false); }
     }, []);
 
-    const loadAdAccount = useCallback(async () => {
+    const loadAdAccounts = useCallback(async () => {
         try {
             const res = await apiFetch('/api/campaigns/meta-ad-account');
             const data = await res.json();
-            if (data.configured && data.account_id) {
-                setAdAccountId(data.account_id);
-                setAdAccountConfigured(true);
+            if (data.configured && data.accounts) {
+                setAdAccounts(data.accounts);
             }
         } catch { /* ignore */ }
     }, []);
 
-    useEffect(() => { loadStatus(); loadGoogleStatus(); loadAdAccount(); }, [loadStatus, loadGoogleStatus, loadAdAccount]);
+    useEffect(() => { loadStatus(); loadGoogleStatus(); loadAdAccounts(); }, [loadStatus, loadGoogleStatus, loadAdAccounts]);
 
     // Handle OAuth return params (Meta + Google)
     useEffect(() => {
@@ -2376,24 +2376,46 @@ function IntegrationsTab() {
         finally { setSaving(false); }
     };
 
-    const saveAdAccount = async () => {
-        if (!adAccountId.trim()) return;
+    const saveAdAccounts = async (accountsList: Array<{ id: string; name: string }>) => {
         setAdAccountSaving(true);
         setAdAccountError(null);
         setAdAccountSuccess(false);
         try {
             const res = await apiFetch('/api/campaigns/meta-ad-account', {
                 method: 'POST',
-                body: JSON.stringify({ account_id: adAccountId.trim() }),
+                body: JSON.stringify({ accounts: accountsList }),
             });
             const data = await res.json();
             if (!res.ok) { setAdAccountError(data.error); return; }
-            setAdAccountId(data.account_id);
-            setAdAccountConfigured(true);
+            setAdAccounts(data.accounts);
             setAdAccountSuccess(true);
             setTimeout(() => setAdAccountSuccess(false), 3000);
-        } catch { setAdAccountError('Error al guardar Ad Account ID'); }
+        } catch { setAdAccountError('Error al guardar cuentas publicitarias'); }
         finally { setAdAccountSaving(false); }
+    };
+
+    const addAdAccount = async () => {
+        const cleanId = newAccountId.trim().replace(/^act_/, '');
+        if (!cleanId) return;
+        if (adAccounts.some(a => a.id === cleanId)) {
+            setAdAccountError('Esta cuenta ya está agregada');
+            setTimeout(() => setAdAccountError(null), 3000);
+            return;
+        }
+        const updated = [...adAccounts, { id: cleanId, name: newAccountName.trim() || `Cuenta ${cleanId}` }];
+        await saveAdAccounts(updated);
+        setNewAccountId('');
+        setNewAccountName('');
+    };
+
+    const removeAdAccount = async (accountId: string) => {
+        const updated = adAccounts.filter(a => a.id !== accountId);
+        if (updated.length === 0) {
+            setAdAccountError('Debes mantener al menos una cuenta. Usa "Desconectar" si quieres quitar todo.');
+            setTimeout(() => setAdAccountError(null), 3000);
+            return;
+        }
+        await saveAdAccounts(updated);
     };
 
     const disconnect = async () => {
@@ -2604,50 +2626,75 @@ function IntegrationsTab() {
                     </div>
                 )}
 
-                {/* Meta Ad Account ID */}
+                {/* Meta Ad Accounts (multi-account) */}
                 {tokenStatus?.configured && tokenStatus?.valid && (
                     <div className="space-y-3 pt-3 border-t border-slate-100">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                Ad Account ID
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Cuentas publicitarias
                                 <span className="ml-2 text-xs text-slate-400 font-normal">
-                                    (ID de la cuenta publicitaria para sincronizar)
+                                    (se sincronizarán todas al presionar &quot;Sincronizar Facebook&quot;)
                                 </span>
                             </label>
+
+                            {/* List of configured accounts */}
+                            {adAccounts.length > 0 && (
+                                <div className="space-y-1.5 mb-3">
+                                    {adAccounts.map((account) => (
+                                        <div key={account.id} className="flex items-center gap-2 bg-slate-50 border rounded-lg px-3 py-2">
+                                            <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                                            <span className="text-sm text-slate-700 font-medium truncate">{account.name}</span>
+                                            <span className="text-xs text-slate-400 font-mono">act_{account.id}</span>
+                                            <button
+                                                onClick={() => removeAdAccount(account.id)}
+                                                className="ml-auto text-slate-400 hover:text-red-500 transition-colors p-0.5"
+                                                title="Quitar cuenta"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Add new account form */}
                             <div className="flex gap-2">
                                 <input
                                     type="text"
-                                    value={adAccountId}
-                                    onChange={e => setAdAccountId(e.target.value)}
-                                    placeholder="Ej: 345453097942209"
+                                    value={newAccountName}
+                                    onChange={e => setNewAccountName(e.target.value)}
+                                    placeholder="Nombre (ej: Amunet 23)"
+                                    className="w-1/3 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                />
+                                <input
+                                    type="text"
+                                    value={newAccountId}
+                                    onChange={e => setNewAccountId(e.target.value)}
+                                    placeholder="Ad Account ID (ej: 330176359635100)"
                                     className="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
                                 />
                                 <button
-                                    onClick={saveAdAccount}
-                                    disabled={adAccountSaving || !adAccountId.trim()}
-                                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                                    onClick={addAdAccount}
+                                    disabled={adAccountSaving || !newAccountId.trim()}
+                                    className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60 whitespace-nowrap"
                                 >
-                                    {adAccountSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Guardar
+                                    {adAccountSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                    Agregar
                                 </button>
                             </div>
-                            {adAccountConfigured && !adAccountSuccess && !adAccountError && (
-                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" /> Configurado: act_{adAccountId}
-                                </p>
-                            )}
+
                             {adAccountSuccess && (
-                                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                                    <CheckCircle className="w-3 h-3" /> Ad Account ID guardado correctamente
+                                <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" /> Cuentas publicitarias guardadas correctamente
                                 </p>
                             )}
                             {adAccountError && (
-                                <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                                     <AlertCircle className="w-3 h-3" /> {adAccountError}
                                 </p>
                             )}
-                            <p className="text-xs text-slate-400 mt-1">
-                                Encuéntralo en Meta Business Suite → Configuración → Cuentas publicitarias → ID de la cuenta.
+                            <p className="text-xs text-slate-400 mt-1.5">
+                                Encuéntralo en Meta Business Suite → Configuración → Cuentas publicitarias → ID de la cuenta. Puedes agregar todas las cuentas que necesites.
                             </p>
                         </div>
                     </div>
