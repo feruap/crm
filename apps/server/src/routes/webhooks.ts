@@ -277,6 +277,13 @@ router.post('/meta', async (req: Request, res: Response) => {
                     [conversationId, channelId, customerId, messageText, event.message.mid]
                 );
 
+                // Record attribution touchpoint if this is an ad click
+                if (referral && referral.ad_id && isNew) {
+                    recordTouchpoint(customerId, null, referral, provider).catch(err =>
+                        console.error('[Touchpoint Recording Error]:', err)
+                    );
+                }
+
                 // Smart bot engine handles campaign auto-reply, qualification, and routing
                 handleBotResponse(conversationId, channelId, customerId, messageText, referral).catch(console.error);
             }

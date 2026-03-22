@@ -87,28 +87,58 @@ export async function generateCampaignResponse(
 
     try {
         const mapping = await findCampaignMapping(referralData);
-        if (!mapping) return null;
 
-        // Send campaign auto-reply
-        await sendCampaignAutoReply(conversationId, '', customerId, mapping);
+        if (mapping) {
+            // ── Has campaign config: send configured auto-reply ──
+            await sendCampaignAutoReply(conversationId, '', customerId, mapping);
 
-        // Record bot interaction
+            await db.query(
+                `INSERT INTO bot_interactions
+                 (conversation_id, customer_id, interaction_type, intent_classification, confidence, action_taken, result)
+                 VALUES ($1, $2, 'campaign_response', 'CAMPAIGN_RESPONSE', 1.0, 'send_campaign_auto_reply', $3)`,
+                [conversationId, customerId, JSON.stringify({ campaign_id: mapping.campaign_id, product_name: mapping.product_name })]
+            );
+
+            await db.query(
+                `UPDATE conversations SET bot_mode = 'campaign_response' WHERE id = $1`,
+                [conversationId]
+            );
+
+            return {
+                message: mapping.welcome_message,
+                confidence: 1.0,
+                intent_type: 'CAMPAIGN_RESPONSE',
+                action_type: 'reply',
+            };
+        }
+
+        // ── No campaign config: smart fallback with ad context ──
+        // The customer clicked an ad but there's no auto-reply configured.
+        // Generate a contextual greeting using the ad title so the bot
+        // still acknowledges the ad and provides a good first impression.
+        const adTitle = referralData.ads_context_data?.ad_title || '';
+        const adContext = adTitle
+            ? `¡Hola! Gracias por tu interés en "${adTitle}". Estoy aquí para ayudarte con cualquier duda sobre este producto. ¿Qué te gustaría saber?`
+            : '¡Hola! Gracias por contactarnos a través de nuestra publicidad. ¿En qué puedo ayudarte?';
+
+        // Record that a customer arrived via ad even without config
         await db.query(
             `INSERT INTO bot_interactions
              (conversation_id, customer_id, interaction_type, intent_classification, confidence, action_taken, result)
-             VALUES ($1, $2, 'campaign_response', 'CAMPAIGN_RESPONSE', 1.0, 'send_campaign_auto_reply', $3)`,
-            [conversationId, customerId, JSON.stringify({ campaign_id: mapping.campaign_id, product_name: mapping.product_name })]
+             VALUES ($1, $2, 'campaign_response', 'CAMPAIGN_FALLBACK', 0.9, 'send_ad_fallback_greeting', $3)`,
+            [conversationId, customerId, JSON.stringify({ ad_id: referralData.ad_id, ad_title: adTitle, fallback: true })]
         );
 
-        // Update conversation to campaign_response mode
         await db.query(
             `UPDATE conversations SET bot_mode = 'campaign_response' WHERE id = $1`,
             [conversationId]
         );
 
+        console.log(`[Campaign Fallback] No config for ad ${referralData.ad_id} — sending contextual greeting for conv ${conversationId}`);
+
         return {
-            message: mapping.welcome_message,
-            confidence: 1.0,
+            message: adContext,
+            confidence: 0.9,
             intent_type: 'CAMPAIGN_RESPONSE',
             action_type: 'reply',
         };

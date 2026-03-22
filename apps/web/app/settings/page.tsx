@@ -61,7 +61,7 @@ interface Team {
 interface Channel {
     id: string;
     name: string;
-    provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok';
+    provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok' | 'webchat' | string;
     subtype: string | null;
     is_active: boolean;
     sync_comments: boolean;
@@ -151,6 +151,28 @@ const PROVIDER_META = {
             '5. Configura los Webhooks en el panel de TikTok usando tu URL.'
         ]
     },
+    webchat: {
+        label: 'Chat Web',
+        color: 'bg-indigo-500',
+        icon: '🌐',
+        fields: ['access_token', 'webhook_secret'],
+        subtypes: null,
+        setupLink: '',
+        setupInstructions: [
+            '1. Agrega el widget de chat web a tu sitio.',
+            '2. Usa el token generado para autenticar las conexiones.',
+        ]
+    },
+};
+
+const PROVIDER_META_FALLBACK = {
+    label: 'Canal',
+    color: 'bg-slate-400',
+    icon: '💬',
+    fields: [] as string[],
+    subtypes: null,
+    setupLink: '',
+    setupInstructions: [] as string[],
 };
 
 const SUBTYPE_LABELS: Record<string, string> = {
@@ -931,7 +953,7 @@ function CanalesTab() {
                 <div className="space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Canales configurados</h4>
                     {channels.map(ch => {
-                        const meta = PROVIDER_META[ch.provider];
+                        const meta = (PROVIDER_META as any)[ch.provider] ?? PROVIDER_META_FALLBACK;
                         return (
                             <div key={ch.id} className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-4 ${!ch.is_active ? 'opacity-60' : ''}`}>
                                 <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-xl shrink-0`}>

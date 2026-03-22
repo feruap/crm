@@ -10,7 +10,11 @@ router.get('/', async (_req: Request, res: Response) => {
         SELECT c.*,
                COUNT(DISTINCT a.customer_id) AS total_customers,
                COUNT(DISTINCT a.order_id)    AS total_orders,
-               COALESCE(SUM(o.total_amount), 0) AS total_revenue
+               COALESCE(SUM(o.total_amount), 0) AS total_revenue,
+               EXISTS(
+                   SELECT 1 FROM campaign_product_mappings cpm
+                   WHERE cpm.campaign_id = c.id AND cpm.is_active = TRUE AND cpm.auto_send = TRUE
+               ) AS has_auto_reply
         FROM campaigns c
         LEFT JOIN attributions a ON a.campaign_id = c.id
         LEFT JOIN orders o ON o.id = a.order_id

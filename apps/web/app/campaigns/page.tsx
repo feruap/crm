@@ -30,6 +30,7 @@ interface Campaign {
     bot_flow_name: string | null;
     bot_flow_active: boolean | null;
     ai_instructions: string | null;
+    has_auto_reply: boolean;
 }
 
 interface AttributionSummary {
@@ -721,7 +722,14 @@ export default function CampaignsPage() {
                                                     <td className="px-2 py-3 text-slate-400">
                                                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                     </td>
-                                                    <td className="px-4 py-3 font-medium text-slate-800">{s.campaign_name || s.campaign_id}</td>
+                                                    <td className="px-4 py-3 font-medium text-slate-800">
+                                                        <span className="flex items-center gap-2">
+                                                            {s.campaign_name || s.campaign_id}
+                                                            {!campaigns.find(c => c.id === s.campaign_id)?.has_auto_reply && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 whitespace-nowrap">Sin auto-respuesta</span>
+                                                            )}
+                                                        </span>
+                                                    </td>
                                                     <td className="px-4 py-3">
                                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.bg} ${style.text}`}>
                                                             {style.emoji} {style.label}
@@ -797,7 +805,14 @@ export default function CampaignsPage() {
                                                     <td className="px-2 py-3 cursor-pointer text-slate-400" onClick={() => setExpanded(isExpanded ? null : c.id)}>
                                                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                     </td>
-                                                    <td className="px-4 py-3 font-medium cursor-pointer" onClick={() => setExpanded(isExpanded ? null : c.id)}>{c.name || c.id}</td>
+                                                    <td className="px-4 py-3 font-medium cursor-pointer" onClick={() => setExpanded(isExpanded ? null : c.id)}>
+                                                        <span className="flex items-center gap-2">
+                                                            {c.name || c.id}
+                                                            {!c.has_auto_reply && (
+                                                                <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 whitespace-nowrap">Sin auto-respuesta</span>
+                                                            )}
+                                                        </span>
+                                                    </td>
                                                     <td className="px-4 py-3">
                                                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${style.bg} ${style.text}`}>
                                                             {style.emoji} {style.label}
