@@ -260,20 +260,84 @@ router.post('/:id/wc-sync', async (req, res) => {
     const attrMap: Record<string, string> = {};
     for (const row of attrs.rows) attrMap[row.key] = row.value;
     
-    // Check if already linked
+    // If already linked, re-sync data from WC instead of returning early
     if (attrMap['wc_customer_id']) {
-        return res.json({ 
-            status: 'already_linked', 
-            wc_customer_id: parseInt(attrMap['wc_customer_id']),
+        const existingWcId = attrMap['wc_customer_id'];
+        // If it's a numeric ID (not order_xxx), fetch the customer and re-import
+        if (!existingWcId.startsWith('order_')) {
+            try {
+                const custResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers/${existingWcId}`, {
+                    headers: { Authorization: `Basic ${wcAuth}` }
+                });
+                if (custResp.ok) {
+                    const wcCust = await custResp.json();
+                    let wcShipping = wcCust.shipping?.first_name ? wcCust.shipping
+                                   : wcCust.billing?.first_name ? wcCust.billing
+                                   : {};
+
+                    // If customer profile has no data, try to get from most recent order
+                    if (!wcShipping.first_name) {
+                        const phone = shipping?.phone || attrMap['phone'] || '';
+                        const phoneLocal = phone.replace(/\D/g, '').slice(-10);
+                        const orderResp = await fetch(`${wcUrl}/wp-json/wc/v3/orders?customer=${existingWcId}&per_page=1&orderby=date&order=desc`, {
+                            headers: { Authorization: `Basic ${wcAuth}` }
+                        });
+                        if (orderResp.ok) {
+                            const orders = await orderResp.json();
+                            if (Array.isArray(orders) && orders.length > 0) {
+                                const order = orders[0];
+                                wcShipping = order.shipping?.first_name ? order.shipping
+                                           : order.billing?.first_name ? order.billing
+                                           : {};
+                            }
+                        }
+                    }
+
+                    const importFields = ['first_name','last_name','address_1','address_2','city','state','postcode','country','phone'];
+                    for (const key of importFields) {
+                        if (wcShipping[key]) {
+                            await db.query(
+                                `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                                 VALUES ($1, $2, $3, 'string')
+                                 ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                                [id, key, wcShipping[key]]
+                            );
+                        }
+                    }
+                    // Import email
+                    const wcEmail = wcCust.email || '';
+                    if (wcEmail && !wcEmail.includes('@placeholder')) {
+                        await db.query(
+                            `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
+                             VALUES ($1, 'email', $2, 'string')
+                             ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
+                            [id, wcEmail]
+                        );
+                    }
+                    return res.json({
+                        status: 'resynced',
+                        wc_customer_id: parseInt(existingWcId),
+                        imported_shipping: wcShipping,
+                        message: `Re-synced data from WC customer #${existingWcId}`
+                    });
+                }
+            } catch (err) {
+                console.error('[wc-sync] Re-sync error:', err);
+            }
+        }
+        return res.json({
+            status: 'already_linked',
+            wc_customer_id: existingWcId,
             message: 'Customer already linked to WooCommerce'
         });
     }
-    
+
     const email = shipping?.email || attrMap['email'] || '';
     const phone = shipping?.phone || attrMap['phone'] || '';
     
     // Search WC by email first, then by phone (billing_phone meta)
     let wcCustomer = null;
+    let wcOrderData: any = null;
     
     if (email) {
         const searchResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers?email=${encodeURIComponent(email)}&per_page=1`, {
@@ -316,7 +380,7 @@ router.post('/:id/wc-sync', async (req, res) => {
         // Fallback: search WC orders by phone (orders search= DOES search billing phone)
         if (!wcCustomer) {
             for (const pv of phoneVariants) {
-                if (wcCustomer) break;
+                if (wcCustomer || wcOrderData) break;
                 const orderResp = await fetch(`${wcUrl}/wp-json/wc/v3/orders?search=${encodeURIComponent(pv)}&per_page=5&orderby=date&order=desc`, {
                     headers: { Authorization: `Basic ${wcAuth}` }
                 });
@@ -327,30 +391,47 @@ router.post('/:id/wc-sync', async (req, res) => {
                             const obLocal = o.billing?.phone?.replace(/\D/g, '').slice(-10);
                             return obLocal === phoneLocal;
                         });
-                        if (matchingOrder && matchingOrder.customer_id > 1) {
-                            const custResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers/${matchingOrder.customer_id}`, {
-                                headers: { Authorization: `Basic ${wcAuth}` }
-                            });
-                            if (custResp.ok) wcCustomer = await custResp.json();
+                        if (matchingOrder) {
+                            wcOrderData = matchingOrder;
+                            if (matchingOrder.customer_id > 1) {
+                                const custResp = await fetch(`${wcUrl}/wp-json/wc/v3/customers/${matchingOrder.customer_id}`, {
+                                    headers: { Authorization: `Basic ${wcAuth}` }
+                                });
+                                if (custResp.ok) wcCustomer = await custResp.json();
+                            }
                         }
                     }
                 }
             }
         }
     }
-    
-    if (wcCustomer) {
-        // Found existing ? link and import their data
+
+    const wcSource = wcCustomer || wcOrderData;
+    if (wcSource) {
+        // Found existing — link and import their data
+        const linkId = wcCustomer ? String(wcCustomer.id)
+                     : (wcOrderData?.customer_id > 1 ? String(wcOrderData.customer_id) : `order_${wcOrderData.id}`);
         await db.query(
             `INSERT INTO customer_attributes (customer_id, key, value, attribute_type)
              VALUES ($1, 'wc_customer_id', $2, 'string')
              ON CONFLICT (customer_id, key) DO UPDATE SET value = EXCLUDED.value`,
-            [id, String(wcCustomer.id)]
+            [id, linkId]
         );
-        
-        // Import WC shipping fields back
-        const wcShipping = wcCustomer.shipping || wcCustomer.billing || {};
-        const importFields = ['first_name','last_name','address_1','address_2','city','state','postcode','country'];
+
+        // Import WC shipping fields — prefer customer profile, fall back to order billing/shipping
+        let wcShipping: any = {};
+        if (wcCustomer) {
+            wcShipping = wcCustomer.shipping?.first_name ? wcCustomer.shipping
+                       : wcCustomer.billing?.first_name ? wcCustomer.billing
+                       : {};
+        }
+        // If customer profile had no data, fall back to order billing/shipping
+        if (!wcShipping.first_name && wcOrderData) {
+            wcShipping = wcOrderData.shipping?.first_name ? wcOrderData.shipping
+                       : wcOrderData.billing?.first_name ? wcOrderData.billing
+                       : {};
+        }
+        const importFields = ['first_name','last_name','address_1','address_2','city','state','postcode','country','phone'];
         for (const key of importFields) {
             if (wcShipping[key]) {
                 await db.query(
@@ -361,12 +442,12 @@ router.post('/:id/wc-sync', async (req, res) => {
                 );
             }
         }
-        
+
         return res.json({
             status: 'found',
-            wc_customer_id: wcCustomer.id,
+            wc_customer_id: linkId,
             imported_shipping: wcShipping,
-            message: `Found existing WC customer #${wcCustomer.id}`
+            message: `Found WC data (${wcCustomer ? 'customer #' + wcCustomer.id : 'order #' + wcOrderData?.id})`
         });
     }
     

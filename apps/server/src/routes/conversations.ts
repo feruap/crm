@@ -468,9 +468,19 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
                         );
 
                         // Import shipping/billing data (prefer customer profile, then order data)
-                        const wcData = wcCustomer
-                            ? (wcCustomer.shipping?.first_name ? wcCustomer.shipping : wcCustomer.billing || {})
-                            : (wcSource.shipping?.first_name ? wcSource.shipping : wcSource.billing || {});
+                        // Try customer profile first, then fall back to order billing/shipping
+                        let wcData: any = {};
+                        if (wcCustomer) {
+                            wcData = wcCustomer.shipping?.first_name ? wcCustomer.shipping
+                                   : wcCustomer.billing?.first_name ? wcCustomer.billing
+                                   : {};
+                        }
+                        // If customer profile had no data, fall back to order billing/shipping
+                        if (!wcData.first_name && wcOrderData) {
+                            wcData = wcOrderData.shipping?.first_name ? wcOrderData.shipping
+                                   : wcOrderData.billing?.first_name ? wcOrderData.billing
+                                   : {};
+                        }
                         const importFields = ['first_name', 'last_name', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone'];
                         for (const key of importFields) {
                             if (wcData[key]) {
