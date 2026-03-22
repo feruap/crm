@@ -64,6 +64,98 @@ router.get('/categories', async (_req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// POST /api/medical-products/seed-from-kb (MUST be before /:id)
+// Import products from the knowledge base markdown format
+// ─────────────────────────────────────────────
+router.post('/seed-from-kb', async (_req: Request, res: Response) => {
+    try {
+        const seedProducts = [
+            {
+                name: 'Prueba Rápida Troponina Cardiac Combo',
+                diagnostic_category: 'cardiologicas',
+                url_tienda: 'https://www.amunet.com.mx/tienda/prueba-rapida-troponina-cardiac-combo/',
+                precio_publico: 400.00,
+                marca: 'Amunet',
+                analito: 'Troponina I',
+                palabras_clave: ['troponina', 'cardiac', 'corazón', 'infarto', 'cardíaco'],
+                clinical_indications: ['Infarto agudo de miocardio', 'Síndrome coronario agudo', 'Dolor torácico'],
+                target_audience: 'ambos',
+                presentaciones: [{ cantidad: 2, precio: 400 }, { cantidad: 5, precio: 0 }, { cantidad: 10, precio: 0 }],
+            },
+            {
+                name: 'Prueba Rápida Cardiac Combo Advanced',
+                diagnostic_category: 'cardiologicas',
+                url_tienda: 'https://www.amunet.com.mx/tienda/prueba-rapida-cardiac-combo-advanced/',
+                precio_publico: 975.00,
+                marca: 'Amunet',
+                analito: 'Troponina I, CK-MB, Mioglobina',
+                palabras_clave: ['cardiac', 'advanced', 'combo', 'troponina', 'ck-mb', 'mioglobina'],
+                clinical_indications: ['Panel cardíaco completo', 'Diagnóstico diferencial de dolor torácico'],
+                target_audience: 'ambos',
+                presentaciones: [{ cantidad: 5, precio: 975 }, { cantidad: 10, precio: 0 }],
+            },
+            {
+                name: 'Prueba Rápida de Péptidos Natriuréticos NT-proBNP',
+                diagnostic_category: 'cardiologicas',
+                url_tienda: 'https://www.amunet.com.mx/tienda/prueba-rapida-de-peptidos-natriureticos-nt-probnp/',
+                precio_publico: 755.00,
+                marca: 'Amunet',
+                analito: 'NT-proBNP',
+                palabras_clave: ['bnp', 'proBNP', 'natriurético', 'insuficiencia cardíaca', 'péptido'],
+                clinical_indications: ['Insuficiencia cardíaca', 'Disnea de origen cardíaco'],
+                target_audience: 'ambos',
+                presentaciones: [{ cantidad: 5, precio: 755 }, { cantidad: 10, precio: 0 }],
+            },
+            {
+                name: 'Prueba Rápida de Dímero D',
+                diagnostic_category: 'cardiologicas',
+                url_tienda: 'https://www.amunet.com.mx/tienda/prueba-rapida-de-dimero-d/',
+                precio_publico: 465.00,
+                marca: 'Amunet',
+                analito: 'Dímero D',
+                palabras_clave: ['dimero', 'dímero', 'trombosis', 'embolia', 'coagulación', 'TEP'],
+                clinical_indications: ['Tromboembolismo pulmonar', 'Trombosis venosa profunda', 'Coagulopatía'],
+                target_audience: 'ambos',
+                presentaciones: [{ cantidad: 5, precio: 465 }, { cantidad: 20, precio: 0 }],
+            },
+            {
+                name: 'Prueba Rápida de HbA1c Cualitativa',
+                diagnostic_category: 'metabolicas',
+                url_tienda: 'https://www.amunet.com.mx/tienda/prueba-rapida-de-hba1c-cualitativa/',
+                precio_publico: 418.00,
+                marca: 'Amunet',
+                analito: 'Hemoglobina Glicosilada (HbA1c)',
+                palabras_clave: ['hba1c', 'hemoglobina', 'glicosilada', 'diabetes', 'glucosa', 'azúcar'],
+                clinical_indications: ['Monitoreo de diabetes', 'Screening de diabetes tipo 2', 'Control glucémico'],
+                target_audience: 'ambos',
+                presentaciones: [{ cantidad: 5, precio: 418 }, { cantidad: 20, precio: 0 }],
+            },
+        ];
+
+        let seeded = 0;
+        for (const p of seedProducts) {
+            const exists = await db.query(`SELECT id FROM medical_products WHERE name = $1`, [p.name]);
+            if (exists.rows.length > 0) continue;
+
+            await db.query(
+                `INSERT INTO medical_products
+                    (name, diagnostic_category, url_tienda, precio_publico, marca, analito,
+                     palabras_clave, clinical_indications, target_audience, presentaciones, is_active)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)`,
+                [p.name, p.diagnostic_category, p.url_tienda, p.precio_publico,
+                 p.marca, p.analito, p.palabras_clave, p.clinical_indications,
+                 p.target_audience, JSON.stringify(p.presentaciones)]
+            );
+            seeded++;
+        }
+
+        res.json({ ok: true, seeded, total: seedProducts.length });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
 // GET /api/medical-products/:id
 // ─────────────────────────────────────────────
 router.get('/:id', async (req: Request, res: Response) => {
@@ -115,6 +207,12 @@ router.post('/', async (req: Request, res: Response) => {
         complementary_product_ids, recommended_profiles,
         contraindications, interpretation_guide,
         storage_conditions, shelf_life, technical_sheet_url, price_range,
+        // New commercial fields
+        precio_publico, precio_laboratorio, precio_distribuidor,
+        presentaciones, url_tienda, marca, analito, volumen_muestra,
+        punto_corte, vida_util, registro_sanitario,
+        pitch_venta, ventaja_competitiva, roi_medico,
+        objeciones_respuestas, palabras_clave, cross_sells, up_sells, target_audience,
     } = req.body;
 
     if (!name || !diagnostic_category) {
@@ -129,8 +227,14 @@ router.post('/', async (req: Request, res: Response) => {
              result_time, methodology, regulatory_approval,
              complementary_product_ids, recommended_profiles,
              contraindications, interpretation_guide,
-             storage_conditions, shelf_life, technical_sheet_url, price_range)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+             storage_conditions, shelf_life, technical_sheet_url, price_range,
+             precio_publico, precio_laboratorio, precio_distribuidor,
+             presentaciones, url_tienda, marca, analito, volumen_muestra,
+             punto_corte, vida_util, registro_sanitario,
+             pitch_venta, ventaja_competitiva, roi_medico,
+             objeciones_respuestas, palabras_clave, cross_sells, up_sells, target_audience)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+                 $20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
          RETURNING *`,
         [
             wc_product_id, name, sku, diagnostic_category,
@@ -139,6 +243,13 @@ router.post('/', async (req: Request, res: Response) => {
             complementary_product_ids || [], recommended_profiles || [],
             contraindications, interpretation_guide,
             storage_conditions, shelf_life, technical_sheet_url, price_range,
+            precio_publico ?? null, precio_laboratorio ?? null, precio_distribuidor ?? null,
+            JSON.stringify(presentaciones || []), url_tienda ?? null, marca ?? null,
+            analito ?? null, volumen_muestra ?? null, punto_corte ?? null,
+            vida_util ?? null, registro_sanitario ?? null,
+            pitch_venta ?? null, ventaja_competitiva ?? null, roi_medico ?? null,
+            JSON.stringify(objeciones_respuestas || []), palabras_clave || [],
+            cross_sells || [], up_sells || [], target_audience ?? 'ambos',
         ]
     );
 
@@ -156,6 +267,12 @@ router.put('/:id', async (req: Request, res: Response) => {
         'complementary_product_ids', 'recommended_profiles',
         'contraindications', 'interpretation_guide',
         'storage_conditions', 'shelf_life', 'technical_sheet_url', 'price_range', 'is_active',
+        // Commercial / pricing fields
+        'precio_publico', 'precio_laboratorio', 'precio_distribuidor',
+        'url_tienda', 'marca', 'analito', 'volumen_muestra',
+        'punto_corte', 'vida_util', 'registro_sanitario',
+        'pitch_venta', 'ventaja_competitiva', 'roi_medico',
+        'palabras_clave', 'cross_sells', 'up_sells', 'target_audience',
     ];
 
     const setClauses: string[] = [];
@@ -165,6 +282,15 @@ router.put('/:id', async (req: Request, res: Response) => {
         if (req.body[field] !== undefined) {
             params.push(req.body[field]);
             setClauses.push(`${field} = $${params.length}`);
+        }
+    }
+
+    // JSON fields need special serialization
+    const jsonFields = ['presentaciones', 'objeciones_respuestas'];
+    for (const jf of jsonFields) {
+        if (req.body[jf] !== undefined) {
+            params.push(JSON.stringify(req.body[jf]));
+            setClauses.push(`${jf} = $${params.length}`);
         }
     }
 

@@ -528,4 +528,86 @@ router.post('/:id/wc-sync', async (req, res) => {
 });
 
 
+// ─────────────────────────────────────────────
+// GET /api/customers/:id/classification — get customer classification
+// ─────────────────────────────────────────────
+router.get('/:id/classification', async (req: Request, res: Response) => {
+    try {
+        const result = await db.query(
+            `SELECT cp.client_classification, cp.classification_confidence,
+                    cp.classification_source, cp.preferred_language_tone,
+                    cp.business_type, cp.specialty, cp.professional_title,
+                    cp.organization_name, cp.estimated_monthly_volume
+             FROM customer_profiles cp
+             WHERE cp.customer_id = $1`,
+            [req.params.id]
+        );
+
+        if (result.rows.length === 0) {
+            res.json({
+                client_classification: 'desconocido',
+                classification_confidence: 0,
+                classification_source: 'pending',
+                preferred_language_tone: 'formal',
+            });
+            return;
+        }
+
+        res.json(result.rows[0]);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// PATCH /api/customers/:id/classification — set customer classification
+// ─────────────────────────────────────────────
+router.patch('/:id/classification', async (req: Request, res: Response) => {
+    const {
+        client_classification, business_type, specialty,
+        professional_title, organization_name, estimated_monthly_volume,
+        preferred_language_tone,
+    } = req.body;
+
+    if (!client_classification) {
+        res.status(400).json({ error: 'client_classification is required' });
+        return;
+    }
+
+    try {
+        await db.query(
+            `INSERT INTO customer_profiles
+                (customer_id, client_classification, classification_confidence, classification_source,
+                 business_type, specialty, professional_title, organization_name,
+                 estimated_monthly_volume, preferred_language_tone, updated_at)
+             VALUES ($1, $2, 1.0, 'manual', $3, $4, $5, $6, $7, $8, NOW())
+             ON CONFLICT (customer_id) DO UPDATE SET
+                 client_classification = EXCLUDED.client_classification,
+                 classification_confidence = 1.0,
+                 classification_source = 'manual',
+                 business_type = COALESCE(EXCLUDED.business_type, customer_profiles.business_type),
+                 specialty = COALESCE(EXCLUDED.specialty, customer_profiles.specialty),
+                 professional_title = COALESCE(EXCLUDED.professional_title, customer_profiles.professional_title),
+                 organization_name = COALESCE(EXCLUDED.organization_name, customer_profiles.organization_name),
+                 estimated_monthly_volume = COALESCE(EXCLUDED.estimated_monthly_volume, customer_profiles.estimated_monthly_volume),
+                 preferred_language_tone = COALESCE(EXCLUDED.preferred_language_tone, customer_profiles.preferred_language_tone),
+                 updated_at = NOW()`,
+            [
+                req.params.id,
+                client_classification,
+                business_type || null,
+                specialty || null,
+                professional_title || null,
+                organization_name || null,
+                estimated_monthly_volume || null,
+                preferred_language_tone || 'formal',
+            ]
+        );
+
+        res.json({ ok: true, client_classification });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
