@@ -16,6 +16,7 @@ import inventoryRouter from './routes/inventory';
 import agentCommissionsRouter from './routes/agent-commissions';
 import authRouter from './routes/auth';
 import channelsRouter from './routes/channels';
+import simulatorRouter from './routes/simulator';
 
 dotenv.config();                          // loads .env
 dotenv.config({ path: '.env.whatsapp' }); // loads WhatsApp credentials (won't override existing)
@@ -124,6 +125,7 @@ app.use('/api/medical-products',  requireAuth, medicalProductsRouter);
 app.use('/api/inventory',         requireAuth, inventoryRouter);
 app.use('/api/agent-commissions', requireAuth, agentCommissionsRouter);
 app.use('/api/channels',          requireAuth, channelsRouter);
+app.use('/api/simulator',         requireAuth, simulatorRouter);
 
 // ─── Manager+ Routes (gerente or director) ───
 app.use('/api/escalation-rules',  requireAuth, requireRole('gerente'), escalationRulesRouter);
