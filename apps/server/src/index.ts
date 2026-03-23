@@ -34,6 +34,47 @@ app.get('/health', async (_req, res) => {
     }
 });
 
+// ─── Legal pages (public, required by Meta) ──
+app.get('/legal/privacy', (_req, res) => {
+    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Política de Privacidad - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
+<h1>Política de Privacidad</h1>
+<p><strong>Última actualización:</strong> 22 de marzo de 2026</p>
+<p>Amunet CRM ("nosotros") opera la aplicación Amunet CRM. Esta página le informa sobre nuestras políticas con respecto a la recopilación, uso y divulgación de datos personales cuando utiliza nuestro servicio.</p>
+<h2>Información que recopilamos</h2>
+<p>Recopilamos información que usted nos proporciona directamente, como nombre, correo electrónico y datos de contacto cuando interactúa con nuestros servicios a través de Facebook Messenger, Instagram o WhatsApp.</p>
+<h2>Uso de la información</h2>
+<p>Utilizamos la información recopilada para: responder a sus consultas, proporcionar nuestros servicios de diagnóstico rápido, mejorar nuestro servicio al cliente y enviar comunicaciones relacionadas con sus pedidos.</p>
+<h2>Compartir información</h2>
+<p>No vendemos ni compartimos su información personal con terceros, excepto cuando sea necesario para proporcionar nuestros servicios o cuando la ley lo requiera.</p>
+<h2>Contacto</h2>
+<p>Si tiene preguntas sobre esta política, contáctenos en: fernando.ruiz@amunet.com.mx</p>
+</body></html>`);
+});
+
+app.get('/legal/terms', (_req, res) => {
+    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Términos y Condiciones - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
+<h1>Términos y Condiciones</h1>
+<p><strong>Última actualización:</strong> 22 de marzo de 2026</p>
+<p>Al utilizar la aplicación Amunet CRM y sus servicios de mensajería, usted acepta estos términos y condiciones.</p>
+<h2>Servicios</h2>
+<p>Amunet CRM proporciona servicios de atención al cliente y venta de pruebas de diagnóstico rápido a través de canales de mensajería como Facebook Messenger, Instagram y WhatsApp.</p>
+<h2>Uso aceptable</h2>
+<p>Usted se compromete a utilizar nuestros servicios de manera responsable y de acuerdo con las leyes aplicables.</p>
+<h2>Limitación de responsabilidad</h2>
+<p>Nuestros servicios se proporcionan "tal cual". No garantizamos la disponibilidad ininterrumpida del servicio.</p>
+<h2>Contacto</h2>
+<p>Para consultas: fernando.ruiz@amunet.com.mx</p>
+</body></html>`);
+});
+
+app.get('/legal/data-deletion', (_req, res) => {
+    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Eliminación de Datos - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
+<h1>Solicitud de Eliminación de Datos</h1>
+<p>Si desea solicitar la eliminación de sus datos personales de nuestro sistema, envíe un correo a: fernando.ruiz@amunet.com.mx con el asunto "Solicitud de eliminación de datos".</p>
+<p>Procesaremos su solicitud en un plazo máximo de 30 días hábiles.</p>
+</body></html>`);
+});
+
 // ─── Auth (public) ───────────────────────────
 app.use('/api/auth', authRouter);
 
