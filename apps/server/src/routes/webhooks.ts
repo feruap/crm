@@ -239,23 +239,41 @@ router.post('/meta', async (req: Request, res: Response) => {
     res.sendStatus(200);
 
     try {
-        const channel = await db.query(
-            `SELECT id, webhook_secret, provider FROM channels
-             WHERE provider IN ('facebook', 'instagram') AND is_active = TRUE LIMIT 1`
+        // Validate signature using any active Meta channel's webhook_secret
+        const anyChannel = await db.query(
+            `SELECT webhook_secret FROM channels
+             WHERE provider IN ('facebook', 'instagram') AND is_active = TRUE AND webhook_secret IS NOT NULL LIMIT 1`
         );
-        if (channel.rows.length === 0) return;
-
-        const { id: channelId, webhook_secret, provider } = channel.rows[0];
-
-        if (webhook_secret && !validateMetaSignature(req, webhook_secret)) {
-            console.warn('Meta webhook signature mismatch — dropping');
-            return;
+        if (anyChannel.rows.length > 0 && anyChannel.rows[0].webhook_secret) {
+            if (!validateMetaSignature(req, anyChannel.rows[0].webhook_secret)) {
+                console.warn('Meta webhook signature mismatch — dropping');
+                return;
+            }
         }
 
         const body = req.body;
         if (body.object !== 'page' && body.object !== 'instagram') return;
 
         for (const entry of body.entry ?? []) {
+            const pageId: string = entry.id; // The page ID from Meta webhook payload
+
+            // Find the channel matching this page_id
+            const channel = await db.query(
+                `SELECT id, provider, subtype FROM channels
+                 WHERE provider IN ('facebook', 'instagram') AND is_active = TRUE
+                   AND provider_config->>'page_id' = $1
+                 ORDER BY CASE WHEN subtype = 'messenger' THEN 0 WHEN subtype = 'chat' THEN 0 ELSE 1 END
+                 LIMIT 1`,
+                [pageId]
+            );
+
+            if (channel.rows.length === 0) {
+                console.warn(`[Meta Webhook] No channel found for page_id ${pageId} — skipping`);
+                continue;
+            }
+
+            const { id: channelId, provider } = channel.rows[0];
+
             for (const event of entry.messaging ?? []) {
                 if (!event.message?.text) continue;
 
