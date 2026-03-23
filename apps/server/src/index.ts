@@ -16,7 +16,6 @@ import inventoryRouter from './routes/inventory';
 import agentCommissionsRouter from './routes/agent-commissions';
 import authRouter from './routes/auth';
 import channelsRouter from './routes/channels';
-import simulatorRouter from './routes/simulator';
 
 dotenv.config();                          // loads .env
 dotenv.config({ path: '.env.whatsapp' }); // loads WhatsApp credentials (won't override existing)
@@ -115,6 +114,11 @@ app.post('/api/agents/:id/reset-password', requireAuth, requireRole('director'),
 // ─── Webhooks (public — validated by signature) ──
 app.use('/api/webhooks', webhooksRouter);
 
+// ─── Facebook OAuth callback (public — FB redirects here, no auth needed) ──
+// This must be before the requireAuth channelsRouter mount
+import { handleOAuthCallback } from './routes/channels';
+app.get('/api/channels/oauth/callback', handleOAuthCallback);
+
 // ─── Protected Routes (require JWT) ──────────
 app.use('/api/conversations',     requireAuth, conversationsRouter);
 app.use('/api/campaigns',         requireAuth, campaignsRouter);
@@ -125,7 +129,6 @@ app.use('/api/medical-products',  requireAuth, medicalProductsRouter);
 app.use('/api/inventory',         requireAuth, inventoryRouter);
 app.use('/api/agent-commissions', requireAuth, agentCommissionsRouter);
 app.use('/api/channels',          requireAuth, channelsRouter);
-app.use('/api/simulator',         requireAuth, simulatorRouter);
 
 // ─── Manager+ Routes (gerente or director) ───
 app.use('/api/escalation-rules',  requireAuth, requireRole('gerente'), escalationRulesRouter);
@@ -157,45 +160,8 @@ app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     res.json(result.rows);
 });
 
-// ─── Auto-migrate missing columns ────────────
-async function ensureSchema() {
-    try {
-        await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_last_sync TIMESTAMP WITH TIME ZONE`);
-        await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[] DEFAULT '{}'`);
-        // Create knowledge_gaps table if missing
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS knowledge_gaps (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                question TEXT NOT NULL,
-                customer_id UUID REFERENCES customers(id),
-                conversation_id UUID REFERENCES conversations(id),
-                status TEXT DEFAULT 'pending',
-                frequency INTEGER DEFAULT 1,
-                resolved_at TIMESTAMP WITH TIME ZONE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            )
-        `);
-        // Create simulator_sessions table if missing
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS simulator_sessions (
-                agent_id UUID PRIMARY KEY REFERENCES agents(id),
-                conversation_id UUID,
-                channel_id UUID,
-                customer_name TEXT,
-                customer_phone TEXT,
-                campaign_id UUID,
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            )
-        `);
-        console.log('[schema] ensured medical_products columns + knowledge_gaps + simulator_sessions');
-    } catch (e: any) { console.error('[schema] migration error:', e.message); }
-}
-
 // ─── Start ────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-ensureSchema().then(() => {
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-    });
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });

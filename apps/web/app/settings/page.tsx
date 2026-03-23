@@ -799,6 +799,16 @@ function CanalesTab() {
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
 
+    // OAuth flow state
+    const [oauthLoading, setOauthLoading] = useState(false);
+    const [showOAuthPages, setShowOAuthPages] = useState(false);
+    const [oauthPages, setOauthPages] = useState<any[]>([]);
+    const [oauthState, setOauthState] = useState<string | null>(null);
+    const [selectedPages, setSelectedPages] = useState<Record<string, string[]>>({}); // page_id -> channel types
+    const [connectingOAuth, setConnectingOAuth] = useState(false);
+    const [oauthError, setOauthError] = useState<string | null>(null);
+    const [oauthSuccess, setOauthSuccess] = useState<string | null>(null);
+
     // Form
     const [formName, setFormName] = useState('');
     const [formFields, setFormFields] = useState<Record<string, string>>({});
@@ -817,6 +827,129 @@ function CanalesTab() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    // ─── Check for OAuth callback on mount ───────────────────────────────────
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const oauthResult = params.get('oauth');
+        const state = params.get('state');
+        const message = params.get('message');
+
+        if (oauthResult === 'success' && state) {
+            setOauthState(state);
+            // Clean URL
+            window.history.replaceState({}, '', '/settings');
+            // Load available pages
+            loadOAuthPages(state);
+        } else if (oauthResult === 'error') {
+            setOauthError(message || 'Error al conectar con Facebook. Intenta de nuevo.');
+            window.history.replaceState({}, '', '/settings');
+        }
+    }, []);
+
+    // ─── OAuth Functions ─────────────────────────────────────────────────────
+    const startOAuth = async () => {
+        setOauthLoading(true);
+        setOauthError(null);
+        try {
+            const resp = await apiFetch('/api/channels/oauth/start');
+            const data = await resp.json();
+            if (data.error) {
+                setOauthError(data.error);
+                setOauthLoading(false);
+                return;
+            }
+            // Redirect to Facebook OAuth
+            window.location.href = data.url;
+        } catch (err: any) {
+            setOauthError(err.message);
+            setOauthLoading(false);
+        }
+    };
+
+    const loadOAuthPages = async (state: string) => {
+        try {
+            const resp = await apiFetch(`/api/channels/oauth/pages?state=${state}`);
+            const data = await resp.json();
+            if (data.error) {
+                setOauthError(data.error);
+                return;
+            }
+            setOauthPages(data.pages || []);
+            setShowOAuthPages(true);
+            // Pre-select all channel types for each page
+            const selections: Record<string, string[]> = {};
+            for (const page of (data.pages || [])) {
+                const types: string[] = [];
+                if (!page.already_connected.facebook) {
+                    types.push('messenger', 'feed');
+                }
+                if (page.instagram_account && !page.already_connected.instagram) {
+                    types.push('instagram_chat', 'instagram_comments');
+                }
+                if (types.length > 0) selections[page.page_id] = types;
+            }
+            setSelectedPages(selections);
+        } catch (err: any) {
+            setOauthError(err.message);
+        }
+    };
+
+    const togglePageChannel = (pageId: string, channelType: string) => {
+        setSelectedPages(prev => {
+            const current = prev[pageId] || [];
+            if (current.includes(channelType)) {
+                const next = current.filter(t => t !== channelType);
+                if (next.length === 0) { const { [pageId]: _, ...rest } = prev; return rest; }
+                return { ...prev, [pageId]: next };
+            }
+            return { ...prev, [pageId]: [...current, channelType] };
+        });
+    };
+
+    const connectOAuthPages = async () => {
+        setConnectingOAuth(true);
+        setOauthError(null);
+        try {
+            const pagesToConnect = oauthPages
+                .filter(p => selectedPages[p.page_id])
+                .map(p => ({
+                    page_id: p.page_id,
+                    page_name: p.page_name,
+                    page_access_token: p.page_access_token,
+                    channels: selectedPages[p.page_id],
+                    instagram_account: p.instagram_account,
+                }));
+
+            if (pagesToConnect.length === 0) {
+                setOauthError('Selecciona al menos una página y un tipo de canal.');
+                setConnectingOAuth(false);
+                return;
+            }
+
+            const resp = await apiFetch('/api/channels/oauth/connect', {
+                method: 'POST',
+                body: JSON.stringify({ pages: pagesToConnect }),
+            });
+            const data = await resp.json();
+
+            if (data.error) {
+                setOauthError(data.error);
+            } else {
+                const count = data.total_created || 0;
+                const errCount = data.total_errors || 0;
+                setOauthSuccess(`${count} canal${count !== 1 ? 'es' : ''} conectado${count !== 1 ? 's' : ''} exitosamente${errCount > 0 ? ` (${errCount} error${errCount !== 1 ? 'es' : ''})` : ''}.`);
+                setShowOAuthPages(false);
+                setOauthPages([]);
+                setSelectedPages({});
+                await load();
+            }
+        } catch (err: any) {
+            setOauthError(err.message);
+        } finally {
+            setConnectingOAuth(false);
+        }
+    };
 
     const openNew = (provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok') => {
         setEditChannel(null);
@@ -973,11 +1106,115 @@ function CanalesTab() {
                 </div>
             )}
 
+            {/* OAuth success/error messages */}
+            {oauthSuccess && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                    <p className="text-sm text-green-800 flex-1">{oauthSuccess}</p>
+                    <button onClick={() => setOauthSuccess(null)} className="text-green-400 hover:text-green-600"><X className="w-4 h-4" /></button>
+                </div>
+            )}
+            {oauthError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                    <p className="text-sm text-red-800 flex-1">{oauthError}</p>
+                    <button onClick={() => setOauthError(null)} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+                </div>
+            )}
+
+            {/* OAuth Page Selector Modal */}
+            {showOAuthPages && oauthPages.length > 0 && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+                        <div className="flex items-center justify-between p-6 border-b">
+                            <div>
+                                <h3 className="font-bold text-lg text-slate-800">Selecciona páginas y canales</h3>
+                                <p className="text-sm text-slate-500 mt-1">Elige qué páginas conectar y qué tipo de mensajes recibir.</p>
+                            </div>
+                            <button onClick={() => { setShowOAuthPages(false); setOauthPages([]); }}
+                                className="p-2 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                            {oauthPages.map((page: any) => (
+                                <div key={page.page_id} className="border rounded-xl p-4 space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        {page.picture_url && (
+                                            <img src={page.picture_url} className="w-10 h-10 rounded-full" alt="" />
+                                        )}
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-slate-800">{page.page_name}</h4>
+                                            <p className="text-xs text-slate-400">{page.category} · ID: {page.page_id}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { type: 'messenger', label: 'Messenger (DMs)', icon: '💬', provider: 'facebook', connected: page.already_connected.facebook },
+                                            { type: 'feed', label: 'Facebook Feed', icon: '📋', provider: 'facebook', connected: page.already_connected.facebook },
+                                            ...(page.instagram_account ? [
+                                                { type: 'instagram_chat', label: `IG Direct @${page.instagram_account.ig_username || ''}`, icon: '📸', provider: 'instagram', connected: page.already_connected.instagram },
+                                                { type: 'instagram_comments', label: `IG Comentarios @${page.instagram_account.ig_username || ''}`, icon: '💬', provider: 'instagram', connected: page.already_connected.instagram },
+                                            ] : []),
+                                        ].map(ch => {
+                                            const isSelected = (selectedPages[page.page_id] || []).includes(ch.type);
+                                            return (
+                                                <label key={ch.type}
+                                                    className={`flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all text-sm ${ch.connected ? 'bg-green-50 border-green-200 opacity-70' : isSelected ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-300' : 'hover:bg-slate-50'}`}>
+                                                    <input type="checkbox" disabled={ch.connected}
+                                                        checked={ch.connected || isSelected}
+                                                        onChange={() => !ch.connected && togglePageChannel(page.page_id, ch.type)}
+                                                        className="rounded" />
+                                                    <span className="text-base">{ch.icon}</span>
+                                                    <span className="text-slate-700 text-xs">{ch.label}</span>
+                                                    {ch.connected && <span className="text-xs text-green-600 ml-auto">Conectado</span>}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {!page.instagram_account && (
+                                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                                            <AlertCircle className="w-3 h-3" />
+                                            Sin cuenta de Instagram Business vinculada a esta página.
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-3 p-6 border-t">
+                            <button onClick={connectOAuthPages}
+                                disabled={connectingOAuth || Object.keys(selectedPages).length === 0}
+                                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
+                                {connectingOAuth && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Conectar canales seleccionados
+                            </button>
+                            <button onClick={() => { setShowOAuthPages(false); setOauthPages([]); }}
+                                className="px-6 py-2.5 rounded-lg border text-slate-600 hover:bg-slate-50 font-medium">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Connect new channel */}
             <div className="space-y-3">
                 <h4 className="font-semibold text-slate-700 text-sm">Conectar canal</h4>
+
+                {/* OAuth button for Facebook + Instagram */}
+                <button onClick={startOAuth} disabled={oauthLoading}
+                    className="w-full flex items-center gap-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl p-5 hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-60 group">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0">
+                        {oauthLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : '🔗'}
+                    </div>
+                    <div className="flex-1 text-left">
+                        <p className="font-bold text-base">Conectar Facebook + Instagram con un click</p>
+                        <p className="text-blue-200 text-xs mt-0.5">Messenger, Feed, Instagram Direct e Instagram Comentarios — todo vía OAuth seguro</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-blue-200 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                {/* Manual buttons for WhatsApp and TikTok */}
                 <div className="grid grid-cols-2 gap-3">
-                    {(Object.keys(PROVIDER_META) as Array<keyof typeof PROVIDER_META>).map(provider => {
+                    {(['whatsapp', 'tiktok'] as const).map(provider => {
                         const meta = PROVIDER_META[provider];
                         const hasOne = existingProviders.includes(provider);
                         return (
@@ -988,13 +1225,33 @@ function CanalesTab() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium text-slate-800 text-sm">{meta.label}</p>
-                                    <p className="text-xs text-slate-400">{hasOne ? 'Agregar otro' : 'No configurado'}</p>
+                                    <p className="text-xs text-slate-400">{hasOne ? 'Agregar otro' : 'Configurar manual'}</p>
                                 </div>
                                 <Plus className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
                             </button>
                         );
                     })}
                 </div>
+                {/* Fallback: manual config for FB/IG (advanced users) */}
+                <details className="text-xs text-slate-400">
+                    <summary className="cursor-pointer hover:text-slate-600">Configuración manual avanzada (Facebook / Instagram)</summary>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                        {(['facebook', 'instagram'] as const).map(provider => {
+                            const meta = PROVIDER_META[provider];
+                            return (
+                                <button key={provider} onClick={() => openNew(provider)}
+                                    className="flex items-center gap-3 bg-white border border-dashed rounded-xl p-3 hover:border-blue-300 transition-all text-left group">
+                                    <div className={`w-8 h-8 rounded-lg ${meta.color} flex items-center justify-center text-lg shrink-0`}>
+                                        {meta.icon}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-slate-600 text-xs">{meta.label} (manual)</p>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </details>
             </div>
 
             {/* Config Modal */}
