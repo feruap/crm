@@ -431,6 +431,42 @@ export async function classifyIntent(message: string, conversationHistory: any[]
                 'clínico',
                 'diagnóstico',
                 'síntomas',
+                'prueba',
+                'test',
+                'médico',
+                'paciente',
+                'recomienda',
+                'infarto',
+                'cardíaco',
+                'cardiólogo',
+                'dolor de pecho',
+                'troponina',
+                'dímero',
+                'hba1c',
+                'diabetes',
+                'covid',
+                'influenza',
+                'strep',
+                'mycoplasma',
+                'neumococo',
+                'embarazo',
+                'antígeno',
+                'anticuerpo',
+                'ets',
+                'vih',
+                'sífilis',
+                'hepatitis',
+                'perfil',
+                'laboratorio',
+                'consultorio',
+                'descartar',
+                'detectar',
+                'tamizaje',
+                'bnp',
+                'procalcitonina',
+                'pcr',
+                'análisis',
+                'marcador',
             ],
             weight: 0.8,
         },
@@ -454,8 +490,15 @@ export async function classifyIntent(message: string, conversationHistory: any[]
             }
         }
 
+        // Use match-count-based scoring: 1 match = 0.65, 2+ matches = 0.8+
+        // This prevents large keyword lists from diluting confidence
+        let score = 0;
+        if (matchCount > 0) {
+            score = Math.min((0.5 + matchCount * 0.15) * pattern.weight, 1.0);
+        }
+
         scores[intent] = {
-            score: matchCount > 0 ? (matchCount / pattern.keywords.length) * pattern.weight : 0,
+            score,
             matched,
         };
     }
