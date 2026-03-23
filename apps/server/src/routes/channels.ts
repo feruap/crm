@@ -24,22 +24,12 @@ async function getMetaCredentials() {
 // ─── Facebook / Instagram OAuth Flow ────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════
 
-// Scopes needed per channel type:
-// Facebook Feed:   pages_show_list, pages_read_engagement, pages_manage_metadata
-// Messenger:       pages_show_list, pages_messaging, pages_read_engagement
-// Instagram Feed:  pages_show_list, instagram_basic, instagram_manage_comments
-// Instagram Chat:  pages_show_list, instagram_basic, instagram_manage_messages
-// We request ALL of them at once so one OAuth covers all channels
-const META_OAUTH_SCOPES = [
-    'pages_show_list',
-    'pages_read_engagement',
-    'pages_manage_metadata',
-    'pages_messaging',
-    'pages_read_user_content',
-    'instagram_basic',
-    'instagram_manage_comments',
-    'instagram_manage_messages',
-].join(',');
+// Facebook Login for Business uses config_id instead of scope parameter.
+// The config_id references a pre-configured set of permissions created in
+// Meta for Developers → Facebook Login for Business → Configurations.
+// Config "CRM Channel Connect" includes: pages_show_list, pages_read_engagement,
+// pages_manage_metadata, pages_messaging, and related dependencies.
+const META_LOGIN_CONFIG_ID = process.env.META_LOGIN_CONFIG_ID || '3084453735085137';
 
 // GET /api/channels/oauth/start — returns the Facebook OAuth URL for the frontend
 router.get('/oauth/start', async (_req: Request, res: Response) => {
@@ -62,7 +52,7 @@ router.get('/oauth/start', async (_req: Request, res: Response) => {
         const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?` +
             `client_id=${creds.appId}` +
             `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-            `&scope=${encodeURIComponent(META_OAUTH_SCOPES)}` +
+            `&config_id=${META_LOGIN_CONFIG_ID}` +
             `&state=${state}` +
             `&response_type=code`;
 
