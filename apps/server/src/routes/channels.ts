@@ -50,7 +50,7 @@ router.get('/oauth/start', async (_req: Request, res: Response) => {
             return;
         }
 
-        const base = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const base = process.env.PUBLIC_URL || process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const redirectUri = `${base}/api/channels/oauth/callback`;
 
         // State token to prevent CSRF
@@ -91,7 +91,7 @@ async function _handleOAuthCallback(req: Request, res: Response) {
         const { code, state, error: fbError, error_description } = req.query;
 
         if (fbError) {
-            const webUrl = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
+            const webUrl = process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
             res.redirect(`${webUrl}/settings?oauth=error&message=${encodeURIComponent(String(error_description || fbError))}`);
             return;
         }
@@ -109,7 +109,7 @@ async function _handleOAuthCallback(req: Request, res: Response) {
         }
 
         const creds = await getMetaCredentials();
-        const base = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}`;
+        const base = process.env.PUBLIC_URL || process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
         const redirectUri = `${base}/api/channels/oauth/callback`;
 
         // Exchange code for short-lived token
@@ -123,7 +123,7 @@ async function _handleOAuthCallback(req: Request, res: Response) {
         const tokenData = await tokenResp.json() as any;
 
         if (tokenData.error) {
-            const webUrl = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
+            const webUrl = process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
             res.redirect(`${webUrl}/settings?oauth=error&message=${encodeURIComponent(tokenData.error.message)}`);
             return;
         }
@@ -146,11 +146,11 @@ async function _handleOAuthCallback(req: Request, res: Response) {
         stateEntry.accessToken = accessToken;
 
         // Redirect to frontend settings page with success
-        const webUrl = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
+        const webUrl = process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
         res.redirect(`${webUrl}/settings?oauth=success&state=${stateStr}`);
     } catch (err: any) {
         console.error('OAuth callback error:', err);
-        const webUrl = process.env.NEXT_PUBLIC_WEB_URL || 'http://localhost:3000';
+        const webUrl = process.env.NEXT_PUBLIC_WEB_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
         res.redirect(`${webUrl}/settings?oauth=error&message=${encodeURIComponent(err.message)}`);
     }
 }
@@ -492,7 +492,7 @@ router.get('/widget-available', async (_req: Request, res: Response) => {
 
 // GET /api/channels/webhook-url  — returns the public webhook URLs for each provider
 router.get('/webhook-url', async (req: Request, res: Response) => {
-    const base = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const base = process.env.PUBLIC_URL || process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
     res.json({
         meta: `${base}/api/webhooks/meta`,
         whatsapp: `${base}/api/webhooks/whatsapp`,
