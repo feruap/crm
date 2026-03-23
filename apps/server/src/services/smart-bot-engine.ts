@@ -855,7 +855,7 @@ async function generateAIResponse(
                         { role: 'user', content: userMessage }
                     ],
                     temperature: 0.7,
-                    max_tokens: 800,
+                    max_tokens: 300,
                 }),
             });
             if (!resp.ok) {
@@ -878,7 +878,7 @@ async function generateAIResponse(
                         { role: 'user', content: userMessage }
                     ],
                     temperature: 0.7,
-                    max_tokens: 800,
+                    max_tokens: 300,
                 }),
             });
             if (!resp.ok) {
