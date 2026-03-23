@@ -157,6 +157,15 @@ router.put('/:id', async (req: Request, res: Response) => {
         'complementary_product_ids', 'recommended_profiles',
         'contraindications', 'interpretation_guide',
         'storage_conditions', 'shelf_life', 'technical_sheet_url', 'price_range', 'is_active',
+        'tipo_producto', 'url_tienda', 'marca',
+        'precio_publico', 'precio_por_prueba', 'precio_sugerido_paciente', 'margen_estimado', 'presentaciones',
+        'analito', 'volumen_muestra', 'punto_corte', 'registro_sanitario',
+        'clasificacion_clinica', 'proposito_clinico', 'especialidades', 'escenarios_uso',
+        'perfil_paciente', 'frecuencia_uso', 'limitaciones', 'resultado_positivo', 'resultado_negativo',
+        'pitch_medico', 'pitch_laboratorio', 'ventaja_vs_lab', 'roi_medico',
+        'objeciones_medico', 'objeciones_laboratorio', 'porque_agregarlo_lab',
+        'cross_sells', 'up_sells', 'palabras_clave', 'target_audience',
+        'wc_last_sync', 'wc_variation_ids',
     ];
 
     const setClauses: string[] = [];
