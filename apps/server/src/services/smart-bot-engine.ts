@@ -293,9 +293,9 @@ export async function generateMedicalAdvisory(
         // Generate embedding for semantic search
         const embedding = await generateEmbedding(message, aiProvider, apiKey);
 
-        // Find relevant medical knowledge (RAG) — audience-aware
+        // Find relevant medical knowledge (RAG) — audience-aware, with keyword fallback
         const { context: medicalContext, products: matchedProducts, hasGap } =
-            await findMedicalContext(embedding, 3, audienceType);
+            await findMedicalContext(embedding, 3, audienceType, message);
 
         // Track knowledge gap if nothing matched
         if (hasGap) {
@@ -834,7 +834,7 @@ export async function handleIncomingMessage(params: {
 }
 
 // ─────────────────────────────────────────────
-// Helper: Generate AI Response (stub for now)
+// Helper: Generate AI Response (real API calls)
 // ─────────────────────────────────────────────
 
 async function generateAIResponse(
@@ -843,7 +843,58 @@ async function generateAIResponse(
     provider: AIProvider,
     apiKey: string
 ): Promise<string> {
-    // This would call the actual AI provider
-    // For now, return a template response
-    return `Basándome en tu pregunta sobre diagnóstico, te recomendamos consultar con un profesional de salud o conectarte con nuestro asesor especializado. ¿Te gustaría saber más sobre algún producto específico?`;
+    try {
+        if (provider === 'deepseek') {
+            const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessage }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 800,
+                }),
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                console.error(`[AI DeepSeek] Error ${resp.status}: ${errText.substring(0, 200)}`);
+                throw new Error(`DeepSeek API error: ${resp.status}`);
+            }
+            const data = await resp.json();
+            return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
+        }
+
+        if (provider === 'z_ai') {
+            const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                    model: 'glm-4-flash',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessage }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 800,
+                }),
+            });
+            if (!resp.ok) {
+                const errText = await resp.text();
+                console.error(`[AI Z.ai] Error ${resp.status}: ${errText.substring(0, 200)}`);
+                throw new Error(`Z.ai API error: ${resp.status}`);
+            }
+            const data = await resp.json();
+            return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
+        }
+
+        // Fallback for other providers
+        console.warn(`[AI] Provider ${provider} not implemented, using template`);
+        return `Gracias por tu consulta. Te recomendamos contactar a un asesor especializado para más información sobre nuestras pruebas de diagnóstico.`;
+    } catch (err: any) {
+        console.error(`[AI Response Error] ${err.message}`);
+        throw err;
+    }
 }

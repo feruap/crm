@@ -46,40 +46,114 @@ export async function findBestAnswer(
 export async function findMedicalContext(
     embedding: number[],
     limit: number = 3,
-    audienceType?: 'medico' | 'laboratorio'
+    audienceType?: 'medico' | 'laboratorio',
+    originalQuery?: string
 ): Promise<{ context: string | null; products: any[]; hasGap: boolean }> {
-    const vectorLiteral = `[${embedding.join(',')}]`;
+    let relevantChunks: any[] = [];
+    let relevantProducts: any[] = [];
 
-    // Search knowledge chunks (existing RAG)
-    const chunkResult = await db.query(
-        `SELECT mkc.content, mkc.chunk_type, mp.name AS product_name,
-                1 - (mkc.embedding <=> $1::vector) AS similarity
-         FROM medical_knowledge_chunks mkc
-         JOIN medical_products mp ON mp.id = mkc.medical_product_id
-         WHERE mkc.embedding IS NOT NULL
-         ORDER BY mkc.embedding <=> $1::vector
-         LIMIT $2`,
-        [vectorLiteral, limit]
-    );
+    // Check if embeddings are real (not all zeros)
+    const hasRealEmbedding = embedding.some(v => v !== 0);
 
-    // Also search product-level embeddings for rich KB data
-    const productResult = await db.query(
-        `SELECT id, name, diagnostic_category, analito, result_time,
-                sensitivity, specificity, precio_publico, presentaciones,
-                pitch_medico, pitch_laboratorio, ventaja_vs_lab, roi_medico,
-                porque_agregarlo_lab, objeciones_medico, objeciones_laboratorio,
-                cross_sells, proposito_clinico, escenarios_uso, url_tienda,
-                target_audience,
-                1 - (embedding <=> $1::vector) AS similarity
-         FROM medical_products
-         WHERE is_active = TRUE AND embedding IS NOT NULL
-         ORDER BY embedding <=> $1::vector
-         LIMIT $2`,
-        [vectorLiteral, limit]
-    );
+    if (hasRealEmbedding) {
+        const vectorLiteral = `[${embedding.join(',')}]`;
 
-    const relevantChunks = chunkResult.rows.filter((r: any) => r.similarity > 0.3);
-    const relevantProducts = productResult.rows.filter((r: any) => r.similarity > 0.3);
+        // Search knowledge chunks (existing RAG)
+        try {
+            const chunkResult = await db.query(
+                `SELECT mkc.content, mkc.chunk_type, mp.name AS product_name,
+                        1 - (mkc.embedding <=> $1::vector) AS similarity
+                 FROM medical_knowledge_chunks mkc
+                 JOIN medical_products mp ON mp.id = mkc.medical_product_id
+                 WHERE mkc.embedding IS NOT NULL
+                 ORDER BY mkc.embedding <=> $1::vector
+                 LIMIT $2`,
+                [vectorLiteral, limit]
+            );
+            relevantChunks = chunkResult.rows.filter((r: any) => r.similarity > 0.3);
+        } catch (err) {
+            console.warn('[RAG] medical_knowledge_chunks query failed, skipping');
+        }
+
+        // Also search product-level embeddings for rich KB data
+        try {
+            const productResult = await db.query(
+                `SELECT id, name, diagnostic_category, analito, result_time,
+                        sensitivity, specificity, precio_publico, presentaciones,
+                        pitch_medico, pitch_laboratorio, ventaja_vs_lab, roi_medico,
+                        porque_agregarlo_lab, objeciones_medico, objeciones_laboratorio,
+                        cross_sells, proposito_clinico, escenarios_uso, url_tienda,
+                        target_audience,
+                        1 - (embedding <=> $1::vector) AS similarity
+                 FROM medical_products
+                 WHERE is_active = TRUE AND embedding IS NOT NULL
+                 ORDER BY embedding <=> $1::vector
+                 LIMIT $2`,
+                [vectorLiteral, limit]
+            );
+            relevantProducts = productResult.rows.filter((r: any) => r.similarity > 0.3);
+        } catch (err) {
+            console.warn('[RAG] product embedding query failed, skipping');
+        }
+    }
+
+    // ── KEYWORD FALLBACK: If no embeddings found, use text search ──
+    if (relevantProducts.length === 0) {
+        console.log('[RAG] No embedding matches, using keyword fallback');
+        try {
+            // Use the original query (or embedding text) to find products via keyword matching
+            const queryText = originalQuery || '';
+            const queryLower = queryText.toLowerCase();
+
+            // Fetch all active products with KB data
+            const allProducts = await db.query(
+                `SELECT id, name, diagnostic_category, analito, result_time,
+                        sensitivity, specificity, precio_publico, presentaciones,
+                        pitch_medico, pitch_laboratorio, ventaja_vs_lab, roi_medico,
+                        porque_agregarlo_lab, objeciones_medico, objeciones_laboratorio,
+                        proposito_clinico, escenarios_uso, url_tienda,
+                        target_audience, palabras_clave, clinical_indications, sample_type
+                 FROM medical_products
+                 WHERE is_active = TRUE
+                   AND (pitch_medico IS NOT NULL OR pitch_laboratorio IS NOT NULL)`
+            );
+
+            // Score each product by keyword overlap
+            const scored = allProducts.rows.map((p: any) => {
+                let score = 0;
+                const searchableText = [
+                    p.name, p.diagnostic_category, p.analito,
+                    p.proposito_clinico, p.clinical_indications,
+                    p.target_audience,
+                    ...(Array.isArray(p.palabras_clave) ? p.palabras_clave : []),
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                // Check keyword matches
+                const queryWords = queryLower.split(/\s+/).filter(w => w.length > 3);
+                for (const word of queryWords) {
+                    if (searchableText.includes(word)) score += 1;
+                }
+
+                // Boost for specific medical terms
+                const medTerms = ['infarto', 'cardíac', 'troponin', 'bnp', 'dímero', 'hba1c', 'diabetes',
+                    'covid', 'influenza', 'strep', 'neumococo', 'mycoplasma', 'embarazo', 'ets', 'vih',
+                    'sífilis', 'hepatitis', 'pecho', 'corazón', 'respirator', 'pulmon'];
+                for (const term of medTerms) {
+                    if (queryLower.includes(term) && searchableText.includes(term)) score += 3;
+                }
+
+                return { ...p, similarity: score };
+            });
+
+            // Sort by score descending and take top matches
+            scored.sort((a: any, b: any) => b.similarity - a.similarity);
+            relevantProducts = scored.filter((p: any) => p.similarity > 0).slice(0, limit);
+
+            console.log(`[RAG Keyword] Found ${relevantProducts.length} products: ${relevantProducts.map((p: any) => p.name).join(', ')}`);
+        } catch (err) {
+            console.error('[RAG Keyword] Fallback error:', err);
+        }
+    }
 
     // Determine if we have a knowledge gap
     const hasGap = relevantChunks.length === 0 && relevantProducts.length === 0;
@@ -228,8 +302,8 @@ export async function getMedicalBotResponse(
         };
     }
 
-    // 3. Get medical context from indexed PDFs
-    const medicalContext = await findMedicalContext(embedding);
+    // 3. Get medical context from indexed PDFs (with keyword fallback)
+    const medicalContext = await findMedicalContext(embedding, 3, undefined, messageText);
 
     // 4. Get AI-computed recommendations
     const recommendations = await getRecommendations(messageText, customerId, provider, apiKey);

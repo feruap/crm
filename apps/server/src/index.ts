@@ -162,7 +162,33 @@ async function ensureSchema() {
     try {
         await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_last_sync TIMESTAMP WITH TIME ZONE`);
         await db.query(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[] DEFAULT '{}'`);
-        console.log('[schema] ensured medical_products columns');
+        // Create knowledge_gaps table if missing
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS knowledge_gaps (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                question TEXT NOT NULL,
+                customer_id UUID REFERENCES customers(id),
+                conversation_id UUID REFERENCES conversations(id),
+                status TEXT DEFAULT 'pending',
+                frequency INTEGER DEFAULT 1,
+                resolved_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        // Create simulator_sessions table if missing
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS simulator_sessions (
+                agent_id UUID PRIMARY KEY REFERENCES agents(id),
+                conversation_id UUID,
+                channel_id UUID,
+                customer_name TEXT,
+                customer_phone TEXT,
+                campaign_id UUID,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        console.log('[schema] ensured medical_products columns + knowledge_gaps + simulator_sessions');
     } catch (e: any) { console.error('[schema] migration error:', e.message); }
 }
 
