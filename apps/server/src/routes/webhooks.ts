@@ -55,6 +55,42 @@ async function resolveOrCreateCustomer(
     return customerId;
 }
 
+/**
+ * Resolve Facebook user's real name from Graph API
+ * Falls back to PSID if API call fails or name is not available
+ */
+async function resolveFacebookProfileName(
+    psid: string,
+    accessToken: string
+): Promise<string> {
+    try {
+        const response = await fetch(
+            `https://graph.facebook.com/v18.0/${psid}?fields=first_name,last_name,profile_pic&access_token=${accessToken}`,
+            { method: 'GET' }
+        );
+
+        if (!response.ok) {
+            console.warn(`[FB Graph API] Failed to resolve profile for ${psid}: ${response.status}`);
+            return psid;
+        }
+
+        const data = await response.json() as { first_name?: string; last_name?: string; profile_pic?: string };
+        const firstName = data.first_name || '';
+        const lastName = data.last_name || '';
+        const displayName = `${firstName} ${lastName}`.trim();
+
+        if (!displayName) {
+            return psid;
+        }
+
+        console.log(`[FB Graph API] Resolved profile for ${psid}: ${displayName}`);
+        return displayName;
+    } catch (err) {
+        console.error(`[FB Graph API] Error resolving profile for ${psid}:`, err);
+        return psid;
+    }
+}
+
 async function resolveOrCreateConversation(
     customerId: string,
     channelId: string,
@@ -147,16 +183,10 @@ async function handleBotResponse(
                 );
 
                 console.log(`[Smart Bot Escalation] Conv ${conversationId}: ${botReply.routing_decision.reason}`);
+                return;
             } catch (err) {
                 console.error('[Escalation execution error]:', err);
-                // Escalation failed — send just the bot message without agent note
-                await db.query(
-                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
-                     VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5, 'escalation')`,
-                    [conversationId, channelId, customerId, botReply.message, botReply.confidence]
-                );
             }
-            return; // Always return after escalation — never fall through to normal reply
         }
 
         // Send normal bot reply
@@ -259,7 +289,7 @@ router.post('/meta', async (req: Request, res: Response) => {
 
             // Find the channel matching this page_id
             const channel = await db.query(
-                `SELECT id, provider, subtype FROM channels
+                `SELECT id, provider, subtype, provider_config FROM channels
                  WHERE provider IN ('facebook', 'instagram') AND is_active = TRUE
                    AND provider_config->>'page_id' = $1
                  ORDER BY CASE WHEN subtype = 'messenger' THEN 0 WHEN subtype = 'chat' THEN 0 ELSE 1 END
@@ -272,7 +302,8 @@ router.post('/meta', async (req: Request, res: Response) => {
                 continue;
             }
 
-            const { id: channelId, provider } = channel.rows[0];
+            const { id: channelId, provider, provider_config } = channel.rows[0];
+            const accessToken = provider_config?.access_token as string | undefined;
 
             for (const event of entry.messaging ?? []) {
                 if (!event.message?.text) continue;
@@ -283,7 +314,13 @@ router.post('/meta', async (req: Request, res: Response) => {
                 // Extract referral data if present (Click-to-DM from ads)
                 const referral: MetaReferral | null = event.referral || event.message?.referral || null;
 
-                const customerId = await resolveOrCreateCustomer(provider, senderId, senderId);
+                // Resolve Facebook profile name if we have an access token
+                let displayName = senderId;
+                if (accessToken) {
+                    displayName = await resolveFacebookProfileName(senderId, accessToken);
+                }
+
+                const customerId = await resolveOrCreateCustomer(provider, senderId, displayName);
                 const { conversationId, isNew } = await resolveOrCreateConversation(
                     customerId, channelId, referral
                 );
@@ -465,80 +502,6 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
-// Webchat — Receive messages from livechat widget
-// ─────────────────────────────────────────────
-router.post('/webchat', async (req: Request, res: Response) => {
-    try {
-        const { contact_id, name, message } = req.body;
-
-        if (!contact_id || !message) {
-            res.status(400).json({ error: 'contact_id and message are required' });
-            return;
-        }
-
-        // Find or create webchat channel
-        let channel = await db.query(
-            `SELECT id FROM channels WHERE provider = 'webchat' AND is_active = TRUE LIMIT 1`
-        );
-        if (channel.rows.length === 0) {
-            // Auto-create webchat channel
-            channel = await db.query(
-                `INSERT INTO channels (name, provider, is_active)
-                 VALUES ('Chat Web', 'webchat', TRUE)
-                 RETURNING id`
-            );
-        }
-        const channelId = channel.rows[0].id;
-
-        // Resolve or create customer from contact_id
-        const customerId = await resolveOrCreateCustomer('webchat', contact_id, name || 'Usuario Web');
-
-        // Resolve or create conversation
-        const { conversationId, isNew } = await resolveOrCreateConversation(customerId, channelId);
-
-        // Save inbound message
-        const msgResult = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content)
-             VALUES ($1, $2, $3, 'inbound', $4) RETURNING id`,
-            [conversationId, channelId, customerId, message]
-        );
-
-        // Emit via Socket.io so CRM inbox updates in real-time
-        try {
-            const { emitNewMessage, emitAlert } = await import('../socket');
-            emitNewMessage(conversationId, {
-                conversation_id: conversationId,
-                message: {
-                    id: msgResult.rows[0].id,
-                    content: message,
-                    direction: 'inbound',
-                    handled_by: null,
-                }
-            });
-            // Also emit a general alert for the inbox
-            emitAlert({
-                type: 'new_conversation',
-                conversation_id: conversationId,
-                customer_name: name || 'Usuario Web',
-                channel: 'webchat',
-            });
-        } catch (socketErr) {
-            console.error('[Webchat] Socket emit error:', socketErr);
-        }
-
-        console.log(`[Webchat] Message from ${name || contact_id} in conv ${conversationId}`);
-
-        // Send bot response asynchronously
-        handleBotResponse(conversationId, channelId, customerId, message).catch(console.error);
-
-        res.json({ ok: true, conversationId });
-    } catch (err) {
-        console.error('Webchat webhook error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// ─────────────────────────────────────────────
 // Webchat — Receive UTM data from chat widget
 // Called when a webchat session starts with UTM params
 // ─────────────────────────────────────────────
@@ -570,4 +533,3 @@ router.post('/webchat-utm', async (req: Request, res: Response) => {
 });
 
 export default router;
-export { handleBotResponse };
