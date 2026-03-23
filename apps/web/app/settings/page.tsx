@@ -1066,7 +1066,7 @@ function CanalesTab() {
                 <div className="space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Canales configurados</h4>
                     {channels.map(ch => {
-                        const meta = PROVIDER_META[ch.provider];
+                        const meta = PROVIDER_META[ch.provider] || { label: ch.provider, color: 'bg-slate-400', icon: '📡', fields: [], subtypes: null, setupLink: '', setupInstructions: [] };
                         return (
                             <div key={ch.id} className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-4 ${!ch.is_active ? 'opacity-60' : ''}`}>
                                 <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-xl shrink-0`}>
