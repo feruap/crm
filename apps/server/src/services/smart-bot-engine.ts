@@ -46,7 +46,8 @@ export type IntentType =
     | 'HUMAN_NEEDED'
     | 'REORDER'
     | 'ORDER_TRACKING'
-    | 'DISCOUNT_REQUEST';
+    | 'DISCOUNT_REQUEST'
+    | 'DISTRIBUTION_INQUIRY';
 
 export interface IntentClassification {
     intent: IntentType;
@@ -470,6 +471,15 @@ export async function classifyIntent(message: string, conversationHistory: any[]
             ],
             weight: 0.8,
         },
+        DISTRIBUTION_INQUIRY: {
+            keywords: [
+                'distribuidor', 'distribuidora', 'distribuir', 'comercializar',
+                'representante comercial', 'socio comercial', 'alianza comercial',
+                'importar', 'exportar', 'otro país', 'otro pais', 'internacional',
+                'licencia', 'registro sanitario', 'franquicia',
+            ],
+            weight: 0.95,
+        },
         HUMAN_NEEDED: {
             keywords: ['hablar con alguien', 'agente humano', 'persona real', 'representante', 'asesor'],
             weight: 1.0,
@@ -593,6 +603,14 @@ export async function routeConversation(
                 priority: 'critical',
             };
 
+        case 'DISTRIBUTION_INQUIRY':
+            return {
+                should_escalate: true,
+                target_type: 'senior_agent',
+                reason: 'Consulta de distribución/alianza comercial — lead de alto valor',
+                priority: 'critical',
+            };
+
         case 'HUMAN_NEEDED':
             return {
                 should_escalate: true,
@@ -608,6 +626,47 @@ export async function routeConversation(
                 reason: 'Clasificación desconocida - escalar por seguridad',
                 priority: 'medium',
             };
+    }
+}
+
+// ─────────────────────────────────────────────
+// CONTEXTUAL ESCALATION MESSAGES
+// Instead of generic "espera un momento", give the client
+// useful info and pass context to the agent via routing.
+// ─────────────────────────────────────────────
+
+function buildContextualEscalationMessage(
+    intent: IntentClassification,
+    routing: RoutingDecision,
+    originalMessage: string
+): string {
+    const agentType = routing.target_type === 'sales_agent'
+        ? 'especialista en ventas'
+        : routing.target_type === 'senior_agent'
+            ? 'ejecutivo comercial'
+            : 'asesor';
+
+    switch (intent.intent) {
+        case 'DISCOUNT_REQUEST':
+            return `Entiendo que te interesa un precio especial. Voy a conectarte con un ${agentType} que puede revisar opciones de descuento según el volumen que manejes. Mientras tanto, te comento que manejamos precios escalonados por volumen en todas nuestras líneas de producto.`;
+
+        case 'DISTRIBUTION_INQUIRY':
+            return `¡Excelente! Nos da gusto tu interés en ser parte de nuestra red de distribuidores. Voy a conectarte con un ${agentType} de nuestro equipo de alianzas comerciales que podrá darte toda la información sobre el programa de distribuidores, requisitos y condiciones. Para agilizar el proceso, ¿podrías compartirnos tu nombre completo, empresa y país?`;
+
+        case 'COMPLAINT':
+            return `Lamento escuchar que tienes una situación que resolver. Voy a conectarte de inmediato con un ${agentType} para atenderte. Tu caso tiene prioridad.`;
+
+        case 'HUMAN_NEEDED':
+            return `Por supuesto, voy a conectarte con un ${agentType}. En un momento te atiende.`;
+
+        default: {
+            // For low-confidence or unknown intents, provide a helpful generic
+            // but still include a brief summary of what the client asked
+            const briefContext = originalMessage.length > 80
+                ? originalMessage.substring(0, 80) + '...'
+                : originalMessage;
+            return `Voy a conectarte con un ${agentType} que podrá ayudarte mejor con tu consulta. En un momento te atiende.`;
+        }
     }
 }
 
@@ -713,8 +772,11 @@ export async function handleIncomingMessage(params: {
                 [conversationId, customerId, intent.intent, intent.confidence]
             );
 
+            // Build contextual escalation message instead of generic "espera un momento"
+            const escalationMsg = buildContextualEscalationMessage(intent, routing, message);
+
             return {
-                message: `Entendido. Voy a conectarte con un ${routing.target_type === 'sales_agent' ? 'especialista en ventas' : routing.target_type === 'senior_agent' ? 'supervisor' : 'asesor'}. Por favor espera un momento.`,
+                message: escalationMsg,
                 confidence: intent.confidence,
                 intent_type: intent.intent,
                 action_type: 'escalate',
@@ -799,19 +861,37 @@ export async function handleIncomingMessage(params: {
             };
         }
 
-        // Gap #8: Handle DISCOUNT_REQUEST (escalate to agent)
+        // Gap #8: Handle DISCOUNT_REQUEST (escalate to agent with context)
         if (intent.intent === 'DISCOUNT_REQUEST') {
+            const discountRouting: RoutingDecision = {
+                should_escalate: true,
+                target_type: 'sales_agent',
+                reason: `Solicitud de descuento — mensaje original: "${message.substring(0, 120)}"`,
+                priority: 'high',
+            };
             return {
-                message: 'Entiendo que necesitas un descuento. Voy a conectarte con un supervisor que puede ayudarte con eso. Por favor espera un momento.',
+                message: buildContextualEscalationMessage(intent, discountRouting, message),
                 confidence: 0.85,
                 intent_type: 'DISCOUNT_REQUEST',
                 action_type: 'escalate',
-                routing_decision: {
-                    should_escalate: true,
-                    target_type: 'sales_agent',
-                    reason: 'Solicitud de descuento requiere autorización de supervisor',
-                    priority: 'high',
-                },
+                routing_decision: discountRouting,
+            };
+        }
+
+        // Handle DISTRIBUTION_INQUIRY (high-value B2B lead — escalate with priority)
+        if (intent.intent === 'DISTRIBUTION_INQUIRY') {
+            const distRouting: RoutingDecision = {
+                should_escalate: true,
+                target_type: 'senior_agent',
+                reason: `Consulta de distribución/alianza comercial — mensaje: "${message.substring(0, 120)}"`,
+                priority: 'critical',
+            };
+            return {
+                message: buildContextualEscalationMessage(intent, distRouting, message),
+                confidence: 0.9,
+                intent_type: 'DISTRIBUTION_INQUIRY',
+                action_type: 'escalate',
+                routing_decision: distRouting,
             };
         }
 

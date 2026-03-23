@@ -164,17 +164,27 @@ async function handleBotResponse(
                 const escalation = {
                     shouldEscalate: true,
                     reason: botReply.routing_decision.reason,
+                    rule: {
+                        id: 0,
+                        name: `Smart Bot: ${botReply.intent_type}`,
+                        condition_type: botReply.intent_type.toLowerCase(),
+                        target_type: botReply.routing_decision.target_type === 'bot' ? 'any_available' : botReply.routing_decision.target_type,
+                        target_id: null,
+                        target_role: botReply.routing_decision.target_type === 'sales_agent' ? 'sales' : botReply.routing_decision.target_type === 'senior_agent' ? 'senior' : null,
+                        generate_summary: true,
+                    },
                 };
 
                 const handoff = await executeHandoff(
                     conversationId, customerId, escalation, provider, api_key_encrypted
                 );
 
+                // Bot message already includes contextual info — only add agent availability note if no agent found
                 const agentNote = handoff.agent_id
-                    ? 'Un asesor se comunicará con usted en breve.'
-                    : 'Estamos buscando un asesor disponible, por favor espere un momento.';
+                    ? ''
+                    : ' Estamos buscando un asesor disponible.';
 
-                const handoffMessage = `${botReply.message} ${agentNote}`;
+                const handoffMessage = `${botReply.message}${agentNote}`;
 
                 await db.query(
                     `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence, bot_action)
@@ -533,3 +543,4 @@ router.post('/webchat-utm', async (req: Request, res: Response) => {
 });
 
 export default router;
+export { handleBotResponse };
