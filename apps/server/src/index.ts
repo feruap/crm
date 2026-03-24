@@ -177,17 +177,17 @@ app.use('/api/analytics',         requireAuth, requireRole('gerente'), analytics
 
 // ─── AI Settings (director only) ─────────────
 app.post('/api/settings/ai', requireAuth, requireRole('director'), async (req, res) => {
-    const { provider, apiKey, model, systemPrompt, temperature } = req.body;
+    const { provider, apiKey, model, systemPrompt, temperature, promptAdditions } = req.body;
 
     await db.query(
         `UPDATE ai_settings SET is_default = FALSE WHERE is_default = TRUE`
     );
 
     await db.query(
-        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default)
-         VALUES ($1, $2, $3, $4, $5, TRUE)
+        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default, prompt_additions)
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6)
          ON CONFLICT DO NOTHING`,
-        [provider, apiKey, model, systemPrompt, temperature ?? 0.7]
+        [provider, apiKey, model, systemPrompt, temperature ?? 0.7, promptAdditions || null]
     );
 
     res.json({ ok: true, provider });
@@ -195,7 +195,7 @@ app.post('/api/settings/ai', requireAuth, requireRole('director'), async (req, r
 
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
-        `SELECT provider, model_name, system_prompt, temperature, is_default
+        `SELECT provider, model_name, system_prompt, temperature, is_default, prompt_additions
          FROM ai_settings ORDER BY is_default DESC`
     );
     res.json(result.rows);

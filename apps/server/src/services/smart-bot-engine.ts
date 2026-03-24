@@ -306,11 +306,23 @@ export async function generateMedicalAdvisory(
         // Get AI recommendations
         const recommendations = await getRecommendations(message, customerId, aiProvider, apiKey);
 
+        // Load prompt_additions from AI settings (UI-configured extra rules)
+        let promptAdditions: string | null = null;
+        try {
+            const paResult = await db.query(
+                `SELECT prompt_additions FROM ai_settings WHERE is_default = TRUE LIMIT 1`
+            );
+            if (paResult.rows.length > 0) {
+                promptAdditions = paResult.rows[0].prompt_additions || null;
+            }
+        } catch { /* ignore — column may not exist yet */ }
+
         // Build system prompt with context — now audience-aware
         const systemPrompt = buildMedicalPrompt({
             customerProfile: profile,
             recommendations,
             knowledgeContext: medicalContext || undefined,
+            promptAdditions,
         });
 
         // Call AI service
@@ -630,15 +642,50 @@ export async function routeConversation(
 }
 
 // ─────────────────────────────────────────────
+// DB ESCALATION MESSAGE LOOKUP
+// Checks if there's a UI-configured escalation_message
+// for a given intent/condition_type. Falls back to null.
+// ─────────────────────────────────────────────
+
+const INTENT_TO_CONDITION_MAP: Record<string, string> = {
+    DISCOUNT_REQUEST: 'discount_request',
+    DISTRIBUTION_INQUIRY: 'distribution_inquiry',
+    COMPLAINT: 'complaint',
+    HUMAN_NEEDED: 'explicit_request',
+    PURCHASE_INTENT: 'purchase_intent',
+    REORDER: 'reorder',
+    PRICE_REQUEST: 'price_request',
+};
+
+async function getEscalationMessageForIntent(intentType: string): Promise<string | null> {
+    try {
+        const conditionType = INTENT_TO_CONDITION_MAP[intentType];
+        if (!conditionType) return null;
+
+        const result = await db.query(
+            `SELECT escalation_message FROM escalation_rules
+             WHERE condition_type = $1 AND is_active = TRUE AND escalation_message IS NOT NULL
+             ORDER BY priority DESC LIMIT 1`,
+            [conditionType]
+        );
+        return result.rows.length > 0 ? result.rows[0].escalation_message : null;
+    } catch {
+        return null;
+    }
+}
+
+// ─────────────────────────────────────────────
 // CONTEXTUAL ESCALATION MESSAGES
 // Instead of generic "espera un momento", give the client
 // useful info and pass context to the agent via routing.
+// Uses DB-configured message if available, else hardcoded fallback.
 // ─────────────────────────────────────────────
 
 function buildContextualEscalationMessage(
     intent: IntentClassification,
     routing: RoutingDecision,
-    originalMessage: string
+    originalMessage: string,
+    dbEscalationMessage?: string | null
 ): string {
     const agentType = routing.target_type === 'sales_agent'
         ? 'especialista en ventas'
@@ -646,6 +693,12 @@ function buildContextualEscalationMessage(
             ? 'ejecutivo comercial'
             : 'asesor';
 
+    // If a DB-configured escalation message exists, use it (replace {agent_type} placeholder)
+    if (dbEscalationMessage) {
+        return dbEscalationMessage.replace(/\{agent_type\}/g, agentType);
+    }
+
+    // Fallback: hardcoded messages per intent (legacy — migrate these to DB rules)
     switch (intent.intent) {
         case 'DISCOUNT_REQUEST':
             return `Entiendo que te interesa un precio especial. Voy a conectarte con un ${agentType} que puede revisar opciones de descuento según el volumen que manejes. Mientras tanto, te comento que manejamos precios escalonados por volumen en todas nuestras líneas de producto.`;
@@ -659,14 +712,8 @@ function buildContextualEscalationMessage(
         case 'HUMAN_NEEDED':
             return `Por supuesto, voy a conectarte con un ${agentType}. En un momento te atiende.`;
 
-        default: {
-            // For low-confidence or unknown intents, provide a helpful generic
-            // but still include a brief summary of what the client asked
-            const briefContext = originalMessage.length > 80
-                ? originalMessage.substring(0, 80) + '...'
-                : originalMessage;
+        default:
             return `Voy a conectarte con un ${agentType} que podrá ayudarte mejor con tu consulta. En un momento te atiende.`;
-        }
     }
 }
 
@@ -772,8 +819,11 @@ export async function handleIncomingMessage(params: {
                 [conversationId, customerId, intent.intent, intent.confidence]
             );
 
-            // Build contextual escalation message instead of generic "espera un momento"
-            const escalationMsg = buildContextualEscalationMessage(intent, routing, message);
+            // Look for a DB-configured escalation message for this intent
+            const dbMsg = await getEscalationMessageForIntent(intent.intent);
+
+            // Build contextual escalation message — uses DB message if available, else hardcoded fallback
+            const escalationMsg = buildContextualEscalationMessage(intent, routing, message, dbMsg);
 
             return {
                 message: escalationMsg,
@@ -863,6 +913,7 @@ export async function handleIncomingMessage(params: {
 
         // Gap #8: Handle DISCOUNT_REQUEST (escalate to agent with context)
         if (intent.intent === 'DISCOUNT_REQUEST') {
+            const discountDbMsg = await getEscalationMessageForIntent('DISCOUNT_REQUEST');
             const discountRouting: RoutingDecision = {
                 should_escalate: true,
                 target_type: 'sales_agent',
@@ -870,7 +921,7 @@ export async function handleIncomingMessage(params: {
                 priority: 'high',
             };
             return {
-                message: buildContextualEscalationMessage(intent, discountRouting, message),
+                message: buildContextualEscalationMessage(intent, discountRouting, message, discountDbMsg),
                 confidence: 0.85,
                 intent_type: 'DISCOUNT_REQUEST',
                 action_type: 'escalate',
@@ -880,6 +931,7 @@ export async function handleIncomingMessage(params: {
 
         // Handle DISTRIBUTION_INQUIRY (high-value B2B lead — escalate with priority)
         if (intent.intent === 'DISTRIBUTION_INQUIRY') {
+            const distDbMsg = await getEscalationMessageForIntent('DISTRIBUTION_INQUIRY');
             const distRouting: RoutingDecision = {
                 should_escalate: true,
                 target_type: 'senior_agent',
@@ -887,7 +939,7 @@ export async function handleIncomingMessage(params: {
                 priority: 'critical',
             };
             return {
-                message: buildContextualEscalationMessage(intent, distRouting, message),
+                message: buildContextualEscalationMessage(intent, distRouting, message, distDbMsg),
                 confidence: 0.9,
                 intent_type: 'DISTRIBUTION_INQUIRY',
                 action_type: 'escalate',

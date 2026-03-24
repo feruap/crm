@@ -1488,6 +1488,7 @@ function AITab() {
     const [prompt, setPrompt] = useState('');
     const [temp, setTemp] = useState(0.7);
     const [excludedCategories, setExcludedCategories] = useState('');
+    const [promptAdditions, setPromptAdditions] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -1516,6 +1517,7 @@ function AITab() {
                     setProvider(d.provider); setModel(d.model_name ?? '');
                     setPrompt(d.system_prompt ?? ''); setTemp(d.temperature ?? 0.7);
                     setExcludedCategories((d.excluded_categories || []).join(', '));
+                    setPromptAdditions(d.prompt_additions ?? '');
                 }
             })
             .catch(console.error)
@@ -1533,7 +1535,8 @@ function AITab() {
                     model,
                     systemPrompt: prompt,
                     temperature: temp,
-                    excludedCategories: excludedCategories.split(',').map(c => c.trim()).filter(Boolean)
+                    excludedCategories: excludedCategories.split(',').map(c => c.trim()).filter(Boolean),
+                    promptAdditions: promptAdditions || undefined,
                 }),
             });
             setSaved(true);
@@ -1650,6 +1653,24 @@ function AITab() {
                 <p className="text-xs text-slate-400">
                     El prompt se inyecta en cada conversación junto con el catálogo de productos activo de WooCommerce.
                 </p>
+            </div>
+
+            {/* Prompt Additions — extra rules appended to system prompt */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700">Reglas Adicionales del Prompt</label>
+                        <p className="text-xs text-slate-400 mt-0.5">Instrucciones extra que se añaden al final del system prompt. Ideal para reglas de precisión, restricciones especiales o directivas temporales.</p>
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">{promptAdditions.length.toLocaleString()} chars</span>
+                </div>
+                <textarea value={promptAdditions} onChange={e => setPromptAdditions(e.target.value)} rows={8}
+                    placeholder={"Ej:\n- NUNCA inventes cantidades de presentación.\n- Los precios deben coincidir EXACTAMENTE con la base de conocimiento.\n- Si no tienes información exacta, di \"le confirmo con un asesor\"."}
+                    className="w-full border rounded-lg px-3 py-3 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y" />
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+                    <p className="font-semibold mb-1">¿Cómo se usan estas reglas?</p>
+                    <p>Este texto se añade al final del system prompt en cada conversación con el bot. Úsalo para agregar reglas de precisión sobre datos de producto, restricciones de comportamiento, o instrucciones temporales de campaña — sin necesidad de modificar el código.</p>
+                </div>
             </div>
 
             {/* Actions row */}

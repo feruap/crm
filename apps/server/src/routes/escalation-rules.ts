@@ -44,7 +44,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 router.post('/', async (req: Request, res: Response) => {
-    const { name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary } = req.body;
+    const { name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary, escalation_message } = req.body;
 
     if (!name || !condition_type) {
         res.status(400).json({ error: 'name and condition_type are required' });
@@ -52,16 +52,16 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const result = await db.query(
-        `INSERT INTO escalation_rules (name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO escalation_rules (name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary, escalation_message)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
-        [name, description, condition_type, JSON.stringify(condition_config || {}), target_type || 'any_available', target_id, target_role, priority || 0, generate_summary !== false]
+        [name, description, condition_type, JSON.stringify(condition_config || {}), target_type || 'any_available', target_id, target_role, priority || 0, generate_summary !== false, escalation_message || null]
     );
     res.status(201).json(result.rows[0]);
 });
 
 router.put('/:id', async (req: Request, res: Response) => {
-    const { name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary, is_active } = req.body;
+    const { name, description, condition_type, condition_config, target_type, target_id, target_role, priority, generate_summary, is_active, escalation_message } = req.body;
 
     const result = await db.query(
         `UPDATE escalation_rules SET
@@ -74,10 +74,11 @@ router.put('/:id', async (req: Request, res: Response) => {
              target_role = $7,
              priority = COALESCE($8, priority),
              generate_summary = COALESCE($9, generate_summary),
-             is_active = COALESCE($10, is_active)
-         WHERE id = $11
+             is_active = COALESCE($10, is_active),
+             escalation_message = $11
+         WHERE id = $12
          RETURNING *`,
-        [name, description, condition_type, condition_config ? JSON.stringify(condition_config) : null, target_type, target_id, target_role, priority, generate_summary, is_active, req.params.id]
+        [name, description, condition_type, condition_config ? JSON.stringify(condition_config) : null, target_type, target_id, target_role, priority, generate_summary, is_active, escalation_message !== undefined ? escalation_message : null, req.params.id]
     );
 
     if (result.rows.length === 0) {

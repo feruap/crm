@@ -101,6 +101,7 @@ export function buildMedicalPrompt(options: {
     recommendations?: Recommendation[];
     conversationHistory?: string;
     knowledgeContext?: string;
+    promptAdditions?: string | null;
 }): string {
     const parts: string[] = [MEDICAL_ADVISOR_BASE_PROMPT];
 
@@ -160,6 +161,13 @@ Prioriza estas recomendaciones pero adapta la presentación al contexto de la co
 ## Contexto de la Base de Conocimiento
 Información relevante de fichas técnicas y consultas previas:
 ${options.knowledgeContext}`);
+    }
+
+    // Inject UI-configured additional rules (from Settings > AI > Reglas Adicionales)
+    if (options.promptAdditions) {
+        parts.push(`
+## Reglas Adicionales (configuradas por el administrador)
+${options.promptAdditions}`);
     }
 
     return parts.join('\n\n');

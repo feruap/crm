@@ -21,6 +21,7 @@ interface EscalationRule {
     target_role: string | null;
     priority: number;
     generate_summary: boolean;
+    escalation_message: string | null;
     is_active: boolean;
     times_triggered: string;
     created_at: string;
@@ -56,6 +57,7 @@ interface FormData {
     target_role: string;
     priority: number;
     generate_summary: boolean;
+    escalation_message: string;
 }
 
 const CONDITION_TYPES = [
@@ -63,11 +65,14 @@ const CONDITION_TYPES = [
     { value: 'explicit_request', label: 'Solicitud de humano' },
     { value: 'purchase_intent', label: 'Intención de compra' },
     { value: 'discount_request', label: 'Solicita descuento' },
+    { value: 'distribution_inquiry', label: 'Consulta de distribución' },
     { value: 'complaint', label: 'Queja / Reclamo' },
     { value: 'order_issue', label: 'Problema con pedido' },
     { value: 'vip_customer', label: 'Cliente VIP' },
     { value: 'sentiment_negative', label: 'Sentimiento negativo' },
     { value: 'technical_question', label: 'Pregunta técnica' },
+    { value: 'reorder', label: 'Reorden / Recompra' },
+    { value: 'price_request', label: 'Consulta de precio' },
 ];
 
 const TARGET_TYPES = [
@@ -87,6 +92,7 @@ const emptyForm: FormData = {
     target_role: '',
     priority: 0,
     generate_summary: true,
+    escalation_message: '',
 };
 
 // ─────────────────────────────────────────────
@@ -99,11 +105,14 @@ function ConditionBadge({ type }: { type: string }) {
         explicit_request: 'bg-orange-100 text-orange-700',
         purchase_intent: 'bg-green-100 text-green-700',
         discount_request: 'bg-yellow-100 text-yellow-700',
+        distribution_inquiry: 'bg-teal-100 text-teal-700',
         complaint: 'bg-red-100 text-red-700',
         order_issue: 'bg-red-100 text-red-700',
         vip_customer: 'bg-amber-100 text-amber-700',
         sentiment_negative: 'bg-rose-100 text-rose-700',
         technical_question: 'bg-blue-100 text-blue-700',
+        reorder: 'bg-cyan-100 text-cyan-700',
+        price_request: 'bg-lime-100 text-lime-700',
     };
     const label = CONDITION_TYPES.find(c => c.value === type)?.label || type;
     return (
@@ -209,6 +218,7 @@ export default function EscalationRulesPage() {
             target_role: r.target_role || '',
             priority: r.priority,
             generate_summary: r.generate_summary,
+            escalation_message: r.escalation_message || '',
         });
         setEditingId(r.id);
         setShowForm(true);
@@ -242,6 +252,7 @@ export default function EscalationRulesPage() {
             target_role: form.target_role || null,
             priority: form.priority,
             generate_summary: form.generate_summary,
+            escalation_message: form.escalation_message || null,
         };
 
         try {
@@ -491,6 +502,22 @@ export default function EscalationRulesPage() {
                                     />
                                     <p className="text-xs text-slate-400 mt-1">
                                         keyword_match: {`{"keywords": [...]}`} · vip_customer: {`{"min_lifetime_spend": 50000}`}
+                                    </p>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        Mensaje de Escalación (opcional)
+                                    </label>
+                                    <textarea
+                                        value={form.escalation_message}
+                                        onChange={e => setForm({ ...form, escalation_message: e.target.value })}
+                                        rows={3}
+                                        placeholder="Ej: Voy a conectarte con un {agent_type} que puede ayudarte con tu consulta sobre distribución."
+                                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Mensaje que el bot envía al cliente cuando esta regla se activa. Usa <code className="bg-slate-100 px-1 rounded">{'{agent_type}'}</code> como placeholder del rol del agente. Si se deja vacío, se usa un mensaje genérico.
                                     </p>
                                 </div>
 

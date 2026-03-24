@@ -34,6 +34,7 @@ export interface EscalationResult {
         target_id: string | null;
         target_role: string | null;
         generate_summary: boolean;
+        escalation_message: string | null;
     };
     reason: string;
 }
@@ -48,6 +49,7 @@ interface EscalationRule {
     target_role: string | null;
     generate_summary: boolean;
     priority: number;
+    escalation_message: string | null;
 }
 
 // ─────────────────────────────────────────────
@@ -217,6 +219,7 @@ export async function evaluateEscalation(
                     target_id: rule.target_id,
                     target_role: rule.target_role,
                     generate_summary: rule.generate_summary,
+                    escalation_message: rule.escalation_message || null,
                 },
                 reason: `Regla "${rule.name}" activada (${rule.condition_type})`,
             };
