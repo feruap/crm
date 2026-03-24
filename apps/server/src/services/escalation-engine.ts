@@ -197,6 +197,7 @@ export async function evaluateEscalation(
                 target_id: null,
                 target_role: null,
                 generate_summary: true,
+                escalation_message: null,
             },
         };
     }

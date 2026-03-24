@@ -172,6 +172,7 @@ async function handleBotResponse(
                         target_id: null,
                         target_role: botReply.routing_decision.target_type === 'sales_agent' ? 'sales' : botReply.routing_decision.target_type === 'senior_agent' ? 'senior' : null,
                         generate_summary: true,
+                        escalation_message: null,
                     },
                 };
 
