@@ -20,17 +20,27 @@ const router = Router();
 // GET /api/campaign-mappings
 // ─────────────────────────────────────────────
 router.get('/', async (_req: Request, res: Response) => {
-    const result = await db.query(`
-        SELECT cpm.*,
-               c.name AS campaign_name,
-               c.platform AS campaign_platform,
-               c.platform_campaign_id,
-               c.platform_ad_id
-        FROM campaign_product_mappings cpm
-        JOIN campaigns c ON c.id = cpm.campaign_id
-        ORDER BY cpm.updated_at DESC
-    `);
-    res.json(result.rows);
+    try {
+        const result = await db.query(`
+            SELECT cpm.*,
+                   c.name AS campaign_name,
+                   c.platform AS campaign_platform,
+                   c.platform_campaign_id,
+                   c.platform_ad_id
+            FROM campaign_product_mappings cpm
+            JOIN campaigns c ON c.id = cpm.campaign_id
+            ORDER BY cpm.updated_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err: unknown) {
+        console.error('[campaign-mappings] Error loading mappings:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message.includes('does not exist') || message.includes('relation')) {
+            res.json([]);
+        } else {
+            res.status(500).json({ error: 'Error cargando mappings', detail: message });
+        }
+    }
 });
 
 // ─────────────────────────────────────────────

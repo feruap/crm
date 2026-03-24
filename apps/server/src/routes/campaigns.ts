@@ -6,18 +6,28 @@ const router = Router();
 
 // GET /api/campaigns
 router.get('/', async (_req: Request, res: Response) => {
-    const result = await db.query(`
-        SELECT c.*,
-               COUNT(DISTINCT a.customer_id) AS total_customers,
-               COUNT(DISTINCT a.order_id)    AS total_orders,
-               COALESCE(SUM(o.total_amount), 0) AS total_revenue
-        FROM campaigns c
-        LEFT JOIN attributions a ON a.campaign_id = c.id
-        LEFT JOIN orders o ON o.id = a.order_id
-        GROUP BY c.id
-        ORDER BY c.created_at DESC
-    `);
-    res.json(result.rows);
+    try {
+        const result = await db.query(`
+            SELECT c.*,
+                   COUNT(DISTINCT a.customer_id) AS total_customers,
+                   COUNT(DISTINCT a.order_id)    AS total_orders,
+                   COALESCE(SUM(o.total_amount), 0) AS total_revenue
+            FROM campaigns c
+            LEFT JOIN attributions a ON a.campaign_id = c.id
+            LEFT JOIN orders o ON o.id = a.order_id
+            GROUP BY c.id
+            ORDER BY c.created_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err: unknown) {
+        console.error('[campaigns] Error loading campaigns:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message.includes('does not exist') || message.includes('relation')) {
+            res.json([]);
+        } else {
+            res.status(500).json({ error: 'Error cargando campañas', detail: message });
+        }
+    }
 });
 
 // POST /api/campaigns

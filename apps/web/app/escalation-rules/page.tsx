@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowRightLeft, History, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowRightLeft, History, Users, Info } from 'lucide-react';
 import { useAuth } from '../../components/AuthProvider';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
@@ -150,22 +150,43 @@ export default function EscalationRulesPage() {
     async function fetchRules() {
         try {
             const res = await authFetch(`${API_URL}/api/escalation-rules`);
-            setRules(await res.json());
-        } catch { setError('Error cargando reglas'); }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setError(err.error || `Error cargando reglas (${res.status})`);
+                setRules([]);
+                return;
+            }
+            const data = await res.json();
+            setRules(Array.isArray(data) ? data : []);
+        } catch { setError('Error de conexión al cargar reglas'); setRules([]); }
     }
 
     async function fetchHandoffs() {
         try {
             const res = await authFetch(`${API_URL}/api/escalation-rules/handoff-log?limit=100`);
-            setHandoffs(await res.json());
-        } catch { setError('Error cargando historial'); }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setError(err.error || `Error cargando historial (${res.status})`);
+                setHandoffs([]);
+                return;
+            }
+            const data = await res.json();
+            setHandoffs(Array.isArray(data) ? data : []);
+        } catch { setError('Error de conexión al cargar historial'); setHandoffs([]); }
     }
 
     async function fetchSegments() {
         try {
             const res = await authFetch(`${API_URL}/api/escalation-rules/segments`);
-            setSegments(await res.json());
-        } catch { setError('Error cargando segmentos'); }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setError(err.error || `Error cargando segmentos (${res.status})`);
+                setSegments([]);
+                return;
+            }
+            const data = await res.json();
+            setSegments(Array.isArray(data) ? data : []);
+        } catch { setError('Error de conexión al cargar segmentos'); setSegments([]); }
     }
 
     // ── Form Handlers ──
@@ -351,6 +372,20 @@ export default function EscalationRulesPage() {
             {/* ═══ RULES TAB ═══ */}
             {tab === 'rules' && (
                 <>
+                    {/* Instructions */}
+                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="flex items-start gap-3">
+                            <Info size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800 space-y-1">
+                                <p className="font-semibold">¿Cómo funcionan las reglas de escalación?</p>
+                                <p>Cada regla define <strong>cuándo</strong> transferir una conversación del bot a un agente humano. El bot evalúa todas las reglas activas en orden de <strong>prioridad</strong> (mayor número = se evalúa primero). La primera regla que coincida activa la transferencia.</p>
+                                <p><strong>Tipo de condición:</strong> Define qué detectar — palabras clave, intención de compra, quejas, clientes VIP, etc.</p>
+                                <p><strong>Configuración JSON:</strong> Para "Palabras clave", usa <code className="bg-blue-100 px-1 rounded">{`{"keywords": ["palabra1", "palabra2"]}`}</code>. Para "Cliente VIP", usa <code className="bg-blue-100 px-1 rounded">{`{"min_lifetime_spend": 50000}`}</code>.</p>
+                                <p><strong>Destino:</strong> A quién se transfiere — cualquier agente, un grupo (por rol), un agente específico, o supervisor.</p>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Form */}
                     {showForm && (
                         <div className="mb-8 bg-white border border-slate-200 rounded-xl shadow-sm p-6">
@@ -577,6 +612,16 @@ export default function EscalationRulesPage() {
 
             {/* ═══ HANDOFF LOG TAB ═══ */}
             {tab === 'handoff-log' && (
+                <>
+                <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                        <Info size={18} className="text-indigo-500 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-indigo-800 space-y-1">
+                            <p className="font-semibold">Historial de transferencias</p>
+                            <p>Aquí puedes ver cada vez que el bot transfirió una conversación a un agente humano. Incluye la regla que se activó, la razón, el agente asignado, y un resumen generado por IA del contexto de la conversación. Usa este historial para identificar patrones y ajustar tus reglas de escalación.</p>
+                        </div>
+                    </div>
+                </div>
                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
                     <table className="w-full">
                         <thead className="bg-slate-50 border-b border-slate-200">
@@ -630,10 +675,21 @@ export default function EscalationRulesPage() {
                         </tbody>
                     </table>
                 </div>
+                </>
             )}
 
             {/* ═══ SEGMENTS TAB ═══ */}
             {tab === 'segments' && (
+                <>
+                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                        <Info size={18} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-emerald-800 space-y-1">
+                            <p className="font-semibold">Segmentos de clientes</p>
+                            <p>Los segmentos clasifican automáticamente a tus clientes según su <strong>ciclo de vida</strong> (nuevo, activo, en riesgo, dormido), <strong>nivel de valor</strong> (VIP, alto, medio, bajo) y <strong>reorden</strong> (vencido, próximo, no aplica). Haz clic en "Recalcular" para actualizar los segmentos con los datos más recientes de compras. Los segmentos se usan en las reglas de escalación (ej: regla "Cliente VIP").</p>
+                        </div>
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {segments.length === 0 && (
                         <div className="md:col-span-2 lg:col-span-3 bg-white border border-slate-200 rounded-xl shadow-sm p-12 text-center text-slate-400">
@@ -692,6 +748,7 @@ export default function EscalationRulesPage() {
                         );
                     })}
                 </div>
+                </>
             )}
         </div>
     );

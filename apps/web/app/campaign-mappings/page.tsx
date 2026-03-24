@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Image, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Image, Link2, Info } from 'lucide-react';
 import { useAuth } from '../../components/AuthProvider';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
@@ -95,20 +95,32 @@ export default function CampaignMappingsPage() {
     async function fetchMappings() {
         try {
             const res = await authFetch(`${API_URL}/api/campaign-mappings`);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                setError(err.error || `Error cargando mappings (${res.status})`);
+                setMappings([]);
+                return;
+            }
             const data = await res.json();
-            setMappings(data);
+            setMappings(Array.isArray(data) ? data : []);
         } catch {
-            setError('Error cargando mappings');
+            setError('Error de conexión al cargar mappings');
+            setMappings([]);
         }
     }
 
     async function fetchCampaigns() {
         try {
             const res = await authFetch(`${API_URL}/api/campaigns`);
+            if (!res.ok) {
+                setCampaigns([]);
+                return;
+            }
             const data = await res.json();
-            setCampaigns(data);
+            setCampaigns(Array.isArray(data) ? data : []);
         } catch {
             console.error('Error fetching campaigns');
+            setCampaigns([]);
         }
     }
 
@@ -215,6 +227,21 @@ export default function CampaignMappingsPage() {
                     <Plus size={18} />
                     Nuevo Mapping
                 </button>
+            </div>
+
+            {/* Instructions */}
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                    <Info size={18} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800 space-y-1">
+                        <p className="font-semibold">¿Cómo funcionan las auto-respuestas por campaña?</p>
+                        <p>Cada mapping asocia una <strong>campaña publicitaria</strong> (Facebook, Instagram, Google, etc.) con un <strong>producto específico</strong>. Cuando un lead llega desde esa campaña, el bot envía automáticamente un mensaje de bienvenida personalizado con información del producto.</p>
+                        <p><strong>Campaña:</strong> Selecciona la campaña registrada (se crean automáticamente cuando llegan leads desde anuncios).</p>
+                        <p><strong>Producto:</strong> El nombre y opcionalmente el ID de WooCommerce del producto que promociona la campaña.</p>
+                        <p><strong>Mensaje de bienvenida:</strong> El mensaje que el bot envía automáticamente al lead. Puede incluir info del producto, precios, y un call-to-action.</p>
+                        <p><strong>URLs de medios:</strong> Imágenes o PDFs que se envían junto con el mensaje (una URL por línea).</p>
+                    </div>
+                </div>
             </div>
 
             {error && (

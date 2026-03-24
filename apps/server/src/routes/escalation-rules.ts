@@ -23,13 +23,24 @@ const router = Router();
 // ─────────────────────────────────────────────
 
 router.get('/', async (_req: Request, res: Response) => {
-    const result = await db.query(
-        `SELECT er.*,
-                (SELECT COUNT(*) FROM handoff_events he WHERE he.escalation_rule_id = er.id) AS times_triggered
-         FROM escalation_rules er
-         ORDER BY er.priority DESC, er.name`
-    );
-    res.json(result.rows);
+    try {
+        const result = await db.query(
+            `SELECT er.*,
+                    (SELECT COUNT(*) FROM handoff_events he WHERE he.escalation_rule_id = er.id) AS times_triggered
+             FROM escalation_rules er
+             ORDER BY er.priority DESC, er.name`
+        );
+        res.json(result.rows);
+    } catch (err: unknown) {
+        console.error('[escalation-rules] Error loading rules:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        // If table doesn't exist, return empty array instead of error
+        if (message.includes('does not exist') || message.includes('relation')) {
+            res.json([]);
+        } else {
+            res.status(500).json({ error: 'Error cargando reglas de escalación', detail: message });
+        }
+    }
 });
 
 router.post('/', async (req: Request, res: Response) => {
@@ -90,23 +101,33 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 
 router.get('/handoff-log', async (req: Request, res: Response) => {
-    const { limit = '50' } = req.query;
+    try {
+        const { limit = '50' } = req.query;
 
-    const result = await db.query(
-        `SELECT he.*,
-                c.display_name AS customer_name,
-                a.name AS agent_name,
-                er.name AS rule_name
-         FROM handoff_events he
-         LEFT JOIN conversations conv ON conv.id = he.conversation_id
-         LEFT JOIN customers c ON c.id = conv.customer_id
-         LEFT JOIN agents a ON a.id = he.to_agent_id
-         LEFT JOIN escalation_rules er ON er.id = he.escalation_rule_id
-         ORDER BY he.created_at DESC
-         LIMIT $1`,
-        [Number(limit)]
-    );
-    res.json(result.rows);
+        const result = await db.query(
+            `SELECT he.*,
+                    c.display_name AS customer_name,
+                    a.name AS agent_name,
+                    er.name AS rule_name
+             FROM handoff_events he
+             LEFT JOIN conversations conv ON conv.id = he.conversation_id
+             LEFT JOIN customers c ON c.id = conv.customer_id
+             LEFT JOIN agents a ON a.id = he.to_agent_id
+             LEFT JOIN escalation_rules er ON er.id = he.escalation_rule_id
+             ORDER BY he.created_at DESC
+             LIMIT $1`,
+            [Number(limit)]
+        );
+        res.json(result.rows);
+    } catch (err: unknown) {
+        console.error('[escalation-rules] Error loading handoff log:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message.includes('does not exist') || message.includes('relation')) {
+            res.json([]);
+        } else {
+            res.status(500).json({ error: 'Error cargando historial de handoff', detail: message });
+        }
+    }
 });
 
 // ─────────────────────────────────────────────
@@ -114,24 +135,34 @@ router.get('/handoff-log', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────
 
 router.get('/segments', async (req: Request, res: Response) => {
-    const { segment_type } = req.query;
+    try {
+        const { segment_type } = req.query;
 
-    let query = `
-        SELECT cs.segment_type, cs.segment_value, COUNT(*) AS customer_count,
-               AVG((cs.metadata->>'lifetime_spend')::numeric) AS avg_lifetime_spend
-        FROM customer_segments cs
-    `;
-    const params: unknown[] = [];
+        let query = `
+            SELECT cs.segment_type, cs.segment_value, COUNT(*) AS customer_count,
+                   AVG((cs.metadata->>'lifetime_spend')::numeric) AS avg_lifetime_spend
+            FROM customer_segments cs
+        `;
+        const params: unknown[] = [];
 
-    if (segment_type) {
-        params.push(segment_type);
-        query += ` WHERE cs.segment_type = $${params.length}`;
+        if (segment_type) {
+            params.push(segment_type);
+            query += ` WHERE cs.segment_type = $${params.length}`;
+        }
+
+        query += ` GROUP BY cs.segment_type, cs.segment_value ORDER BY cs.segment_type, customer_count DESC`;
+
+        const result = await db.query(query, params);
+        res.json(result.rows);
+    } catch (err: unknown) {
+        console.error('[escalation-rules] Error loading segments:', err);
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        if (message.includes('does not exist') || message.includes('relation')) {
+            res.json([]);
+        } else {
+            res.status(500).json({ error: 'Error cargando segmentos', detail: message });
+        }
     }
-
-    query += ` GROUP BY cs.segment_type, cs.segment_value ORDER BY cs.segment_type, customer_count DESC`;
-
-    const result = await db.query(query, params);
-    res.json(result.rows);
 });
 
 router.post('/recalculate', async (_req: Request, res: Response) => {
