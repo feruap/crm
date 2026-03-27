@@ -1,10 +1,15 @@
-import { Router, Request, Response } from 'express';
+﻿import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { db } from '../db';
 import { findBestAnswer, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
 import { findMatchingFlow, isWithinBusinessHours } from './flows';
 import { assignFromGroup } from './agent-groups';
 import { emitNewMessage, getIO } from '../socket';
+import { handleIncomingMessage } from '../services/smart-bot-engine';
+import { executeHandoff } from '../services/escalation-engine';
+import { recordTouchpoint, findCampaignMapping, sendCampaignAutoReply, recordUTMTouchpoint } from '../services/campaign-responder';
+import { deliverMessage } from '../services/message-sender';
+import { receiveStatusFromWC } from '../services/woocommerce';
 
 // ─────────────────────────────────────────────
 // Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
@@ -138,7 +143,7 @@ function validateMetaSignature(req: Request, secret: string): boolean {
     if (!signature) return false;
     const expected = 'sha256=' + crypto
         .createHmac('sha256', secret)
-        .update(JSON.stringify(req.body))
+        .update((req as any).rawBody || JSON.stringify(req.body))
         .digest('hex');
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
@@ -170,22 +175,51 @@ async function resolveOrCreateCustomer(
     return customerId;
 }
 
+/**
+ * Resolve Facebook user's real name from Graph API.
+ * Falls back to PSID if API call fails or name is not available.
+ */
+async function resolveFacebookProfileName(psid: string, accessToken: string): Promise<string> {
+    try {
+        const response = await fetch(
+            `https://graph.facebook.com/v18.0/${psid}?fields=first_name,last_name,profile_pic&access_token=${accessToken}`,
+            { method: 'GET' }
+        );
+        if (!response.ok) {
+            console.warn(`[FB Graph API] Failed to resolve profile for ${psid}: ${response.status}`);
+            return psid;
+        }
+        const data = await response.json() as any;
+        const firstName = data.first_name || '';
+        const lastName = data.last_name || '';
+        const displayName = `${firstName} ${lastName}`.trim();
+        if (!displayName) return psid;
+        console.log(`[FB Graph API] Resolved profile for ${psid}: ${displayName}`);
+        return displayName;
+    } catch (err) {
+        console.error(`[FB Graph API] Error resolving profile for ${psid}:`, err);
+        return psid;
+    }
+}
+
 async function resolveOrCreateConversation(
     customerId: string,
-    channelId: string
-): Promise<string> {
+    channelId: string,
+    referralData?: any,
+    utmData?: any
+): Promise<{ conversationId: string; isNew: boolean }> {
     const existing = await db.query(
         `SELECT id FROM conversations
          WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
          ORDER BY created_at DESC LIMIT 1`,
         [customerId, channelId]
     );
-    if (existing.rows.length > 0) return existing.rows[0].id;
+    if (existing.rows.length > 0) return { conversationId: existing.rows[0].id, isNew: false };
 
-    // Create new conversation
+    // Create new conversation with referral/UTM data
     const conv = await db.query(
-        `INSERT INTO conversations (customer_id, channel_id) VALUES ($1, $2) RETURNING id`,
-        [customerId, channelId]
+        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [customerId, channelId, referralData ? JSON.stringify(referralData) : null, utmData ? JSON.stringify(utmData) : null]
     );
     const convId = conv.rows[0].id;
 
@@ -227,7 +261,7 @@ async function resolveOrCreateConversation(
         console.error('[AutoAssign] Error:', err);
     }
 
-    return convId;
+    return { conversationId: convId, isNew: true };
 }
 
 // ─────────────────────────────────────────────
@@ -644,9 +678,21 @@ router.post('/meta', async (req: Request, res: Response) => {
 
                 const senderId: string = event.sender.id;
                 const messageText: string = event.message.text;
+                const referral = event.referral || event.message?.referral || null;
 
-                const customerId = await resolveOrCreateCustomer(provider, senderId, senderId);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
+                // Resolve FB profile name if possible
+                let displayName = senderId;
+                try {
+                    const chConfig = await db.query(`SELECT provider_config FROM channels WHERE id = $1`, [ch.id]);
+                    const cfg = chConfig.rows[0]?.provider_config || {};
+                    const accessToken = typeof cfg === 'string' ? JSON.parse(cfg).access_token : cfg.access_token;
+                    if (accessToken && !isInstagram) {
+                        displayName = await resolveFacebookProfileName(senderId, accessToken);
+                    }
+                } catch (_) { /* fallback to senderId */ }
+
+                const customerId = await resolveOrCreateCustomer(provider, senderId, displayName);
+                const { conversationId } = await resolveOrCreateConversation(customerId, ch.id, referral);
 
                 // Auto-attribution from Click-to-Messenger / Click-to-IG-DM ads
                 if (event.referral?.source === 'ADS') {
@@ -664,7 +710,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                     [conversationId, ch.id, customerId, messageText, event.message.mid]
                 );
 
-                handleBotResponse(conversationId, ch.id, customerId, messageText).catch(console.error);
+                handleBotResponse(conversationId, ch.id, customerId, messageText, referral).catch(console.error);
             }
 
             // ── 2. FB Page post comments (entry.changes[field='feed']) ────────
@@ -686,7 +732,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                 if (!senderId || !commentText) continue;
 
                 const customerId = await resolveOrCreateCustomer('facebook', senderId, senderName);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
+                const { conversationId } = await resolveOrCreateConversation(customerId, ch.id);
 
                 await db.query(
                     `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content,
@@ -725,7 +771,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                 if (!senderId || !commentText) continue;
 
                 const customerId = await resolveOrCreateCustomer('instagram', senderId, senderName);
-                const conversationId = await resolveOrCreateConversation(customerId, ch.id);
+                const { conversationId } = await resolveOrCreateConversation(customerId, ch.id);
 
                 await db.query(
                     `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content,
@@ -795,8 +841,11 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
             const messageText: string = msg.text.body;
             const displayName: string = changes.contacts?.[0]?.profile?.name || phone;
 
+            // WhatsApp Click-to-WhatsApp ads include referral
+            const referral = msg.referral || null;
+
             const customerId = await resolveOrCreateCustomer('whatsapp', phone, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
+            const { conversationId } = await resolveOrCreateConversation(customerId, channelId, referral);
 
             const insertResult = await db.query(
                 `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
@@ -813,7 +862,7 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
                 getIO().emit('conversation_list_updated', { conversationId, channelId });
             }
 
-            handleBotResponse(conversationId, channelId, customerId, messageText).catch(console.error);
+            handleBotResponse(conversationId, channelId, customerId, messageText, referral).catch(console.error);
         }
     } catch (err) {
         console.error('WhatsApp webhook error:', err);
@@ -874,7 +923,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             if (!senderId || !messageText) return;
 
             const customerId = await resolveOrCreateCustomer('tiktok', senderId, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
+            const { conversationId } = await resolveOrCreateConversation(customerId, channelId);
 
             await db.query(
                 `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
@@ -896,7 +945,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             if (!senderId || !messageText) return;
 
             const customerId = await resolveOrCreateCustomer('tiktok', senderId, displayName);
-            const conversationId = await resolveOrCreateConversation(customerId, channelId);
+            const { conversationId } = await resolveOrCreateConversation(customerId, channelId);
 
             await db.query(
                 `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, provider_message_id)
@@ -932,7 +981,7 @@ router.post('/webchat', async (req: Request, res: Response) => {
         const channelId = channel.rows[0].id;
 
         const customerId = await resolveOrCreateCustomer('webchat', contact_id, name || contact_id);
-        const conversationId = await resolveOrCreateConversation(customerId, channelId);
+        const { conversationId } = await resolveOrCreateConversation(customerId, channelId);
 
         // Insert message
         await db.query(
@@ -951,6 +1000,117 @@ router.post('/webchat', async (req: Request, res: Response) => {
     } catch (err: any) {
         console.error('Webchat webhook error:', err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// WooCommerce Webhook — Order Status Changes
+// Receives status updates from WC and syncs to CRM
+// ──────────────────────────────────────────────────────────────────────────
+router.post('/woocommerce-status', async (req: Request, res: Response) => {
+    const wcWebhookSecret = process.env.WC_WEBHOOK_SECRET;
+    if (wcWebhookSecret) {
+        const signature = req.headers['x-wc-webhook-signature'] as string;
+        if (signature) {
+            const expected = crypto
+                .createHmac('sha256', wcWebhookSecret)
+                .update((req as any).rawBody || JSON.stringify(req.body))
+                .digest('base64');
+            if (signature !== expected) {
+                console.warn('WooCommerce webhook signature mismatch — dropping');
+                res.sendStatus(401);
+                return;
+            }
+        }
+    }
+
+    try {
+        const order = req.body;
+        if (!order.id || !order.status) {
+            res.sendStatus(200);
+            return;
+        }
+
+        const externalOrderId = String(order.id);
+        const newStatus = order.status;
+
+        const result = await receiveStatusFromWC(externalOrderId, newStatus);
+        if (result.ok) {
+            console.log(`[WC→CRM Sync] Order #${externalOrderId} → ${newStatus}`);
+        } else {
+            console.error(`[WC→CRM Sync] Error for order #${externalOrderId}:`, (result as any).error);
+        }
+
+        // Also sync order data if it doesn't exist in CRM
+        const existingOrder = await db.query(
+            `SELECT id FROM orders WHERE external_order_id = $1`,
+            [externalOrderId]
+        );
+
+        if (existingOrder.rows.length === 0 && order.total) {
+            const customerEmail = order.billing?.email;
+            let customerId: string | null = null;
+
+            if (customerEmail) {
+                const customer = await db.query(
+                    `SELECT c.id FROM customers c
+                     JOIN customer_attributes ca ON ca.customer_id = c.id
+                     WHERE ca.key = 'email' AND ca.value = $1
+                     LIMIT 1`,
+                    [customerEmail]
+                );
+                if (customer.rows.length > 0) {
+                    customerId = customer.rows[0].id;
+                }
+            }
+
+            await db.query(
+                `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (external_order_id) DO UPDATE
+                     SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
+                [
+                    externalOrderId,
+                    customerId,
+                    order.total,
+                    order.currency?.toUpperCase() || 'MXN',
+                    newStatus,
+                    JSON.stringify(order.line_items || []),
+                    order.date_created || new Date().toISOString(),
+                ]
+            );
+        }
+
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('WooCommerce webhook error:', err);
+        res.sendStatus(500);
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Webchat — Receive UTM data from chat widget
+// ──────────────────────────────────────────────────────────────────────────
+router.post('/webchat-utm', async (req: Request, res: Response) => {
+    try {
+        const { customer_id, conversation_id, utm_data } = req.body;
+        if (!customer_id || !utm_data) {
+            res.status(400).json({ error: 'customer_id and utm_data are required' });
+            return;
+        }
+
+        if (conversation_id) {
+            await db.query(
+                `UPDATE conversations SET utm_data = $1 WHERE id = $2`,
+                [JSON.stringify(utm_data), conversation_id]
+            );
+        }
+
+        await recordUTMTouchpoint(customer_id, utm_data);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Webchat UTM error:', err);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

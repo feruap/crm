@@ -46,7 +46,11 @@ const httpServer = http.createServer(app);
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000' }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, _res: any, buf: Buffer) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.static('public'));
 
 // ─── Socket.io ───────────────────────────────────────────────────────────────
