@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { learnFromConversation } from '../ai.service';
+import { getWCCreds } from '../utils/wc-creds';
 
 const router = Router();
 
@@ -117,11 +118,55 @@ router.get('/:id/customer', async (req: Request, res: Response) => {
     for (const row of attrs.rows) attrMap[row.key] = row.value;
 
     // Orders from WooCommerce sync
-    const orders = await db.query(
+    let orders = await db.query(
         `SELECT id, external_order_id, total_amount, currency, status, order_date, items
-         FROM orders WHERE customer_id = $1 ORDER BY order_date DESC LIMIT 10`,
+         FROM orders WHERE customer_id = $1 ORDER BY order_date DESC LIMIT 20`,
         [customer_id]
     );
+
+    // Auto-fetch from WooCommerce if no local orders exist yet
+    if (orders.rows.length === 0 && phone) {
+        try {
+            const wc = await getWCCreds();
+            if (wc.url && wc.key && wc.secret) {
+                const auth = Buffer.from(`${wc.key}:${wc.secret}`).toString('base64');
+                const phoneLast10 = phone.replace(/\D/g, '').slice(-10);
+                const after = new Date();
+                after.setMonth(after.getMonth() - 13);
+                const wcRes = await fetch(
+                    `${wc.url.replace(/\/$/, '')}/wp-json/wc/v3/orders?search=${encodeURIComponent(phoneLast10)}&per_page=20&after=${after.toISOString()}&orderby=date&order=desc`,
+                    { headers: { Authorization: `Basic ${auth}` } }
+                );
+                if (wcRes.ok) {
+                    const wcOrders: any[] = await wcRes.json();
+                    if (Array.isArray(wcOrders) && wcOrders.length > 0) {
+                        for (const o of wcOrders) {
+                            const items = (o.line_items || []).map((li: any) => ({
+                                product_id: li.product_id,
+                                name: li.name,
+                                quantity: li.quantity,
+                                total: li.total,
+                            }));
+                            await db.query(
+                                `INSERT INTO orders (customer_id, external_order_id, total_amount, currency, status, order_date, items)
+                                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                                 ON CONFLICT (external_order_id) DO NOTHING`,
+                                [customer_id, String(o.id), o.total, o.currency || 'MXN', o.status || 'completed',
+                                 o.date_created || new Date().toISOString(), JSON.stringify(items)]
+                            );
+                        }
+                        orders = await db.query(
+                            `SELECT id, external_order_id, total_amount, currency, status, order_date, items
+                             FROM orders WHERE customer_id = $1 ORDER BY order_date DESC LIMIT 20`,
+                            [customer_id]
+                        );
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[WC Auto-sync] Error fetching orders for customer', customer_id, err);
+        }
+    }
 
     // Total spent
     const spent = await db.query(
