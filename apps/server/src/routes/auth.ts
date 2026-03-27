@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 import { db } from '../db';
 import { requireAuth } from '../middleware/auth';
 
@@ -104,6 +106,116 @@ router.post('/seed-admin', async (req: Request, res: Response) => {
     );
 
     res.status(201).json(agent.rows[0]);
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response) => {
+    const { email } = req.body;
+    if (!email) {
+        res.status(400).json({ error: 'Email requerido' });
+        return;
+    }
+
+    const successMsg = { message: 'Si el correo existe, recibirás un link de recuperación' };
+
+    try {
+        const agentResult = await db.query('SELECT id, email FROM agents WHERE email = $1', [email]);
+        if (agentResult.rows.length === 0) {
+            res.json(successMsg);
+            return;
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const expires = new Date(Date.now() + 3600000); // 1 hour
+
+        await db.query(
+            `UPDATE agents SET reset_token = $1, reset_token_expires = $2 WHERE id = $3`,
+            [tokenHash, expires, agentResult.rows[0].id]
+        );
+
+        const resetUrl = `https://crm.botonmedico.com/reset-password?token=${token}`;
+
+        // Get SMTP config from settings table
+        const smtpResult = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from')`
+        );
+        const smtp: Record<string, string> = {};
+        for (const row of smtpResult.rows) smtp[row.key] = row.value;
+
+        const host = smtp.smtp_host || process.env.SMTP_HOST || '';
+        const port = parseInt(smtp.smtp_port || process.env.SMTP_PORT || '587');
+        const user = smtp.smtp_user || process.env.SMTP_USER || '';
+        const pass = smtp.smtp_pass || process.env.SMTP_PASS || '';
+        const from = smtp.smtp_from || process.env.SMTP_FROM || user;
+
+        if (host) {
+            const transporter = nodemailer.createTransport({
+                host,
+                port,
+                secure: port === 465,
+                auth: { user, pass },
+            });
+
+            await transporter.sendMail({
+                from: `"MyAlice CRM" <${from}>`,
+                to: agentResult.rows[0].email,
+                subject: 'Recuperación de contraseña - MyAlice CRM',
+                html: `
+                    <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
+                        <h2 style="color:#1e40af">Recuperar contraseña</h2>
+                        <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+                        <p>Haz clic en el siguiente enlace para crear una nueva contraseña. Este enlace es válido por <strong>1 hora</strong>.</p>
+                        <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0">
+                            Restablecer contraseña
+                        </a>
+                        <p style="color:#64748b;font-size:13px">Si no solicitaste esto, puedes ignorar este correo.</p>
+                        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+                        <p style="color:#94a3b8;font-size:12px">MyAlice CRM - botonmedico.com</p>
+                    </div>
+                `,
+            });
+        }
+
+        res.json(successMsg);
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.json(successMsg);
+    }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req: Request, res: Response) => {
+    const { token, password } = req.body;
+    if (!token || !password) {
+        res.status(400).json({ error: 'Token y contraseña requeridos' });
+        return;
+    }
+
+    try {
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+        const agentResult = await db.query(
+            `SELECT id FROM agents WHERE reset_token = $1 AND reset_token_expires > NOW()`,
+            [tokenHash]
+        );
+
+        if (agentResult.rows.length === 0) {
+            res.status(400).json({ error: 'Token inválido o expirado' });
+            return;
+        }
+
+        const hashed = await bcrypt.hash(password, 10);
+        await db.query(
+            `UPDATE agents SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
+            [hashed, agentResult.rows[0].id]
+        );
+
+        res.json({ message: 'Contraseña actualizada exitosamente' });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ error: 'Error al actualizar contraseña' });
+    }
 });
 
 export default router;
