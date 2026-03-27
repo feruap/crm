@@ -606,6 +606,120 @@ router.patch('/:id/read', async (req: Request, res: Response) => {
     res.json({ ok: true });
 });
 
+// POST /api/conversations/:id/call-request
+// Sends a WhatsApp call_permission_request to the customer via Meta Cloud API.
+// Requires whatsapp_calling_enabled=true in settings and a Mexico number (US/CA blocked by Meta).
+router.post('/:id/call-request', async (req: Request, res: Response) => {
+    const convId = req.params.id;
+
+    // Check calling feature enabled
+    const callingEnabled = await db.query(
+        `SELECT value FROM settings WHERE key = 'whatsapp_calling_enabled' LIMIT 1`
+    );
+    if (callingEnabled.rows[0]?.value !== 'true') {
+        res.status(403).json({ error: 'Llamadas no habilitadas. Actívalas en Ajustes → WhatsApp Llamadas.' });
+        return;
+    }
+
+    // Get conversation + channel
+    const conv = await db.query(
+        `SELECT c.customer_id, c.channel_id, ch.provider, ch.provider_config
+         FROM conversations c
+         JOIN channels ch ON ch.id = c.channel_id
+         WHERE c.id = $1`,
+        [convId]
+    );
+    if (conv.rows.length === 0) {
+        res.status(404).json({ error: 'Conversación no encontrada' });
+        return;
+    }
+    const { customer_id, channel_id, provider, provider_config } = conv.rows[0];
+    if (provider !== 'whatsapp') {
+        res.status(400).json({ error: 'Las llamadas solo están disponibles para conversaciones de WhatsApp' });
+        return;
+    }
+
+    // Get customer phone
+    const identity = await db.query(
+        `SELECT provider_id FROM external_identities WHERE customer_id = $1 AND provider = 'whatsapp' LIMIT 1`,
+        [customer_id]
+    );
+    if (identity.rows.length === 0) {
+        res.status(400).json({ error: 'No se encontró número de WhatsApp para este cliente' });
+        return;
+    }
+    const customerPhone = identity.rows[0].provider_id;
+
+    // 24h cooldown check
+    const recentRequest = await db.query(
+        `SELECT id FROM messages
+         WHERE conversation_id = $1 AND message_type = 'call_request'
+           AND created_at > NOW() - INTERVAL '24 hours'
+         LIMIT 1`,
+        [convId]
+    );
+    if (recentRequest.rows.length > 0) {
+        res.status(429).json({ error: 'Ya se envió una solicitud de llamada en las últimas 24 horas' });
+        return;
+    }
+
+    // Get WhatsApp config
+    const config = provider_config || {};
+    const phoneNumberId = config.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = config.whatsapp_access_token || config.access_token || process.env.WHATSAPP_ACCESS_TOKEN;
+    if (!phoneNumberId || !accessToken) {
+        res.status(503).json({ error: 'Canal de WhatsApp no configurado correctamente (falta phone_number_id o access_token)' });
+        return;
+    }
+
+    // Get call message text from settings or request body
+    const msgRow = await db.query(
+        `SELECT value FROM settings WHERE key = 'whatsapp_call_message' LIMIT 1`
+    );
+    const bodyText = (req.body?.message as string) || msgRow.rows[0]?.value || 'Nos gustaría llamarle para darle seguimiento.';
+
+    // Send call_permission_request via Meta Cloud API
+    const metaUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
+    const metaPayload = {
+        messaging_product: 'whatsapp',
+        to: customerPhone,
+        type: 'interactive',
+        interactive: {
+            type: 'call_permission_request',
+            action: { name: 'call_permission_request' },
+            body: { text: bodyText },
+        },
+    };
+
+    const metaRes = await fetch(metaUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(metaPayload),
+    });
+
+    if (!metaRes.ok) {
+        const errBody = await metaRes.text();
+        console.error('[CallRequest] Meta API error:', errBody);
+        res.status(502).json({ error: 'Error al enviar solicitud de llamada via Meta', detail: errBody });
+        return;
+    }
+
+    const metaData = await metaRes.json() as any;
+
+    // Log to messages table
+    const msg = await db.query(
+        `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, message_type, handled_by, provider_message_id)
+         VALUES ($1, $2, $3, 'outbound', $4, 'call_request', 'human', $5)
+         RETURNING *`,
+        [convId, channel_id, customer_id, bodyText, metaData?.messages?.[0]?.id ?? null]
+    );
+
+    res.status(201).json({ ok: true, message: msg.rows[0] });
+});
+
 // PATCH /api/conversations/:id/close-deal
 // Registra venta manual cerrada por el agente. Crea/actualiza atribución con sale_source='manual'.
 router.patch('/:id/close-deal', async (req: Request, res: Response) => {

@@ -836,11 +836,52 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
         if (!changes?.messages) return;
 
         for (const msg of changes.messages) {
+            const phone: string = msg.from;
+            const displayName: string = changes.contacts?.[0]?.profile?.name || phone;
+
+            // ── Handle call permission responses and call events ──────────────
+            if (msg.type === 'interactive' || msg.type === 'call') {
+                const customerId = await resolveOrCreateCustomer('whatsapp', phone, displayName);
+                const { conversationId } = await resolveOrCreateConversation(customerId, channelId, null);
+
+                let eventContent = '';
+                let eventType = 'call_event';
+
+                if (msg.type === 'call') {
+                    // Incoming call from user
+                    eventContent = `Llamada entrante de WhatsApp`;
+                    eventType = 'call_incoming';
+                } else if (msg.interactive?.type === 'nfm_reply') {
+                    // call_permission_request response
+                    const accepted = msg.interactive?.nfm_reply?.response_json
+                        ? JSON.parse(msg.interactive.nfm_reply.response_json)?.permission_granted
+                        : null;
+                    eventContent = accepted === true
+                        ? 'El cliente aceptó la solicitud de llamada'
+                        : accepted === false
+                            ? 'El cliente rechazó la solicitud de llamada'
+                            : 'Respuesta a solicitud de llamada recibida';
+                } else {
+                    eventContent = `Evento de llamada: ${msg.type}`;
+                }
+
+                const insertResult = await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, message_type, provider_message_id)
+                     VALUES ($1, $2, $3, 'inbound', $4, $5, $6)
+                     RETURNING id, conversation_id, channel_id, customer_id, direction, content, created_at, handled_by`,
+                    [conversationId, channelId, customerId, eventContent, eventType, msg.id]
+                );
+                if (insertResult.rows[0]) {
+                    emitNewMessage(conversationId, insertResult.rows[0]);
+                    getIO().emit('conversation_list_updated', { conversationId, channelId });
+                }
+                console.log(`[CallEvent] ${eventType} for ${phone}: ${eventContent}`);
+                continue;
+            }
+
             if (msg.type !== 'text') continue;
 
-            const phone: string = msg.from;
             const messageText: string = msg.text.body;
-            const displayName: string = changes.contacts?.[0]?.profile?.name || phone;
 
             // WhatsApp Click-to-WhatsApp ads include referral
             const referral = msg.referral || null;

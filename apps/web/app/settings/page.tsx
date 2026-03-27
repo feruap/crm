@@ -200,6 +200,7 @@ export default function SettingsPage() {
                         { key: 'usuarios', label: 'Usuarios', icon: <UserPlus className="w-4 h-4" /> },
                         { key: 'equipos', label: 'Equipos', icon: <Users className="w-4 h-4" /> },
                         { key: 'canales', label: 'Canales & Webhooks', icon: <Share2 className="w-4 h-4" /> },
+                        { key: 'llamadas', label: 'WhatsApp Llamadas', icon: <Phone className="w-4 h-4" /> },
                         { key: 'horarios', label: 'Horarios', icon: <Clock className="w-4 h-4" /> },
                         { key: 'ai', label: 'Configuración IA', icon: <Brain className="w-4 h-4" /> },
                         { key: 'asignacion', label: 'Reglas de Asignación', icon: <ArrowRightLeft className="w-4 h-4" /> },
@@ -227,6 +228,7 @@ export default function SettingsPage() {
                 {activeTab === 'usuarios' && <UsuariosTab />}
                 {activeTab === 'equipos' && <EquiposTab />}
                 {activeTab === 'canales' && <CanalesTab />}
+                {activeTab === 'llamadas' && <LlamadasTab />}
                 {activeTab === 'horarios' && <HorariosTab />}
                 {activeTab === 'ai' && <AITab />}
                 {activeTab === 'bot_knowledge' && <KnowledgeBaseTab />}
@@ -1205,6 +1207,113 @@ function HorariosTab() {
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
                     : saved ? <><CheckCircle className="w-4 h-4" /> Guardado</>
                         : <><Save className="w-4 h-4" /> Guardar horarios</>}
+            </button>
+        </div>
+    );
+}
+
+// ── WhatsApp Llamadas Tab ─────────────────────────────────────────────────────
+function LlamadasTab() {
+    const [enabled, setEnabled] = useState(false);
+    const [callMessage, setCallMessage] = useState('Nos gustaría llamarle para darle seguimiento.');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        apiFetch('/api/settings/calling')
+            .then(r => r.json())
+            .then((data: any) => {
+                setEnabled(!!data.whatsapp_calling_enabled);
+                setCallMessage(data.whatsapp_call_message || 'Nos gustaría llamarle para darle seguimiento.');
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, []);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            await apiFetch('/api/settings/calling', {
+                method: 'POST',
+                body: JSON.stringify({ whatsapp_calling_enabled: enabled, whatsapp_call_message: callMessage }),
+            });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
+    };
+
+    if (loading) return <div className="p-10 flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>;
+
+    return (
+        <div className="p-8 max-w-2xl space-y-6">
+            <div>
+                <h3 className="text-2xl font-bold text-slate-800">WhatsApp Llamadas</h3>
+                <p className="text-slate-500 text-sm mt-1">Configura la función de llamadas de WhatsApp Business para tus agentes.</p>
+            </div>
+
+            {/* Important notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 space-y-1">
+                    <p className="font-semibold">Nota sobre restricciones de Meta</p>
+                    <p>Las llamadas salientes de WhatsApp Business están <strong>bloqueadas para números de EE.UU. y Canadá</strong>. Para usar esta función, debes tener configurado un <strong>número de México u otro país de LATAM</strong> en tu canal de WhatsApp.</p>
+                    <p className="text-xs text-amber-600 mt-1">Consulta la documentación de Meta: WhatsApp Business Calling API está disponible en mercados seleccionados.</p>
+                </div>
+            </div>
+
+            {/* Enable toggle */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="font-semibold text-slate-700">Habilitar llamadas</h4>
+                        <p className="text-sm text-slate-500 mt-0.5">Muestra el botón de llamada en el Inbox para conversaciones de WhatsApp.</p>
+                    </div>
+                    <button
+                        onClick={() => setEnabled(!enabled)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-green-500' : 'bg-slate-300'}`}
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Call message */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                <h4 className="font-semibold text-slate-700">Mensaje de solicitud de llamada</h4>
+                <p className="text-sm text-slate-500">Este texto se muestra al cliente cuando el agente solicita permiso para llamarle.</p>
+                <textarea
+                    value={callMessage}
+                    onChange={e => setCallMessage(e.target.value)}
+                    rows={3}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                    placeholder="ej: Nos gustaría llamarle para darle seguimiento."
+                />
+                <p className="text-xs text-slate-400">El cliente verá este mensaje junto con botones para aceptar o rechazar la llamada.</p>
+            </div>
+
+            {/* How it works */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
+                <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-700 space-y-1">
+                    <p className="font-semibold">¿Cómo funciona?</p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-xs">
+                        <li>El agente hace clic en el ícono de teléfono en el Inbox.</li>
+                        <li>El cliente recibe un mensaje interactivo para aceptar o rechazar la llamada.</li>
+                        <li>Al aceptar, WhatsApp inicia la llamada de voz sobre IP.</li>
+                        <li>Solo se puede enviar una solicitud cada 24 horas por conversación.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <button
+                onClick={save}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+            >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                {saved ? 'Guardado' : 'Guardar cambios'}
             </button>
         </div>
     );

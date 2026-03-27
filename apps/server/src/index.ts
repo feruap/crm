@@ -155,6 +155,41 @@ app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
     }
 });
 
+// ─── WhatsApp Calling Settings ───────────────────────────────────────────────
+app.get('/api/settings/calling', requireAuth, async (_req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('whatsapp_calling_enabled', 'whatsapp_call_message')`
+        );
+        const map: Record<string, string> = {};
+        for (const r of result.rows) map[r.key] = r.value;
+        res.json({
+            whatsapp_calling_enabled: map['whatsapp_calling_enabled'] === 'true',
+            whatsapp_call_message: map['whatsapp_call_message'] || 'Nos gustaría llamarle para darle seguimiento.',
+        });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
+app.post('/api/settings/calling', requireAuth, async (req, res) => {
+    try {
+        const { whatsapp_calling_enabled, whatsapp_call_message } = req.body as Record<string, string | boolean>;
+        const upsert = async (key: string, value: string) => {
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [key, value]
+            );
+        };
+        if (whatsapp_calling_enabled !== undefined) await upsert('whatsapp_calling_enabled', String(whatsapp_calling_enabled));
+        if (whatsapp_call_message !== undefined) await upsert('whatsapp_call_message', String(whatsapp_call_message));
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
 // ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(

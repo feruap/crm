@@ -7,7 +7,7 @@ const {
     CheckCircle, Plus, X, Check, Trash2, Tag, Star, Archive,
     MessageCircle, Image, FileText, Calendar, Clock, Sparkles,
     Zap, UserCheck, MessageSquare, ChevronDown, CheckCheck, MailCheck, MoreVertical, Filter,
-    DollarSign,
+    DollarSign, Phone,
 } = Lucide as any;
 
 import CustomerPanel from '../../components/CustomerPanel';
@@ -107,6 +107,11 @@ export default function InboxPage() {
     const [channelFilter, setChannelFilter] = useState<ChannelFilter>('all');
     const [handlerFilter, setHandlerFilter] = useState<HandlerFilter>('all');
 
+    // Calling
+    const [callingEnabled, setCallingEnabled] = useState(false);
+    const [callLoading, setCallLoading] = useState(false);
+    const [callToast, setCallToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
     // Agent assignment
     const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
     const [showAssignDropdown, setShowAssignDropdown] = useState(false);
@@ -158,6 +163,13 @@ export default function InboxPage() {
         apiFetch('/api/agents').then(r => r.json()).then(data => {
             if (Array.isArray(data)) setAgents(data.map((a: any) => ({ id: a.id, name: a.name })));
         }).catch(console.error);
+    }, []);
+
+    // ── Load calling settings ─────────────────────────────────────────────────
+    useEffect(() => {
+        apiFetch('/api/settings/calling').then(r => r.json()).then((data: any) => {
+            setCallingEnabled(!!data.whatsapp_calling_enabled);
+        }).catch(() => {});
     }, []);
 
     // ── Close assign dropdown on outside click ────────────────────────────────
@@ -307,6 +319,27 @@ export default function InboxPage() {
             await apiFetch(`/api/conversations/${selected}/read`, { method: 'PATCH' });
             setConversations(prev => prev.map(c => c.id === selected ? { ...c, unread_count: 0 } : c));
         } catch (err) { console.error(err); }
+    };
+
+    const doCallRequest = async () => {
+        if (!selected || callLoading) return;
+        setCallLoading(true);
+        try {
+            const res = await apiFetch(`/api/conversations/${selected}/call-request`, { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                setMessages(prev => [...prev, data.message]);
+                setCallToast({ type: 'success', text: 'Solicitud de llamada enviada' });
+            } else {
+                const err = await res.json();
+                setCallToast({ type: 'error', text: err.error || 'Error al enviar solicitud de llamada' });
+            }
+        } catch {
+            setCallToast({ type: 'error', text: 'Error de red al enviar solicitud de llamada' });
+        } finally {
+            setCallLoading(false);
+            setTimeout(() => setCallToast(null), 4000);
+        }
     };
 
     const onSelectQuickReply = async (content: string, id: string) => {
@@ -575,6 +608,19 @@ export default function InboxPage() {
                                 <MailCheck className="w-4 h-4 text-slate-500" />
                             </button>
 
+                            {/* Call request — WhatsApp only */}
+                            {conv.channel_provider === 'whatsapp' && callingEnabled && (
+                                <button
+                                    onClick={doCallRequest}
+                                    disabled={callLoading}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-60"
+                                    title="Solicitar llamada de WhatsApp"
+                                >
+                                    {callLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Phone className="w-3.5 h-3.5" />}
+                                    Llamar
+                                </button>
+                            )}
+
                             <div className="w-px h-6 bg-slate-200 mx-1" />
 
                             {/* Agenda */}
@@ -746,6 +792,14 @@ export default function InboxPage() {
                 />
             )}
 
+            {/* ── Call toast ── */}
+            {callToast && (
+                <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 transition-all
+                    ${callToast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                    {callToast.type === 'success' ? <Phone className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                    {callToast.text}
+                </div>
+            )}
         </div>
     );
 }
