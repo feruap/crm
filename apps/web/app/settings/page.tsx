@@ -206,6 +206,7 @@ export default function SettingsPage() {
                         { key: 'respuestas', label: 'Respuestas Rápidas', icon: <Zap className="w-4 h-4" /> },
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
                         { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
+                        { key: 'email', label: 'Email / SMTP', icon: <Globe className="w-4 h-4" /> },
                     ].map(t => (
                         <button
                             key={t.key}
@@ -233,6 +234,7 @@ export default function SettingsPage() {
                 {activeTab === 'asignacion' && <AssignmentRulesPage />}
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
+                {activeTab === 'email' && <EmailTab />}
             </div>
         </div>
     );
@@ -3004,6 +3006,160 @@ function KnowledgeBaseTab() {
         <div className="p-10 max-w-3xl">
             <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
             <p className="text-slate-500 text-sm mt-1">Próximamente disponible.</p>
+        </div>
+    );
+}
+
+// ── SMTP / Email Settings Tab ─────────────────────────────────────────────────
+function EmailTab() {
+    const [form, setForm] = useState({
+        smtp_host: '',
+        smtp_port: '587',
+        smtp_user: '',
+        smtp_pass: '',
+        smtp_from: '',
+        smtp_secure: 'false',
+    });
+    const [passSet, setPassSet] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [showPass, setShowPass] = useState(false);
+
+    useEffect(() => {
+        apiFetch('/api/settings/smtp')
+            .then(r => r.json())
+            .then((data: any) => {
+                setForm({
+                    smtp_host: data.smtp_host || '',
+                    smtp_port: data.smtp_port || '587',
+                    smtp_user: data.smtp_user || '',
+                    smtp_pass: data.smtp_pass || '',
+                    smtp_from: data.smtp_from || '',
+                    smtp_secure: data.smtp_secure || 'false',
+                });
+                setPassSet(!!data.smtp_pass_set);
+            })
+            .catch(() => setError('No se pudo cargar la configuración'))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const save = async () => {
+        setSaving(true); setError(null);
+        try {
+            const r = await apiFetch('/api/settings/smtp', {
+                method: 'POST',
+                body: JSON.stringify(form),
+            });
+            if (!r.ok) throw new Error((await r.json()).error || 'Error');
+            setSaved(true);
+            setPassSet(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (e: any) {
+            setError(e.message || 'Error al guardar');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return (
+        <div className="p-10 flex items-center gap-2 text-slate-400">
+            <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
+        </div>
+    );
+
+    const field = (label: string, key: keyof typeof form, type = 'text', placeholder = '') => (
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+            <input
+                type={type}
+                value={form[key]}
+                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                placeholder={placeholder}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+        </div>
+    );
+
+    return (
+        <div className="p-10 max-w-2xl">
+            <h3 className="text-2xl font-bold text-slate-800">Configuración de Email (SMTP)</h3>
+            <p className="text-slate-500 text-sm mt-1 mb-8">
+                Configura el servidor de correo para enviar emails de recuperación de contraseña y notificaciones.
+            </p>
+
+            <div className="bg-white rounded-xl border p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 sm:col-span-1">
+                        {field('Servidor SMTP (Host)', 'smtp_host', 'text', 'smtp.gmail.com')}
+                    </div>
+                    <div>
+                        {field('Puerto', 'smtp_port', 'text', '587')}
+                    </div>
+                </div>
+
+                {field('Usuario (Email de envío)', 'smtp_user', 'email', 'noreply@tuempresa.com')}
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Contraseña / App Password
+                        {passSet && <span className="ml-2 text-xs text-green-600 font-normal">● Configurada</span>}
+                    </label>
+                    <div className="relative">
+                        <input
+                            type={showPass ? 'text' : 'password'}
+                            value={form.smtp_pass}
+                            onChange={e => setForm(f => ({ ...f, smtp_pass: e.target.value }))}
+                            placeholder={passSet ? '••••••••  (dejar en blanco para no cambiar)' : 'Contraseña o App Password'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPass(v => !v)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+
+                {field('Nombre / Email remitente (From)', 'smtp_from', 'text', 'MyAlice CRM <noreply@tuempresa.com>')}
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Conexión segura (SSL/TLS)</label>
+                    <select
+                        value={form.smtp_secure}
+                        onChange={e => setForm(f => ({ ...f, smtp_secure: e.target.value }))}
+                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                        <option value="false">STARTTLS (puerto 587 — recomendado)</option>
+                        <option value="true">SSL/TLS directo (puerto 465)</option>
+                    </select>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                    <strong>Gmail:</strong> Usa smtp.gmail.com puerto 587 y una <em>App Password</em> (no tu contraseña normal).
+                    Activa la verificación en 2 pasos y genera una App Password en tu cuenta de Google.
+                </div>
+
+                {error && (
+                    <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                    </div>
+                )}
+
+                <div className="flex justify-end pt-2">
+                    <button
+                        onClick={save}
+                        disabled={saving}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+                    >
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                        {saved ? 'Guardado' : 'Guardar configuración'}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

@@ -155,6 +155,51 @@ app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
     }
 });
 
+// ─── SMTP / Email Settings ────────────────────────────────────────────────────
+app.get('/api/settings/smtp', requireAuth, async (_req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('smtp_host','smtp_port','smtp_user','smtp_pass','smtp_from','smtp_secure')`
+        );
+        const map: Record<string, string> = {};
+        for (const r of result.rows) map[r.key] = r.value;
+        res.json({
+            smtp_host: map['smtp_host'] || '',
+            smtp_port: map['smtp_port'] || '587',
+            smtp_user: map['smtp_user'] || '',
+            smtp_pass: map['smtp_pass'] ? '••••••••' : '',
+            smtp_from: map['smtp_from'] || '',
+            smtp_secure: map['smtp_secure'] || 'false',
+            smtp_pass_set: !!map['smtp_pass'],
+        });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
+app.post('/api/settings/smtp', requireAuth, async (req, res) => {
+    try {
+        const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_secure } = req.body as Record<string, string>;
+        const upsert = async (key: string, value: string | undefined) => {
+            if (value === undefined || value === '••••••••') return;
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [key, value]
+            );
+        };
+        await upsert('smtp_host', smtp_host);
+        await upsert('smtp_port', smtp_port);
+        await upsert('smtp_user', smtp_user);
+        await upsert('smtp_pass', smtp_pass);
+        await upsert('smtp_from', smtp_from);
+        await upsert('smtp_secure', smtp_secure);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
 // ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
@@ -394,6 +439,21 @@ async function runMigrations() {
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
             )
         `);
+    } catch (_) { /* already exists */ }
+
+    // Password reset tokens table
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                used_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        await db.query(`CREATE INDEX IF NOT EXISTS idx_prt_token_hash ON password_reset_tokens(token_hash)`);
     } catch (_) { /* already exists */ }
 }
 
