@@ -1,7 +1,33 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 
 const router = Router();
+
+// ─── Helper: read WooCommerce config from settings DB (fallback to env vars) ─
+async function getWCConfig() {
+    try {
+        const result = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('wc_url', 'wc_key', 'wc_secret', 'wc_webhook_secret')`
+        );
+        const map: Record<string, string> = {};
+        for (const r of result.rows) map[r.key] = r.value;
+        return {
+            url: map['wc_url'] || process.env.WC_URL || '',
+            key: map['wc_key'] || process.env.WC_KEY || '',
+            secret: map['wc_secret'] || process.env.WC_SECRET || '',
+            webhookSecret: map['wc_webhook_secret'] || process.env.WC_WEBHOOK_SECRET || '',
+        };
+    } catch {
+        // If settings table doesn't exist yet, fall back to env vars
+        return {
+            url: process.env.WC_URL || '',
+            key: process.env.WC_KEY || '',
+            secret: process.env.WC_SECRET || '',
+            webhookSecret: process.env.WC_WEBHOOK_SECRET || '',
+        };
+    }
+}
 
 // POST /api/attributions  — vincula customer + campaign + conversation (al primer contacto)
 router.post('/', async (req: Request, res: Response) => {
@@ -86,8 +112,42 @@ router.post('/woocommerce-sync', async (req: Request, res: Response) => {
     res.sendStatus(200); // responder rápido a WC
 
     try {
+        const wcConfig = await getWCConfig();
+
+        // ── HMAC signature validation (only when a secret is configured) ──────
+        if (wcConfig.webhookSecret) {
+            const sig = req.headers['x-wc-webhook-signature'] as string | undefined;
+            if (!sig) {
+                console.warn('[WC Sync] Missing X-WC-Webhook-Signature header — dropping');
+                return;
+            }
+            const rawBody: Buffer | undefined = (req as any).rawBody;
+            if (!rawBody) {
+                console.warn('[WC Sync] rawBody not available for signature check — dropping');
+                return;
+            }
+            const expected = crypto.createHmac('sha256', wcConfig.webhookSecret)
+                .update(rawBody)
+                .digest('base64');
+            let sigMatch = false;
+            try {
+                sigMatch = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+            } catch { /* length mismatch — stays false */ }
+            if (!sigMatch) {
+                console.warn('[WC Sync] Signature mismatch — dropping');
+                return;
+            }
+        }
+
+        // ── Guard against WC test/ping payloads that have no order body ───────
+        const body = req.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            console.log('[WC Sync] Empty or non-object body (ping?) — ignoring');
+            return;
+        }
+
         // Detect if this is a native WC webhook (has 'id' and 'line_items') or custom format
-        const isNativeWC = req.body.id && req.body.line_items;
+        const isNativeWC = body.id && body.line_items;
 
         let order_id: string, order_total: string, currency: string;
         let customer_email: string, customer_phone: string;
@@ -97,7 +157,7 @@ router.post('/woocommerce-sync', async (req: Request, res: Response) => {
 
         if (isNativeWC) {
             // Native WC webhook — full order object
-            const o = req.body;
+            const o = body;
             order_id = String(o.id);
             order_total = o.total;
             currency = o.currency;
@@ -113,12 +173,12 @@ router.post('/woocommerce-sync', async (req: Request, res: Response) => {
             orderStatus = o.status || 'completed';
         } else {
             // Custom format (backward compat)
-            order_id = req.body.order_id;
-            order_total = req.body.order_total;
-            currency = req.body.currency;
-            customer_email = req.body.customer_email;
-            customer_phone = req.body.customer_phone;
-            meta_data = req.body.meta_data || [];
+            order_id = body.order_id;
+            order_total = body.order_total;
+            currency = body.currency;
+            customer_email = body.customer_email;
+            customer_phone = body.customer_phone;
+            meta_data = body.meta_data || [];
             orderStatus = 'completed';
         }
 
@@ -315,18 +375,16 @@ router.post('/sync-woocommerce', async (_req: Request, res: Response) => {
            AND a.order_id IS NOT NULL`
     );
 
+    const wcConfig = await getWCConfig();
     const results = [];
     for (const row of pending.rows) {
         try {
-            const wcUrl = process.env.WC_URL;
-            const wcKey = process.env.WC_KEY;
-            const wcSecret = process.env.WC_SECRET;
-            if (!wcUrl || !wcKey || !wcSecret) {
-                results.push({ id: row.id, ok: false, error: 'WooCommerce credentials not configured' });
+            if (!wcConfig.url || !wcConfig.key || !wcConfig.secret) {
+                results.push({ id: row.id, ok: false, error: 'WooCommerce credentials not configured in Settings' });
                 continue;
             }
-            const auth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
-            const response = await fetch(`${wcUrl}/wp-json/wc/v3/orders/${row.external_order_id}`, {
+            const auth = Buffer.from(`${wcConfig.key}:${wcConfig.secret}`).toString('base64');
+            const response = await fetch(`${wcConfig.url}/wp-json/wc/v3/orders/${row.external_order_id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
                 body: JSON.stringify({
@@ -437,38 +495,26 @@ router.post('/sync-google-ads', async (_req: Request, res: Response) => {
 
 // ─── WooCommerce Webhook Management ─────────────────────────────────────────
 
-function wcAuth() {
-    const key = process.env.WC_KEY;
-    const secret = process.env.WC_SECRET;
-    if (!key || !secret) return null;
-    return Buffer.from(`${key}:${secret}`).toString('base64');
-}
-
 // GET /api/attributions/wc-webhooks — list WC webhooks that point to us
-router.get('/wc-webhooks', async (req: Request, res: Response) => {
-    const auth = wcAuth();
-    const wcUrl = process.env.WC_URL;
-    if (!auth || !wcUrl) {
-        res.status(400).json({ error: 'WC credentials not configured' });
+router.get('/wc-webhooks', async (_req: Request, res: Response) => {
+    const wc = await getWCConfig();
+    if (!wc.url || !wc.key || !wc.secret) {
+        res.status(400).json({ error: 'WC credentials not configured in Settings' });
         return;
     }
+    const auth = Buffer.from(`${wc.key}:${wc.secret}`).toString('base64');
     try {
-        const r = await fetch(`${wcUrl}/wp-json/wc/v3/webhooks?per_page=50`, {
+        const r = await fetch(`${wc.url}/wp-json/wc/v3/webhooks?per_page=50`, {
             headers: { Authorization: `Basic ${auth}` },
         });
         const webhooks = await r.json();
-        // Filter only webhooks that contain our endpoint
         const ours = (Array.isArray(webhooks) ? webhooks : []).filter((w: any) =>
             w.delivery_url?.includes('woocommerce-sync') || w.delivery_url?.includes('salesking-sync')
         );
         res.json({
             webhooks: ours.map((w: any) => ({
-                id: w.id,
-                name: w.name,
-                topic: w.topic,
-                delivery_url: w.delivery_url,
-                status: w.status,
-                date_created: w.date_created,
+                id: w.id, name: w.name, topic: w.topic,
+                delivery_url: w.delivery_url, status: w.status, date_created: w.date_created,
             })),
             all_count: Array.isArray(webhooks) ? webhooks.length : 0,
         });
@@ -477,14 +523,14 @@ router.get('/wc-webhooks', async (req: Request, res: Response) => {
     }
 });
 
-// POST /api/attributions/wc-webhooks — create webhook in WooCommerce
+// POST /api/attributions/wc-webhooks — create order.created + order.updated webhooks in WooCommerce
 router.post('/wc-webhooks', async (req: Request, res: Response) => {
-    const auth = wcAuth();
-    const wcUrl = process.env.WC_URL;
-    if (!auth || !wcUrl) {
-        res.status(400).json({ error: 'WC credentials not configured' });
+    const wc = await getWCConfig();
+    if (!wc.url || !wc.key || !wc.secret) {
+        res.status(400).json({ error: 'WC credentials not configured in Settings' });
         return;
     }
+    const auth = Buffer.from(`${wc.key}:${wc.secret}`).toString('base64');
 
     const { public_url } = req.body as { public_url: string };
     if (!public_url) {
@@ -492,17 +538,15 @@ router.post('/wc-webhooks', async (req: Request, res: Response) => {
         return;
     }
 
-    // Save public_url in settings table for future reference
     await db.query(
-        `INSERT INTO settings (key, value) VALUES ('public_url', $1)
+        `INSERT INTO settings (key, value, updated_at) VALUES ('public_url', $1, NOW())
          ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
         [public_url]
-    ).catch(() => { /* settings table might not exist yet */ });
+    ).catch(() => {});
 
     const deliveryUrl = `${public_url.replace(/\/$/, '')}/api/attributions/woocommerce-sync`;
 
     try {
-        // Create two webhooks: order.created and order.updated
         const topics = [
             { topic: 'order.created', name: 'MyAlice CRM — Orden creada' },
             { topic: 'order.updated', name: 'MyAlice CRM — Orden actualizada' },
@@ -510,8 +554,7 @@ router.post('/wc-webhooks', async (req: Request, res: Response) => {
         const created = [];
 
         for (const t of topics) {
-            // Check if webhook already exists for this topic + delivery_url
-            const listRes = await fetch(`${wcUrl}/wp-json/wc/v3/webhooks?per_page=100`, {
+            const listRes = await fetch(`${wc.url}/wp-json/wc/v3/webhooks?per_page=100`, {
                 headers: { Authorization: `Basic ${auth}` },
             });
             const existing = await listRes.json();
@@ -523,15 +566,13 @@ router.post('/wc-webhooks', async (req: Request, res: Response) => {
                 continue;
             }
 
-            const r = await fetch(`${wcUrl}/wp-json/wc/v3/webhooks`, {
+            const r = await fetch(`${wc.url}/wp-json/wc/v3/webhooks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
                 body: JSON.stringify({
-                    name: t.name,
-                    topic: t.topic,
-                    delivery_url: deliveryUrl,
-                    status: 'active',
-                    secret: process.env.JWT_SECRET || 'myalice-webhook-secret',
+                    name: t.name, topic: t.topic, delivery_url: deliveryUrl, status: 'active',
+                    // Use the configured webhook secret so signatures can be validated
+                    secret: wc.webhookSecret || undefined,
                 }),
             });
             const wh: any = await r.json();
@@ -550,18 +591,17 @@ router.post('/wc-webhooks', async (req: Request, res: Response) => {
 
 // DELETE /api/attributions/wc-webhooks/:id — delete a WC webhook
 router.delete('/wc-webhooks/:id', async (req: Request, res: Response) => {
-    const auth = wcAuth();
-    const wcUrl = process.env.WC_URL;
-    if (!auth || !wcUrl) {
-        res.status(400).json({ error: 'WC credentials not configured' });
+    const wc = await getWCConfig();
+    if (!wc.url || !wc.key || !wc.secret) {
+        res.status(400).json({ error: 'WC credentials not configured in Settings' });
         return;
     }
+    const auth = Buffer.from(`${wc.key}:${wc.secret}`).toString('base64');
     try {
-        const r = await fetch(`${wcUrl}/wp-json/wc/v3/webhooks/${req.params.id}?force=true`, {
+        await fetch(`${wc.url}/wp-json/wc/v3/webhooks/${req.params.id}?force=true`, {
             method: 'DELETE',
             headers: { Authorization: `Basic ${auth}` },
         });
-        const data = await r.json();
         res.json({ deleted: true, id: req.params.id });
     } catch (err: any) {
         res.status(500).json({ error: err.message });

@@ -1736,6 +1736,10 @@ function IntegracionesTab() {
     const [wcUrl, setWcUrl] = useState('');
     const [wcKey, setWcKey] = useState('');
     const [wcSecret, setWcSecret] = useState('');
+    const [wcWebhookSecret, setWcWebhookSecret] = useState('');
+    const [wcKeySet, setWcKeySet] = useState(false);
+    const [wcSecretSet, setWcSecretSet] = useState(false);
+    const [wcWebhookSecretSet, setWcWebhookSecretSet] = useState(false);
     const [skEnabled, setSkEnabled] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -1744,11 +1748,39 @@ function IntegracionesTab() {
 
     const base = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : 'http://localhost:3001';
 
+    // Load saved WC config on mount
+    useEffect(() => {
+        apiFetch('/api/settings/woocommerce').then(async r => {
+            if (!r.ok) return;
+            const data = await r.json();
+            if (data.wc_url) setWcUrl(data.wc_url);
+            setWcKeySet(!!data.wc_key_set);
+            setWcSecretSet(!!data.wc_secret_set);
+            setWcWebhookSecretSet(!!data.wc_webhook_secret_set);
+        }).catch(() => {});
+    }, []);
+
     const saveWC = async () => {
         setSaving(true);
         try {
-            // En producción esto se guardaría en DB/env. Por ahora solo mostramos confirmación.
-            setSaved(true); setTimeout(() => setSaved(false), 2500);
+            const body: Record<string, string> = { wc_url: wcUrl };
+            // Only send secrets if user typed a new value (not the masked placeholder)
+            if (wcKey && wcKey !== '••••••••') body.wc_key = wcKey;
+            if (wcSecret && wcSecret !== '••••••••') body.wc_secret = wcSecret;
+            if (wcWebhookSecret && wcWebhookSecret !== '••••••••') body.wc_webhook_secret = wcWebhookSecret;
+            const r = await apiFetch('/api/settings/woocommerce', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (r.ok) {
+                setSaved(true); setTimeout(() => setSaved(false), 2500);
+                // Refresh mask indicators
+                if (body.wc_key) setWcKeySet(true);
+                if (body.wc_secret) setWcSecretSet(true);
+                if (body.wc_webhook_secret) setWcWebhookSecretSet(true);
+                setWcKey(''); setWcSecret(''); setWcWebhookSecret('');
+            }
         } catch (e) { console.error(e); }
         finally { setSaving(false); }
     };
@@ -1800,17 +1832,30 @@ function IntegracionesTab() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Consumer Key (WC_KEY)</label>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">
+                                Consumer Key {wcKeySet && <span className="text-green-600 font-normal">✓ configurado</span>}
+                            </label>
                             <input value={wcKey} onChange={e => setWcKey(e.target.value)}
-                                type="password" placeholder="ck_xxxxxxx"
+                                type="password" placeholder={wcKeySet ? '(dejar en blanco para mantener)' : 'ck_xxxxxxx'}
                                 className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-300" />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Consumer Secret (WC_SECRET)</label>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">
+                                Consumer Secret {wcSecretSet && <span className="text-green-600 font-normal">✓ configurado</span>}
+                            </label>
                             <input value={wcSecret} onChange={e => setWcSecret(e.target.value)}
-                                type="password" placeholder="cs_xxxxxxx"
+                                type="password" placeholder={wcSecretSet ? '(dejar en blanco para mantener)' : 'cs_xxxxxxx'}
                                 className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-300" />
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                            Webhook Secret {wcWebhookSecretSet && <span className="text-green-600 font-normal">✓ configurado</span>}
+                        </label>
+                        <input value={wcWebhookSecret} onChange={e => setWcWebhookSecret(e.target.value)}
+                            type="password" placeholder={wcWebhookSecretSet ? '(dejar en blanco para mantener)' : 'Secreto para validar firma HMAC de WooCommerce'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-300" />
+                        <p className="text-xs text-slate-400 mt-1">El mismo valor que pusiste en WC Admin → Webhooks → Secreto. Deja en blanco para omitir validación.</p>
                     </div>
                 </div>
                 <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600 space-y-1">

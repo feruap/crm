@@ -109,6 +109,52 @@ app.use('/api/pipelines', requireAuth, pipelinesRouter);
 app.use('/api/automations', requireAuth, automationsRouter);
 app.use('/api/agent-groups', requireAuth, agentGroupsRouter);
 
+// ─── WooCommerce Settings ─────────────────────────────────────────────────────
+// Reads/writes wc_url, wc_key, wc_secret, wc_webhook_secret from the settings table.
+// These are the values the UI saves — the server reads them at runtime so no deploy needed.
+app.get('/api/settings/woocommerce', requireAuth, async (_req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('wc_url', 'wc_key', 'wc_secret', 'wc_webhook_secret')`
+        );
+        const map: Record<string, string> = {};
+        for (const r of result.rows) map[r.key] = r.value;
+        res.json({
+            wc_url: map['wc_url'] || '',
+            // Never return secrets in plaintext — return masked values so the UI knows they're set
+            wc_key: map['wc_key'] ? '••••••••' : '',
+            wc_secret: map['wc_secret'] ? '••••••••' : '',
+            wc_webhook_secret: map['wc_webhook_secret'] ? '••••••••' : '',
+            wc_key_set: !!map['wc_key'],
+            wc_secret_set: !!map['wc_secret'],
+            wc_webhook_secret_set: !!map['wc_webhook_secret'],
+        });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
+app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
+    try {
+        const { wc_url, wc_key, wc_secret, wc_webhook_secret } = req.body as Record<string, string>;
+        const upsert = async (key: string, value: string | undefined) => {
+            if (value === undefined || value === '••••••••') return; // don't overwrite with masked placeholder
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [key, value]
+            );
+        };
+        await upsert('wc_url', wc_url);
+        await upsert('wc_key', wc_key);
+        await upsert('wc_secret', wc_secret);
+        await upsert('wc_webhook_secret', wc_webhook_secret);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
 // ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
