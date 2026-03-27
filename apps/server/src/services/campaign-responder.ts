@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Campaign Auto-Responder Service
  *
  * When a new conversation starts from a Meta ad (Click-to-DM), this service:
@@ -13,9 +13,7 @@
 
 import { db } from '../db';
 
-// ─────────────────────────────────────────────
 // Type Definitions
-// ─────────────────────────────────────────────
 
 interface MetaReferral {
   ad_id?: string;
@@ -49,9 +47,7 @@ interface UTMData {
 
 type MediaType = 'image' | 'video' | 'file' | 'text';
 
-// ─────────────────────────────────────────────
 // Public Functions
-// ─────────────────────────────────────────────
 
 /**
  * Find campaign and product mappings for a given Meta referral
@@ -63,13 +59,12 @@ export async function findCampaignMapping(
 
   // Look up the campaign by ad_id
   const campaign = await db.query(
-    SELECT id, name FROM campaigns
-     WHERE platform_ad_id =  AND is_active = TRUE
-     LIMIT 1,
+    `SELECT id, name FROM campaigns
+     WHERE platform_ad_id = $1 AND is_active = TRUE
+     LIMIT 1`,
     [referral.ad_id]
   );
 
-  // If no exact ad match, try ad_set or campaign level
   let campaignId: string | number | null = null;
   let campaignName: string | null = null;
 
@@ -80,14 +75,15 @@ export async function findCampaignMapping(
     // Try matching by platform_campaign_id from ads_context_data or ref
     // For now, create the campaign on the fly if we have an ad_id
     const newCampaign = await db.query(
-      INSERT INTO campaigns (platform, platform_campaign_id, platform_ad_id, name, metadata)
-       VALUES ('facebook', , , , )
+      `INSERT INTO campaigns (platform, platform_campaign_id, platform_ad_id, name, metadata)
+       VALUES ('facebook', $1, $2, $3, $4)
        ON CONFLICT (platform, platform_campaign_id) DO UPDATE
            SET platform_ad_id = EXCLUDED.platform_ad_id, metadata = EXCLUDED.metadata
-       RETURNING id, name,
+       RETURNING id, name`,
       [
         referral.ad_id,
-        referral.ads_context_data?.ad_title || \FB Ad \\,
+        referral.ad_id,
+        referral.ads_context_data?.ad_title || `FB Ad ${referral.ad_id}`,
         JSON.stringify(referral),
       ]
     );
@@ -100,14 +96,14 @@ export async function findCampaignMapping(
 
   // Find the active mapping for this campaign
   const mapping = await db.query(
-    SELECT cpm.*, c.name AS campaign_name
+    `SELECT cpm.*, c.name AS campaign_name
      FROM campaign_product_mappings cpm
      JOIN campaigns c ON c.id = cpm.campaign_id
-     WHERE cpm.campaign_id = 
+     WHERE cpm.campaign_id = $1
        AND cpm.is_active = TRUE
        AND cpm.auto_send = TRUE
      ORDER BY cpm.priority DESC
-     LIMIT 1,
+     LIMIT 1`,
     [campaignId]
   );
 
@@ -140,9 +136,9 @@ export async function sendCampaignAutoReply(
 ): Promise<void> {
   // Send welcome message
   await db.query(
-    INSERT INTO messages
+    `INSERT INTO messages
       (conversation_id, channel_id, customer_id, direction, content, message_type, handled_by, bot_confidence, bot_action)
-     VALUES (, , , 'outbound', , 'text', 'bot', 1.0, 'campaign_auto_reply'),
+     VALUES ($1, $2, $3, 'outbound', $4, 'text', 'bot', 1.0, 'campaign_auto_reply')`,
     [conversationId, channelId, customerId, mapping.welcome_message]
   );
 
@@ -150,9 +146,9 @@ export async function sendCampaignAutoReply(
   for (const mediaUrl of mapping.media_urls) {
     const mediaType = guessMediaType(mediaUrl);
     await db.query(
-      INSERT INTO messages
+      `INSERT INTO messages
         (conversation_id, channel_id, customer_id, direction, content, media_url, message_type, handled_by, bot_confidence, bot_action)
-       VALUES (, , , 'outbound', , , , 'bot', 1.0, 'campaign_auto_reply'),
+       VALUES ($1, $2, $3, 'outbound', $4, $5, $6, 'bot', 1.0, 'campaign_auto_reply')`,
       [conversationId, channelId, customerId, mapping.product_name, mediaUrl, mediaType]
     );
   }
@@ -168,9 +164,9 @@ export async function recordTouchpoint(
   channel: string
 ): Promise<void> {
   await db.query(
-    INSERT INTO attribution_touchpoints
+    `INSERT INTO attribution_touchpoints
       (customer_id, campaign_id, channel, touchpoint_type, ad_id, raw_referral)
-     VALUES (, , , , , ),
+     VALUES ($1, $2, $3, $4, $5, $6)`,
     [
       customerId,
       campaignId,
@@ -194,8 +190,8 @@ export async function recordUTMTouchpoint(
 
   if (utmData.utm_campaign) {
     const campaign = await db.query(
-      SELECT id FROM campaigns WHERE name ILIKE  LIMIT 1,
-      [\%\%\]
+      `SELECT id FROM campaigns WHERE name ILIKE $1 LIMIT 1`,
+      [`%${utmData.utm_campaign}%`]
     );
     if (campaign.rows.length > 0) {
       campaignId = campaign.rows[0].id;
@@ -209,9 +205,9 @@ export async function recordUTMTouchpoint(
     utmData.utm_source ? 'referral' : 'direct';
 
   await db.query(
-    INSERT INTO attribution_touchpoints
+    `INSERT INTO attribution_touchpoints
       (customer_id, campaign_id, channel, touchpoint_type, utm_source, utm_medium, utm_campaign, utm_content, utm_term, gclid, fbclid)
-     VALUES (, , 'web', , , , , , , , ),
+     VALUES ($1, $2, 'web', $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       customerId,
       campaignId,
@@ -227,9 +223,7 @@ export async function recordUTMTouchpoint(
   );
 }
 
-// ─────────────────────────────────────────────
 // Helpers
-// ─────────────────────────────────────────────
 
 /**
  * Guess media type from URL

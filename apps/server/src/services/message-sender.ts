@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Outbound Message Sender Service
  *
  * Actually delivers messages to customers via:
@@ -14,9 +14,7 @@
 
 import { db } from '../db';
 
-// ─────────────────────────────────────────────
 // Types & Interfaces
-// ─────────────────────────────────────────────
 
 interface SendResult {
   ok: boolean;
@@ -43,9 +41,7 @@ interface SendAndSaveResult {
   error?: string;
 }
 
-// ─────────────────────────────────────────────
 // WhatsApp Cloud API
-// ─────────────────────────────────────────────
 
 async function sendWhatsApp(
   phoneNumberId: string,
@@ -55,12 +51,12 @@ async function sendWhatsApp(
 ): Promise<SendResult> {
   try {
     const response = await fetch(
-      https://graph.facebook.com/v19.0/\/messages,
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': Bearer \,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
@@ -74,7 +70,7 @@ async function sendWhatsApp(
 
     if (!response.ok) {
       const err = await response.text();
-      return { ok: false, error: WhatsApp API \: \ };
+      return { ok: false, error: `WhatsApp API ${response.status}: ${err}` };
     }
 
     const data = await response.json() as Record<string, unknown>;
@@ -85,9 +81,7 @@ async function sendWhatsApp(
   }
 }
 
-// ─────────────────────────────────────────────
 // Facebook Messenger Send API
-// ─────────────────────────────────────────────
 
 async function sendFacebookMessenger(
   pageAccessToken: string,
@@ -101,7 +95,7 @@ async function sendFacebookMessenger(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': Bearer \,
+          'Authorization': `Bearer ${pageAccessToken}`,
         },
         body: JSON.stringify({
           recipient: { id: recipientPSID },
@@ -113,7 +107,7 @@ async function sendFacebookMessenger(
 
     if (!response.ok) {
       const err = await response.text();
-      return { ok: false, error: FB Messenger API \: \ };
+      return { ok: false, error: `FB Messenger API ${response.status}: ${err}` };
     }
 
     const data = await response.json() as { message_id?: string };
@@ -123,9 +117,7 @@ async function sendFacebookMessenger(
   }
 }
 
-// ─────────────────────────────────────────────
 // Instagram Direct Send API
-// ─────────────────────────────────────────────
 
 async function sendInstagramDirect(
   pageAccessToken: string,
@@ -139,7 +131,7 @@ async function sendInstagramDirect(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': Bearer \,
+          'Authorization': `Bearer ${pageAccessToken}`,
         },
         body: JSON.stringify({
           recipient: { id: recipientIGSID },
@@ -151,7 +143,7 @@ async function sendInstagramDirect(
 
     if (!response.ok) {
       const err = await response.text();
-      return { ok: false, error: IG Direct API \: \ };
+      return { ok: false, error: `IG Direct API ${response.status}: ${err}` };
     }
 
     const data = await response.json() as { message_id?: string };
@@ -160,10 +152,6 @@ async function sendInstagramDirect(
     return { ok: false, error: String(err) };
   }
 }
-
-// ─────────────────────────────────────────────
-// Public: Send Message to Customer
-// ─────────────────────────────────────────────
 
 /**
  * Delivers an outbound message to a customer via their channel.
@@ -182,7 +170,7 @@ export async function deliverMessage(
   try {
     // Get channel config
     const channelResult = await db.query(
-      'SELECT provider, provider_config FROM channels WHERE id = \',
+      'SELECT provider, provider_config FROM channels WHERE id = $1',
       [channelId]
     );
 
@@ -195,16 +183,16 @@ export async function deliverMessage(
 
     // Get customer's external ID for this provider
     const identity = await db.query(
-      SELECT provider_id FROM external_identities
-       WHERE customer_id = \ AND provider = \
-       LIMIT 1,
+      `SELECT provider_id FROM external_identities
+       WHERE customer_id = $1 AND provider = $2
+       LIMIT 1`,
       [customerId, channel.provider]
     );
 
     if (identity.rows.length === 0) {
       return {
         ok: false,
-        error: No \ identity found for customer,
+        error: `No ${channel.provider} identity found for customer`,
       };
     }
 
@@ -261,14 +249,14 @@ export async function deliverMessage(
       default:
         return {
           ok: false,
-          error: Unsupported channel provider: \,
+          error: `Unsupported channel provider: ${channel.provider}`,
         };
     }
 
     // Update message with provider_message_id if sent successfully
     if (result.ok && result.provider_message_id) {
       await db.query(
-        'UPDATE messages SET provider_message_id = \ WHERE id = \',
+        'UPDATE messages SET provider_message_id = $1 WHERE id = $2',
         [result.provider_message_id, messageId]
       );
     }
@@ -276,7 +264,7 @@ export async function deliverMessage(
     // Log delivery result
     if (!result.ok) {
       console.error(
-        [Message Sender] Failed to deliver msg \ via \:,
+        `[Message Sender] Failed to deliver msg ${messageId} via ${channel.provider}:`,
         result.error
       );
     }
@@ -302,9 +290,9 @@ export async function sendAndSaveMessage(
 ): Promise<SendAndSaveResult> {
   // Save to DB first
   const msg = await db.query(
-    \INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_action, bot_confidence)
-     VALUES (\, \, \, 'outbound', \, \, \, \)
-     RETURNING id\,
+    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_action, bot_confidence)
+     VALUES ($1, $2, $3, 'outbound', $4, $5, $6, $7)
+     RETURNING id`,
     [conversationId, channelId, customerId, content, handledBy, botAction || null, botConfidence || null]
   );
 

@@ -169,7 +169,7 @@ async function evaluateRule(
       const minSpend = config.min_lifetime_spend || 50000;
       const spend = await db.query<LifetimeSpendRow>(
         `SELECT COALESCE(SUM(total_amount), 0) AS lifetime_spend
-         FROM orders WHERE customer_id = $1 AND status NOT IN ('cancelled', 'refunded', 'failed')``,
+         FROM orders WHERE customer_id = $1 AND status NOT IN ('cancelled', 'refunded', 'failed')`,
         [customerId]
       );
       return parseFloat(String(spend.rows[0].lifetime_spend)) >= minSpend;
@@ -178,7 +178,7 @@ async function evaluateRule(
     case 'sentiment_negative': {
       const insight = await db.query<SentimentInsightRow>(
         `SELECT last_sentiment FROM ai_insights
-         WHERE customer_id = $1 ORDER BY updated_at DESC LIMIT 1``,
+         WHERE customer_id = $1 ORDER BY updated_at DESC LIMIT 1`,
         [customerId]
       );
       return insight.rows.length > 0 && insight.rows[0].last_sentiment === 'negative';
@@ -222,7 +222,7 @@ export async function evaluateEscalation(
   }
 
   const rules = await db.query<EscalationRule>(
-    `SELECT * FROM escalation_rules WHERE is_active = TRUE ORDER BY priority DESC``
+    `SELECT * FROM escalation_rules WHERE is_active = TRUE ORDER BY priority DESC`
   );
 
   for (const rule of rules.rows) {
@@ -259,7 +259,7 @@ export async function generateHandoffSummary(
   const messages = await db.query<MessageRow>(
     `SELECT direction, content, handled_by, bot_action, created_at
      FROM messages WHERE conversation_id = $1 AND content IS NOT NULL
-     ORDER BY created_at ASC LIMIT 30``,
+     ORDER BY created_at ASC LIMIT 30`,
     [conversationId]
   );
 
@@ -269,14 +269,14 @@ export async function generateHandoffSummary(
     `SELECT c.display_name, cp.business_type, cp.specialty, cp.organization_name
      FROM customers c
      LEFT JOIN customer_profiles cp ON cp.customer_id = c.id
-     WHERE c.id = $1``,
+     WHERE c.id = $1`,
     [customerId]
   );
 
   const orders = await db.query<OrderRow>(
     `SELECT external_order_id, total_amount, status, items
      FROM orders WHERE customer_id = $1
-     ORDER BY order_date DESC LIMIT 3``,
+     ORDER BY order_date DESC LIMIT 3`,
     [customerId]
   );
 
@@ -315,14 +315,14 @@ Conversación:
 ${messageLog}`;
 
   try {
-    const summary = await getAIResponse(provider, '', summaryPrompt, apiKey);
+    const summary = await getAIResponse(provider as any, '', summaryPrompt, apiKey);
     return summary;
   } catch {
     return `Cliente: ${customerInfo.display_name || 'Desconocido'}. Razón de transferencia: ${escalationReason}. Últimos mensajes del cliente: ${messages.rows
       .filter((m: MessageRow) => m.direction === 'inbound')
       .slice(-2)
       .map((m: MessageRow) => m.content)
-      .join(' | ')}``;
+      .join(' | ')}`;
   }
 }
 
@@ -357,7 +357,7 @@ export async function executeHandoff(
            SELECT COUNT(*) FROM conversations
            WHERE assigned_agent_id = agents.id AND status IN ('open', 'pending')
        ) ASC
-       LIMIT 1``,
+       LIMIT 1`,
       [escalation.rule.target_role]
     );
     if (agent.rows.length > 0) agentId = agent.rows[0].id;
@@ -369,7 +369,7 @@ export async function executeHandoff(
            SELECT COUNT(*) FROM conversations
            WHERE assigned_agent_id = agents.id AND status IN ('open', 'pending')
        ) ASC
-       LIMIT 1``
+       LIMIT 1`
     );
     if (agent.rows.length > 0) agentId = agent.rows[0].id;
   }
@@ -377,7 +377,7 @@ export async function executeHandoff(
   await db.query(
     `UPDATE conversations
      SET assigned_agent_id = $1, handoff_summary = $2, escalation_reason = $3, updated_at = NOW()
-     WHERE id = $4``,
+     WHERE id = $4`,
     [agentId, summary, escalation.reason, conversationId]
   );
 
@@ -386,7 +386,7 @@ export async function executeHandoff(
   await db.query(
     `INSERT INTO handoff_events
       (conversation_id, from_handler, to_agent_id, escalation_rule_id, trigger_reason, ai_summary, customer_profile_snapshot)
-     VALUES ($1, 'bot', $2, $3, $4, $5, $6)``,
+     VALUES ($1, 'bot', $2, $3, $4, $5, $6)`,
     [
       conversationId,
       agentId,

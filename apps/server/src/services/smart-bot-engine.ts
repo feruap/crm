@@ -331,11 +331,11 @@ export async function generateMedicalAdvisory(
 ): Promise<BotResponse> {
   try {
     // Get customer profile to determine audience type
-    const profile = await getCustomerProfile(customerId);
+    const profile = await getCustomerProfile(parseInt(customerId, 10));
     const audienceType = profile?.business_type === 'laboratorio' ? 'laboratorio' : 'medico';
 
     // Generate embedding for semantic search
-    const embedding = await generateEmbedding(message, aiProvider, apiKey);
+    const embedding = await generateEmbedding(message, aiProvider as any, apiKey);
 
     // Find relevant medical knowledge (RAG) — audience-aware, with keyword fallback
     const medicalResult: MedicalContextResult = await findMedicalContext(
@@ -352,7 +352,7 @@ export async function generateMedicalAdvisory(
     }
 
     // Get AI recommendations
-    const recommendations = await getRecommendations(message, customerId, aiProvider, apiKey);
+    const recommendations = await getRecommendations(message, parseInt(customerId, 10), aiProvider, apiKey);
 
     // Load prompt_additions from AI settings (UI-configured extra rules)
     let promptAdditions: string | null = null;
@@ -369,7 +369,7 @@ export async function generateMedicalAdvisory(
 
     // Build system prompt with context — now audience-aware
     const systemPrompt = buildMedicalPrompt({
-      customerProfile: profile,
+      customerProfile: profile || undefined,
       recommendations,
       knowledgeContext: medicalContext || undefined,
       promptAdditions: promptAdditions || undefined,
@@ -930,7 +930,10 @@ export async function handleIncomingMessage(params: IncomingMessageParams): Prom
 
       if (orderMatch && orderMatch[1]) {
         try {
-          const kanbanState = await getOrderWithKanbanState(orderMatch[1]);
+          const kanbanState = await getOrderWithKanbanState(parseInt(orderMatch[1], 10));
+          if (!kanbanState) {
+            throw new Error('Order not found');
+          }
           const statusMap: Record<string, string> = {
             'Esperando Pago': 'en espera de pago',
             'En Preparación': 'en preparación para envío',
@@ -942,11 +945,7 @@ export async function handleIncomingMessage(params: IncomingMessageParams): Prom
           const status = statusMap[kanbanState.kanban_column] || kanbanState.kanban_column.toLowerCase();
 
           return {
-            message: `Tu pedido #${orderMatch[1]} ${status}. ${
-              kanbanState.last_moved_at
-                ? `Último actualizado: ${new Date(kanbanState.last_moved_at).toLocaleDateString('es-MX')}.`
-                : ''
-            } ¿Hay algo más en lo que pueda ayudarte?`,
+            message: `Tu pedido #${orderMatch[1]} ${status}. ¿Hay algo más en lo que pueda ayudarte?`,
             confidence: 0.9,
             intent_type: 'ORDER_TRACKING',
             action_type: 'reply',

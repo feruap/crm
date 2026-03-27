@@ -315,7 +315,8 @@ export async function handleBotResponse(
     conversationId: string,
     channelId: string,
     customerId: string,
-    messageText: string
+    messageText: string,
+    referral?: Record<string, any>
 ): Promise<void> {
     try {
         const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');

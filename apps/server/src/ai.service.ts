@@ -702,3 +702,63 @@ export async function getOrderTracking(query: string): Promise<string> {
     }
 }
 
+/**
+ * Find relevant medical context from knowledge chunks using embedding similarity.
+ * Used by the smart bot engine for RAG-based medical advisory responses.
+ */
+export async function findMedicalContext(
+    embedding: number[],
+    limit: number,
+    audienceType: string,
+    messageText: string
+): Promise<{ context: string | null; products: Array<{ name: string }>; hasGap: boolean }> {
+    try {
+        const isZeroVector = embedding.every(v => v === 0);
+        let chunks: any[] = [];
+
+        if (!isZeroVector) {
+            const vectorLiteral = `[${embedding.join(',')}]`;
+            const res = await db.query(
+                `SELECT mkc.content, mkc.chunk_type, mp.name AS product_name,
+                        1 - (mkc.embedding <=> $1::vector) AS similarity
+                 FROM medical_knowledge_chunks mkc
+                 JOIN medical_products mp ON mp.id = mkc.medical_product_id
+                 WHERE mkc.embedding IS NOT NULL
+                   AND 1 - (mkc.embedding <=> $1::vector) > 0.35
+                 ORDER BY mkc.embedding <=> $1::vector
+                 LIMIT $2`,
+                [vectorLiteral, limit]
+            );
+            chunks = res.rows;
+        }
+
+        // Keyword fallback if no semantic results
+        if (chunks.length === 0 && messageText) {
+            const words = messageText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            if (words.length > 0) {
+                const res = await db.query(
+                    `SELECT mkc.content, mkc.chunk_type, mp.name AS product_name
+                     FROM medical_knowledge_chunks mkc
+                     JOIN medical_products mp ON mp.id = mkc.medical_product_id
+                     WHERE LOWER(mkc.content) LIKE ANY($1::text[])
+                     LIMIT $2`,
+                    [words.map(w => `%${w}%`), limit]
+                );
+                chunks = res.rows;
+            }
+        }
+
+        if (chunks.length === 0) {
+            return { context: null, products: [], hasGap: true };
+        }
+
+        const context = chunks.map((c: any) => c.content).join('\n\n');
+        const products = [...new Map(chunks.map((c: any) => [c.product_name, { name: c.product_name }])).values()];
+
+        return { context, products, hasGap: false };
+    } catch (err) {
+        console.error('[findMedicalContext error]', err);
+        return { context: null, products: [], hasGap: true };
+    }
+}
+

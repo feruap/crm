@@ -92,7 +92,7 @@ async function getRecommendationsByRules(
   for (const rule of rules.rows) {
     // Check if any trigger keyword matches
     const keywords = rule.trigger_keywords || [];
-    const matched = keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
+    const matched = keywords.some((kw: string) => lowerMessage.includes(kw.toLowerCase()));
     if (!matched) continue;
 
     // Check profile filter if specified
@@ -192,7 +192,7 @@ async function getSemanticRecommendations(
   apiKey: string,
   limit: number = 5
 ): Promise<ProductRecommendation[]> {
-  const embedding = await generateEmbedding(messageText, provider, apiKey);
+  const embedding = await generateEmbedding(messageText, provider as any, apiKey);
   const vectorLiteral = `[${embedding.join(',')}]`;
 
   // Search products by embedding similarity
