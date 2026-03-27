@@ -203,7 +203,7 @@ router.post('/woocommerce-sync', async (req: Request, res: Response) => {
             const byPhone = await db.query(
                 `SELECT customer_id FROM external_identities
                  WHERE provider = 'whatsapp' AND provider_id = $1 LIMIT 1`,
-                [customer_phone.replace(/\D/g, '')]
+                [customer_phone.replace(/\D/g, '').slice(-10)]
             );
             if (byPhone.rows.length > 0) customerId = byPhone.rows[0].customer_id;
         }
