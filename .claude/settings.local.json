@@ -110,7 +110,8 @@
       "Bash(curl -s -X POST http://localhost:3001/api/campaigns/sync-google -H \"Content-Type: application/json\" -w \"\\\\nHTTP_STATUS:%{http_code}\")",
       "Bash(tasklist /fi \"imagename eq node.exe\" /v)",
       "Bash(ss -tlnp)",
-      "Bash(wmic process where \"ProcessId=70432\" get ProcessId,CommandLine)"
+      "Bash(wmic process where \"ProcessId=70432\" get ProcessId,CommandLine)",
+      "Bash(npm install:*)"
     ]
   }
 }

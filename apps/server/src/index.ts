@@ -373,6 +373,8 @@ async function runMigrations() {
     };
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wc_agent_id TEXT`);
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_agent_code TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS reset_token TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS excluded_categories TEXT[]`);
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS model_name TEXT`);
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS temperature NUMERIC(3,2) DEFAULT 0.7`);
