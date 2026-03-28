@@ -94,7 +94,7 @@ const PROVIDER_META = {
         label: 'Facebook',
         color: 'bg-blue-600',
         icon: '📘',
-        fields: ['page_id', 'page_username', 'access_token', 'app_secret', 'webhook_secret'],
+        fields: ['page_id', 'page_username', 'access_token', 'app_secret', 'webhook_secret', 'brand_name'],
         subtypes: [
             { value: 'messenger', label: 'Messenger (DMs)' },
             { value: 'feed', label: 'Feed (comentarios en posts/anuncios)' },
@@ -112,7 +112,7 @@ const PROVIDER_META = {
         label: 'Instagram',
         color: 'bg-pink-500',
         icon: '📸',
-        fields: ['ig_account_id', 'ig_username', 'access_token', 'webhook_secret'],
+        fields: ['ig_account_id', 'ig_username', 'access_token', 'webhook_secret', 'brand_name'],
         subtypes: [
             { value: 'chat', label: 'Direct (mensajes directos)' },
             { value: 'comments', label: 'Comentarios en posts/anuncios' },
@@ -130,7 +130,7 @@ const PROVIDER_META = {
         label: 'TikTok for Business',
         color: 'bg-slate-900',
         icon: '🎵',
-        fields: ['tiktok_open_id', 'access_token', 'webhook_secret'],
+        fields: ['tiktok_open_id', 'access_token', 'webhook_secret', 'brand_name'],
         subtypes: null,
         setupLink: 'https://ads.tiktok.com/marketing_api/docs',
         setupInstructions: [
@@ -1016,6 +1016,7 @@ function CanalesTab() {
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <span className="text-xs text-slate-400">{meta.label}</span>
+                                        {ch.brand_name && <span className="text-xs text-indigo-600 font-medium">{ch.brand_name}</span>}
                                         {ch.has_token
                                             ? <span className="text-xs text-green-600 flex items-center gap-0.5"><CheckCircle className="w-3 h-3" /> Token configurado</span>
                                             : <span className="text-xs text-red-500 flex items-center gap-0.5"><AlertCircle className="w-3 h-3" /> Sin token</span>}
@@ -1339,7 +1340,7 @@ function AITab() {
             .finally(() => setLoading(false));
         apiFetch('/api/products/categories?parent=0')
             .then(r => r.json())
-            .then((cats: any) => { if (Array.isArray(cats)) setWcCategories(cats); })
+            .then((cats: any) => { if (cats?.categories) setWcCategories(cats.categories); })
             .catch(() => {});
     }, []);
 
