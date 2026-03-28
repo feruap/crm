@@ -327,7 +327,7 @@ export async function handleBotResponse(
             // Determine context for flow matching
             const channel = await db.query(`SELECT provider, provider_config->>'brand_name' AS brand_name FROM channels WHERE id = $1`, [channelId]);
             const provider = channel.rows[0]?.provider || 'whatsapp';
-            const channelBrandName: string | null = channel.rows[0]?.brand_name || null;
+            // channelBrandName moved to outer scope as brandName
 
             const msgCount = await db.query(
                 `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
@@ -398,8 +398,8 @@ export async function handleBotResponse(
             }
 
             let finalSystemPrompt = system_prompt || '';
-            if (channelBrandName) {
-                finalSystemPrompt = `Eres el asistente de ${channelBrandName}. ` + finalSystemPrompt;
+            if (brandName && brandName !== 'Amunet') {
+                finalSystemPrompt = `Eres el asistente de ${brandName}. ` + finalSystemPrompt;
             }
             botReply = await getAIResponse(
                 aiProvider as any,
