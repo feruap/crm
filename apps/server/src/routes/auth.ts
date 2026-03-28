@@ -149,7 +149,11 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
         const pass = smtp.smtp_pass || process.env.SMTP_PASS || '';
         const from = smtp.smtp_from || process.env.SMTP_FROM || user;
 
-        if (host) {
+        console.log('[forgot-password] SMTP config:', { host, port, user, from, hasPass: !!pass, secure: port === 465 });
+
+        if (!host) {
+            console.error('[forgot-password] No SMTP host configured — email NOT sent');
+        } else {
             const transporter = nodemailer.createTransport({
                 host,
                 port,
@@ -157,11 +161,13 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
                 auth: { user, pass },
             });
 
-            await transporter.sendMail({
-                from: `"MyAlice CRM" <${from}>`,
-                to: agentResult.rows[0].email,
-                subject: 'Recuperación de contraseña - MyAlice CRM',
-                html: `
+            console.log('[forgot-password] Sending email to:', agentResult.rows[0].email);
+            try {
+                const info = await transporter.sendMail({
+                    from: `"MyAlice CRM" <${from}>`,
+                    to: agentResult.rows[0].email,
+                    subject: 'Recuperación de contraseña - MyAlice CRM',
+                    html: `
                     <div style="font-family:sans-serif;max-width:500px;margin:0 auto">
                         <h2 style="color:#1e40af">Recuperar contraseña</h2>
                         <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
@@ -174,7 +180,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
                         <p style="color:#94a3b8;font-size:12px">MyAlice CRM - botonmedico.com</p>
                     </div>
                 `,
-            });
+                });
+                console.log('[forgot-password] Email sent:', info.messageId);
+            } catch (mailErr) {
+                console.error('[forgot-password] sendMail error:', mailErr);
+                throw mailErr;
+            }
         }
 
         res.json(successMsg);
