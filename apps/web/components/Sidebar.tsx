@@ -16,6 +16,7 @@ const {
     Code2,
     Layout,
     FlaskConical, // Simulator
+    Beaker, // Medical Products
 } = Lucide as any;
 
 const nav = [
@@ -28,6 +29,7 @@ const nav = [
     { href: '/automations', icon: Bot, label: 'Automatización' },
     { href: '/supervisor', icon: ShieldCheck, label: 'Supervisor' },
     { href: '/gamification', icon: Trophy, label: 'Gamificación' },
+    { href: '/medical-products', icon: Beaker, label: 'Productos Med.' },
     { href: '/simulator', icon: FlaskConical, label: 'Simulador' },
     { href: '/settings', icon: Settings, label: 'Configuración' },
 ];

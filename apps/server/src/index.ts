@@ -37,6 +37,8 @@ import simulatorRouter from './routes/simulator';
 import pipelinesRouter from './routes/pipelines';
 import automationsRouter from './routes/automations';
 import agentGroupsRouter from './routes/agent-groups';
+import knowledgeRouter from './routes/knowledge';
+import medicalProductsRouter from './routes/medical-products';
 import './workers/bulkSender'; // Start worker
 
 dotenv.config();
@@ -47,6 +49,7 @@ const httpServer = http.createServer(app);
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000' }));
 app.use(express.json({
+  limit: '5mb',
   verify: (req: any, _res: any, buf: Buffer) => {
     req.rawBody = buf;
   }
@@ -108,6 +111,8 @@ app.use('/api/simulator', requireAuth, simulatorRouter);
 app.use('/api/pipelines', requireAuth, pipelinesRouter);
 app.use('/api/automations', requireAuth, automationsRouter);
 app.use('/api/agent-groups', requireAuth, agentGroupsRouter);
+app.use('/api/knowledge', requireAuth, knowledgeRouter);
+app.use('/api/medical-products', requireAuth, medicalProductsRouter);
 
 // ─── WooCommerce Settings ─────────────────────────────────────────────────────
 // Reads/writes wc_url, wc_key, wc_secret, wc_webhook_secret from the settings table.
