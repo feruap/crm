@@ -397,9 +397,13 @@ export async function handleBotResponse(
                 await recordKnowledgeUse(knowledgeHit.knowledgeId as any);
             }
 
+            let finalSystemPrompt = system_prompt || '';
+            if (channelBrandName) {
+                finalSystemPrompt = `Eres el asistente de ${channelBrandName}. ` + finalSystemPrompt;
+            }
             botReply = await getAIResponse(
                 aiProvider as any,
-                system_prompt || '',
+                finalSystemPrompt,
                 messageText,
                 api_key_encrypted,
                 model_name,
