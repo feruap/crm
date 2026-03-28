@@ -407,13 +407,32 @@ router.post('/sync-products', async (_req: Request, res: Response) => {
 
             const price = parseFloat(wc.price) || null;
 
+            // Parse units_per_box from product name or short_description
+            let units_per_box: number | null = null;
+            const searchText = `${wc.name} ${wc.short_description || ''}`;
+            const unitsPatterns = [
+                /caja\s+con\s+(\d+)\s+prueba/i,
+                /(\d+)\s+pruebas?\s*\/\s*caja/i,
+                /(\d+)\s+tests?\s*\/\s*box/i,
+                /(\d+)\s+pzas?\b/i,
+                /(\d+)\s+piezas?\b/i,
+                /(\d+)\s+unidades?\b/i,
+                /\bx\s*(\d+)\b/i,
+                /pack\s+(?:of\s+)?(\d+)/i,
+                /(\d+)\s+ct\b/i,
+            ];
+            for (const pattern of unitsPatterns) {
+                const match = searchText.match(pattern);
+                if (match) { units_per_box = parseInt(match[1], 10); break; }
+            }
+
             await db.query(`
                 INSERT INTO medical_products (
                     wc_product_id, name, sku, diagnostic_category,
-                    url_tienda, precio_publico, is_active, wc_last_sync,
+                    url_tienda, precio_publico, units_per_box, is_active, wc_last_sync,
                     clinical_indications, recommended_profiles, complementary_product_ids
-                ) VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW(), '{}', '{}', '{}')
-            `, [wc.id, wc.name, wc.sku || null, category, wc.permalink, price]);
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(), '{}', '{}', '{}')
+            `, [wc.id, wc.name, wc.sku || null, category, wc.permalink, price, units_per_box]);
 
             imported++;
             importedNames.push(wc.name);

@@ -865,6 +865,7 @@ function CanalesTab() {
 
     // Form
     const [formName, setFormName] = useState('');
+    const [formBrandName, setFormBrandName] = useState('');
     const [formFields, setFormFields] = useState<Record<string, string>>({});
     const [formSubtype, setFormSubtype] = useState<string>('');
 
@@ -884,7 +885,7 @@ function CanalesTab() {
 
     const openNew = (provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok') => {
         setEditChannel(null);
-        setFormName(''); setFormFields({}); setFormSubtype('');
+        setFormName(''); setFormBrandName(''); setFormFields({}); setFormSubtype('');
         setShowModal(provider);
     };
 
@@ -920,7 +921,7 @@ function CanalesTab() {
             if (editChannel) {
                 await apiFetch(`/api/channels/${editChannel.id}`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ name: formName, provider_config, subtype: formSubtype || null }),
+                    body: JSON.stringify({ name: formName, provider_config, subtype: formSubtype || null, brand_name: formFields.brand_name || null }),
                 });
             } else {
                 await apiFetch('/api/channels', {
@@ -1085,6 +1086,13 @@ function CanalesTab() {
                                 <input value={formName} onChange={e => setFormName(e.target.value)}
                                     placeholder={`ej: ${PROVIDER_META[showModal].label} Principal`}
                                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de marca (para el bot)</label>
+                                <input value={formFields.brand_name || ''} onChange={e => setFormFields(prev => ({...prev, brand_name: e.target.value}))}
+                                    placeholder="ej: Pruebas de Antidoping, Laboratorio Portable"
+                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                                <p className="text-xs text-slate-500 mt-1">El bot usará este nombre en vez de &quot;Amunet&quot; cuando responda por este canal.</p>
                             </div>
                             {/* Subtype selector para Facebook e Instagram */}
                             {PROVIDER_META[showModal].subtypes && (
@@ -1295,7 +1303,8 @@ function AITab() {
     const [model, setModel] = useState('');
     const [prompt, setPrompt] = useState('');
     const [temp, setTemp] = useState(0.7);
-    const [excludedCategories, setExcludedCategories] = useState('');
+    const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
+    const [wcCategories, setWcCategories] = useState<Array<{id:number;name:string;slug:string}>>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -1323,12 +1332,20 @@ function AITab() {
                     const d = data[0];
                     setProvider(d.provider); setModel(d.model_name ?? '');
                     setPrompt(d.system_prompt ?? ''); setTemp(d.temperature ?? 0.7);
-                    setExcludedCategories((d.excluded_categories || []).join(', '));
+                    setExcludedCategories(d.excluded_categories || []);
                 }
             })
             .catch(console.error)
             .finally(() => setLoading(false));
+        apiFetch('/api/products/categories?parent=0')
+            .then(r => r.json())
+            .then((cats: any) => { if (Array.isArray(cats)) setWcCategories(cats); })
+            .catch(() => {});
     }, []);
+
+    const toggleCategory = (slug: string) => {
+        setExcludedCategories(prev => prev.includes(slug) ? prev.filter(c => c !== slug) : [...prev, slug]);
+    };
 
     const save = async () => {
         setSaving(true);
@@ -1341,7 +1358,7 @@ function AITab() {
                     model,
                     systemPrompt: prompt,
                     temperature: temp,
-                    excludedCategories: excludedCategories.split(',').map(c => c.trim()).filter(Boolean)
+                    excludedCategories
                 }),
             });
             setSaved(true);
@@ -1433,13 +1450,23 @@ function AITab() {
                     </div>
                 </div>
 
-                {/* Excluded categories */}
+                {/* Excluded categories from WooCommerce */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Categorías Excluidas del Catálogo</label>
-                    <input type="text" value={excludedCategories} onChange={e => setExcludedCategories(e.target.value)}
-                        placeholder="ej: cortesias, ofertas (separadas por coma)"
-                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                    <p className="text-xs text-slate-500 mt-1">La IA no ofrecerá productos de estas categorías de WooCommerce en sus respuestas.</p>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Categorías Excluidas del Bot</label>
+                    <p className="text-xs text-slate-500 mb-2">El bot NO ofrecerá productos de las categorías marcadas. Se sincronizan de WooCommerce.</p>
+                    {wcCategories.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-1">
+                            {wcCategories.map(cat => (
+                                <label key={cat.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer text-sm">
+                                    <input type="checkbox" checked={excludedCategories.includes(cat.slug)} onChange={() => toggleCategory(cat.slug)}
+                                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                    <span className={excludedCategories.includes(cat.slug) ? 'line-through text-slate-400' : ''}>{cat.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-400 italic">Conecta WooCommerce en Integraciones para ver las categorías disponibles.</p>
+                    )}
                 </div>
             </div>
 
