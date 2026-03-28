@@ -92,7 +92,7 @@ export async function indexPDFForProduct(
     medicalProductId: number,
     pdfBuffer: Buffer,
     filename: string,
-    provider: string,
+    provider: any,
     apiKey: string
 ): Promise<{ chunks_created: number; errors: string[] }> {
     const errors: string[] = [];
@@ -135,7 +135,7 @@ export async function indexPDFForProduct(
     return { chunks_created: created, errors };
 }
 
-export async function generateProductEmbedding(productId: number, provider: string, apiKey: string): Promise<void> {
+export async function generateProductEmbedding(productId: number, provider: any, apiKey: string): Promise<void> {
     const product = await db.query(
         `SELECT name, diagnostic_category, clinical_indications, sample_type, methodology, interpretation_guide
          FROM medical_products WHERE id = $1`,
