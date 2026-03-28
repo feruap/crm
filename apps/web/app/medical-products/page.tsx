@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye, BookOpen, Upload } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth, apiFetch } from '../../hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
@@ -465,7 +465,8 @@ function DetailPanel({ product, onClose, onSave }: { product: MedicalProduct; on
 // ─────────────────────────────────────────────
 
 export default function MedicalProductsPage() {
-    const { authFetch } = useAuth();
+    const { agent, loading } = useAuth();
+    const authFetch = apiFetch;
     const [products, setProducts] = useState<MedicalProduct[]>([]);
     const [error, setError] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
