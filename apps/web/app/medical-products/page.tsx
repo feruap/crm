@@ -691,6 +691,12 @@ export default function MedicalProductsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={handleSyncKnowledgeMD} disabled={syncingMD}
+                        className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg hover:bg-emerald-200 text-sm font-medium disabled:opacity-50"
+                        title="Sube los archivos MD del Knowledge Base para generar entradas Q&A con embeddings">
+                        <BookOpen size={14} className={syncingMD ? 'animate-pulse' : ''} />
+                        {syncingMD ? 'Procesando MD...' : 'Sync Documentación → KB'}
+                    </button>
                     <button onClick={handleSyncProducts} disabled={syncingProducts}
                         className="flex items-center gap-1.5 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-200 text-sm font-medium disabled:opacity-50">
                         <RefreshCw size={14} className={syncingProducts ? 'animate-spin' : ''} />
@@ -714,6 +720,17 @@ export default function MedicalProductsPage() {
                             : `Sync: ${syncResult.synced} revisados, ${syncResult.updated} actualizados`
                     }
                     <button onClick={() => setSyncResult(null)} className="ml-2 underline">cerrar</button>
+                </div>
+            )}
+
+            {/* MD Sync result banner */}
+            {mdSyncResult && (
+                <div className={`mb-3 p-3 rounded-lg text-sm ${mdSyncResult.error ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
+                    {mdSyncResult.error
+                        ? `Error: ${mdSyncResult.error}`
+                        : `✅ Documentación sincronizada: ${mdSyncResult.products_parsed} productos parseados (${mdSyncResult.medical_products} médico, ${mdSyncResult.lab_products} lab) → ${mdSyncResult.kb_entries_inserted} entradas KB, ${mdSyncResult.chunks_inserted} chunks, ${mdSyncResult.products_updated} productos actualizados${mdSyncResult.errors > 0 ? `, ${mdSyncResult.errors} errores` : ''}`
+                    }
+                    <button onClick={() => setMdSyncResult(null)} className="ml-2 underline">cerrar</button>
                 </div>
             )}
 
