@@ -386,6 +386,8 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_instructions TEXT`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS automated_flow TEXT`);
+    await safeAlter(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS brand_name TEXT`);
+    await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS units_per_box INTEGER`);
 
     // Ensure automations table exists (was missing from Fase 7)
     try {

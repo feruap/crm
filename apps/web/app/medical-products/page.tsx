@@ -84,6 +84,7 @@ interface MedicalProduct {
     palabras_clave: string[];
     target_audience: string[];
     wc_last_sync: string | null;
+    units_per_box: number | null;
 }
 
 interface KnowledgeGap {
@@ -200,6 +201,7 @@ function DetailPanel({ product, onClose, onSave }: { product: MedicalProduct; on
             precio_sugerido_paciente: product.precio_sugerido_paciente || '',
             margen_estimado: product.margen_estimado || '',
             presentaciones: JSON.stringify(product.presentaciones || [], null, 2),
+            units_per_box: product.units_per_box ?? '',
         });
         setEditing(true);
     };
@@ -228,6 +230,7 @@ function DetailPanel({ product, onClose, onSave }: { product: MedicalProduct; on
             if (processed.precio_por_prueba) processed.precio_por_prueba = Number(processed.precio_por_prueba) || null;
             if (processed.sensitivity) processed.sensitivity = Number(processed.sensitivity) || null;
             if (processed.specificity) processed.specificity = Number(processed.specificity) || null;
+            if (processed.units_per_box) processed.units_per_box = Number(processed.units_per_box) || null;
             // Empty strings → null
             for (const k of Object.keys(processed)) {
                 if (processed[k] === '') processed[k] = null;
@@ -445,6 +448,7 @@ function DetailPanel({ product, onClose, onSave }: { product: MedicalProduct; on
                                 <Field label="Precio por prueba" field="precio_por_prueba" />
                                 <Field label="Precio sugerido al paciente" field="precio_sugerido_paciente" />
                                 <Field label="Margen estimado" field="margen_estimado" />
+                                <Field label="Uds/caja (unidades por caja)" field="units_per_box" />
                                 <div className="col-span-2"><JsonField label="Presentaciones" field="presentaciones" /></div>
                             </div>
                             {product.wc_last_sync && (
@@ -809,6 +813,7 @@ export default function MedicalProductsPage() {
                                     <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[200px]">Producto</th>
                                     <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Cat</th>
                                     <th className="px-2 py-2.5 font-semibold text-slate-700 text-right">Precio</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Uds/caja</th>
                                     <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Muestra</th>
                                     <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Sens.</th>
                                     <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Tiempo</th>
@@ -828,7 +833,7 @@ export default function MedicalProductsPage() {
                                 </tr>
                                 <tr className="bg-slate-50/50 border-b border-slate-100">
                                     <th className="sticky left-0 bg-slate-50/50 z-10"></th>
-                                    <th></th><th></th><th></th><th></th><th></th><th></th>
+                                    <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
                                     {showMed && medCols.map(c => (
                                         <th key={c.key} className="px-1 py-1 text-[9px] text-slate-500 font-medium text-center border-l border-slate-100 first:border-l-slate-200">{c.label}</th>
                                     ))}
@@ -864,6 +869,8 @@ export default function MedicalProductsPage() {
                                             <td className="px-2 py-2 text-center"><CategoryBadge category={p.diagnostic_category} /></td>
                                             {/* Price */}
                                             <td className="px-2 py-2 text-right font-medium text-emerald-700">{formatPrice(p.precio_publico)}</td>
+                                            {/* Units per box */}
+                                            <td className="px-2 py-2 text-center text-slate-600">{p.units_per_box ?? <span className="text-slate-300">-</span>}</td>
                                             {/* Sample */}
                                             <td className="px-2 py-2 text-center">
                                                 {p.sample_type ? <span className="text-slate-600">{p.sample_type.replace(/_/g, ' ').substring(0, 12)}</span> : <span className="text-red-400">-</span>}

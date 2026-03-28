@@ -41,6 +41,29 @@ interface SendAndSaveResult {
   error?: string;
 }
 
+// Detect numbered options in bot text and extract buttons (max 3 for WhatsApp)
+function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
+  const lines = text.split('\n');
+  const optionPattern = /^\s*(\d+)\.\s*\*{0,2}(.+?)\*{0,2}[:：]?\s*(.*)/;
+  const buttons: Array<{ id: string; title: string }> = [];
+  const bodyLines: string[] = [];
+  
+  for (const line of lines) {
+    const match = line.match(optionPattern);
+    if (match && buttons.length < 3) {
+      const title = match[2].replace(/\*/g, '').trim().substring(0, 20); // WhatsApp max 20 chars
+      buttons.push({ id: `opt_${match[1]}`, title });
+    } else {
+      bodyLines.push(line);
+    }
+  }
+  
+  if (buttons.length >= 2) {
+    return { bodyText: bodyLines.join('\n').trim(), buttons };
+  }
+  return null;
+}
+
 // WhatsApp Cloud API
 
 async function sendWhatsApp(
@@ -50,6 +73,37 @@ async function sendWhatsApp(
   text: string
 ): Promise<SendResult> {
   try {
+    // Try to detect interactive buttons in the message
+    const interactive = extractButtons(text);
+    
+    let messageBody: Record<string, unknown>;
+    if (interactive && interactive.buttons.length >= 2) {
+      messageBody = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: recipientPhone,
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: { text: interactive.bodyText.substring(0, 1024) },
+          action: {
+            buttons: interactive.buttons.map(b => ({
+              type: 'reply',
+              reply: { id: b.id, title: b.title }
+            }))
+          }
+        }
+      };
+    } else {
+      messageBody = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: recipientPhone,
+        type: 'text',
+        text: { body: text },
+      };
+    }
+    
     const response = await fetch(
       `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
       {
@@ -58,13 +112,7 @@ async function sendWhatsApp(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: recipientPhone,
-          type: 'text',
-          text: { body: text },
-        }),
+        body: JSON.stringify(messageBody),
       }
     );
 

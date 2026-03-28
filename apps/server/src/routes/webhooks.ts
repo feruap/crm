@@ -325,8 +325,9 @@ export async function handleBotResponse(
         // ── 1. Check for matching bot_flow ────────────────────────────────────
         try {
             // Determine context for flow matching
-            const channel = await db.query(`SELECT provider FROM channels WHERE id = $1`, [channelId]);
+            const channel = await db.query(`SELECT provider, provider_config->>'brand_name' AS brand_name FROM channels WHERE id = $1`, [channelId]);
             const provider = channel.rows[0]?.provider || 'whatsapp';
+            const channelBrandName: string | null = channel.rows[0]?.brand_name || null;
 
             const msgCount = await db.query(
                 `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
@@ -372,7 +373,12 @@ export async function handleBotResponse(
         );
         if (settings.rows.length === 0) return;
 
-        const { provider: aiProvider, api_key_encrypted, system_prompt, model_name } = settings.rows[0];
+        const { provider: aiProvider, api_key_encrypted, system_prompt: rawPrompt, model_name } = settings.rows[0];
+
+        // Inject channel brand name into system prompt
+        const chBrand = await db.query(`SELECT brand_name, name FROM channels WHERE id = $1`, [channelId]);
+        const brandName = chBrand.rows[0]?.brand_name || chBrand.rows[0]?.name || 'Amunet';
+        const system_prompt = rawPrompt ? rawPrompt.replace(/Amunet/gi, brandName) : rawPrompt;
 
         const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
         const knowledgeHit = await findBestAnswer(messageText, embedding);

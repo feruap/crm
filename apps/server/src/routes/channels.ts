@@ -11,6 +11,7 @@ router.get('/', async (_req: Request, res: Response) => {
                provider_config->>'phone_number_id'   AS phone_number_id,
                provider_config->>'ig_account_id'     AS ig_account_id,
                provider_config->>'tiktok_open_id'    AS tiktok_open_id,
+               provider_config->>'brand_name'        AS brand_name,
                CASE WHEN provider_config->>'access_token' IS NOT NULL THEN TRUE ELSE FALSE END AS has_token,
                CASE WHEN webhook_secret IS NOT NULL THEN TRUE ELSE FALSE END AS has_webhook_secret
         FROM channels
@@ -45,11 +46,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PATCH /api/channels/:id  — update config / credentials
 router.patch('/:id', async (req: Request, res: Response) => {
-    const { name, provider_config, webhook_secret, is_active, sync_comments, subtype } = req.body;
+    const { name, provider_config, webhook_secret, is_active, sync_comments, subtype, brand_name } = req.body;
     const sets: string[] = [];
     const params: unknown[] = [];
 
     if (name !== undefined) { params.push(name); sets.push(`name = $${params.length}`); }
+    if (brand_name !== undefined) { params.push(brand_name); sets.push(`brand_name = $${params.length}`); }
     if (is_active !== undefined) { params.push(is_active); sets.push(`is_active = $${params.length}`); }
     if (sync_comments !== undefined) { params.push(sync_comments); sets.push(`sync_comments = $${params.length}`); }
     if (webhook_secret !== undefined) { params.push(webhook_secret); sets.push(`webhook_secret = $${params.length}`); }

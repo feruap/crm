@@ -246,7 +246,8 @@ export async function getAIResponse(
         finalSystemPrompt += `\n\n=== CATÁLOGO DE PRODUCTOS DISPONIBLES ===\n`;
         finalSystemPrompt += `Tienes acceso al siguiente inventario:\n`;
         catalog.forEach((p: any) => {
-            finalSystemPrompt += `- ${p.name} (Precio: $${p.price})\n`;
+            const unitsLabel = p.units_per_box ? ` — Caja con ${p.units_per_box} pruebas` : '';
+            finalSystemPrompt += `- ${p.name} (Precio: $${p.price}${unitsLabel})\n`;
         });
 
         finalSystemPrompt += `\n REGLAS DE ORO PARA VENTAS (MUY IMPORTANTE):\n`;
@@ -494,6 +495,23 @@ export async function getCatalogForAI(excludedCategories: string[]): Promise<any
             categories: p.categories?.map((c: any) => c.name.toLowerCase()) ?? [],
         }));
         wcProductsCacheTime = now;
+
+        // Augment with units_per_box from medical_products table
+        try {
+            const wcIds = wcProductsCache.map((p: any) => p.id);
+            if (wcIds.length > 0) {
+                const mpRes = await db.query(
+                    `SELECT wc_product_id, units_per_box FROM medical_products WHERE wc_product_id = ANY($1) AND units_per_box IS NOT NULL`,
+                    [wcIds]
+                );
+                const unitsMap: Record<number, number> = {};
+                for (const row of mpRes.rows) unitsMap[row.wc_product_id] = row.units_per_box;
+                wcProductsCache = wcProductsCache.map((p: any) => ({
+                    ...p,
+                    units_per_box: unitsMap[p.id] ?? null,
+                }));
+            }
+        } catch (e) { /* units_per_box augment is non-critical */ }
 
         return filterCatalog(wcProductsCache, excludedCategories);
     } catch (err) {

@@ -60,6 +60,7 @@ interface Channel {
     phone_number_id: string | null;
     ig_account_id: string | null;
     tiktok_open_id: string | null;
+    brand_name: string | null;
     created_at: string;
 }
 
@@ -77,7 +78,7 @@ const PROVIDER_META = {
         label: 'WhatsApp Business',
         color: 'bg-green-500',
         icon: '💬',
-        fields: ['phone_number_id', 'whatsapp_number', 'access_token', 'webhook_secret'],
+        fields: ['phone_number_id', 'whatsapp_number', 'access_token', 'webhook_secret', 'brand_name'],
         subtypes: null,
         setupLink: 'https://developers.facebook.com/apps/',
         setupInstructions: [
@@ -160,6 +161,7 @@ const FIELD_LABELS: Record<string, string> = {
     access_token: 'Access Token',
     app_secret: 'App Secret',
     webhook_secret: 'Webhook Secret (verify token)',
+    brand_name: 'Nombre de Marca (para el bot)',
 };
 
 const TEAM_COLORS = [
@@ -895,6 +897,7 @@ function CanalesTab() {
             phone_number_id: ch.phone_number_id ?? '',
             ig_account_id: ch.ig_account_id ?? '',
             tiktok_open_id: ch.tiktok_open_id ?? '',
+            brand_name: ch.brand_name ?? '',
         });
         setShowModal(ch.provider);
     };
@@ -1123,7 +1126,7 @@ function CanalesTab() {
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         {FIELD_LABELS[field] ?? field}
-                                        {field === 'webhook_secret' && <span className="text-slate-400 font-normal"> (opcional)</span>}
+                                        {(field === 'webhook_secret' || field === 'brand_name') && <span className="text-slate-400 font-normal"> (opcional)</span>}
                                     </label>
                                     <input
                                         type={field.includes('token') || field.includes('secret') ? 'password' : 'text'}
