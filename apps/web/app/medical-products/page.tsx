@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye, BookOpen, Upload } from 'lucide-react';
 import { useAuth, apiFetch } from '../../hooks/useAuth';
 
-// API_URL not needed — apiFetch already includes the base URL
-const API_URL = '';
 
 // ─────────────────────────────────────────────
 // Types
@@ -491,14 +489,14 @@ export default function MedicalProductsPage() {
             const params = new URLSearchParams();
             if (categoryFilter) params.set('category', categoryFilter);
             params.set('active_only', 'false');
-            const res = await authFetch(`${API_URL}/api/medical-products?${params}`);
+            const res = await authFetch(`/api/medical-products?${params}`);
             setProducts(await res.json());
         } catch { setError('Error cargando productos'); }
     }
 
     async function fetchGaps() {
         try {
-            const res = await authFetch(`${API_URL}/api/medical-products/knowledge-gaps?status=pending`);
+            const res = await authFetch(`/api/medical-products/knowledge-gaps?status=pending`);
             setGaps(await res.json());
         } catch { /* ignore */ }
     }
@@ -506,7 +504,7 @@ export default function MedicalProductsPage() {
     async function handleSync() {
         setSyncing(true); setSyncResult(null);
         try {
-            const res = await authFetch(`${API_URL}/api/medical-products/sync-prices`, { method: 'POST' });
+            const res = await authFetch(`/api/medical-products/sync-prices`, { method: 'POST' });
             setSyncResult(await res.json());
             fetchProducts();
         } catch { setSyncResult({ error: 'Error de conexión' }); }
@@ -516,7 +514,7 @@ export default function MedicalProductsPage() {
     async function handleSyncProducts() {
         setSyncingProducts(true); setSyncResult(null);
         try {
-            const res = await authFetch(`${API_URL}/api/medical-products/sync-products`, { method: 'POST' });
+            const res = await authFetch(`/api/medical-products/sync-products`, { method: 'POST' });
             const data = await res.json();
             setSyncResult({ productSync: true, ...data });
             fetchProducts();
@@ -557,7 +555,7 @@ export default function MedicalProductsPage() {
                 }
 
                 try {
-                    const res = await authFetch(`${API_URL}/api/knowledge/sync-md`, {
+                    const res = await authFetch(`/api/knowledge/sync-md`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ medical_md, labs_md }),
@@ -581,26 +579,25 @@ export default function MedicalProductsPage() {
     }
 
     async function handleSaveProduct(id: number, data: Record<string, unknown>) {
-        const res = await authFetch(`${API_URL}/api/medical-products/${id}`, {
+        const res = await authFetch(`/api/medical-products/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
-        if (!res.ok) throw new Error((await res.json()).error || 'Error');
         await fetchProducts();
         // Update detail panel with fresh data
-        const updated = await authFetch(`${API_URL}/api/medical-products/${id}`);
+        const updated = await authFetch(`/api/medical-products/${id}`);
         setDetailProduct(await updated.json());
     }
 
     async function handleDelete(id: number) {
         if (!confirm('¿Eliminar este producto médico?')) return;
-        await authFetch(`${API_URL}/api/medical-products/${id}`, { method: 'DELETE' });
+        await authFetch(`/api/medical-products/${id}`, { method: 'DELETE' });
         fetchProducts();
     }
 
     async function resolveGap(gapId: number, status: string) {
-        await authFetch(`${API_URL}/api/medical-products/knowledge-gaps/${gapId}`, {
+        await authFetch(`/api/medical-products/knowledge-gaps/${gapId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status }),
