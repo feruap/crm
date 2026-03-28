@@ -1,0 +1,52 @@
+services:
+  webrtc-bridge:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "10000-10100:10000-10100/udp"
+    environment:
+      - PORT=4000
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
+      - META_APP_SECRET=${META_APP_SECRET}
+      - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
+      - TURN_SERVER_URL=turn:rtc1.botonmedico.com:3478
+      - TURN_USERNAME=amunet
+      - TURN_PASSWORD=${TURN_PASSWORD}
+      - CRM_API_URL=https://api-crm.botonmedico.com
+      - CORS_ORIGIN=https://crm.botonmedico.com
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - coturn
+    networks:
+      - rtc-net
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    network_mode: host   # Required for TURN to work correctly (exposes real client IPs)
+    volumes:
+      - coturn-data:/var/lib/coturn
+    command: >
+      --realm=rtc1.botonmedico.com
+      --listening-port=3478
+      --tls-listening-port=5349
+      --min-port=10000
+      --max-port=10100
+      --user=amunet:${TURN_PASSWORD}
+      --lt-cred-mech
+      --fingerprint
+      --no-cli
+      --log-file=stdout
+      --verbose
+
+volumes:
+  coturn-data:
+
+networks:
+  rtc-net:
+    driver: bridge

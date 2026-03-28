@@ -1,5 +1,6 @@
 ﻿import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import axios from 'axios';
 import { db } from '../db';
 import { findBestAnswer, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
 import { findMatchingFlow, isWithinBusinessHours } from './flows';
@@ -833,6 +834,20 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
         }
 
         const changes = req.body?.entry?.[0]?.changes?.[0]?.value;
+
+        // ── Forward call events to the WebRTC bridge ───────────────────────
+        if (changes?.calls?.length) {
+            const bridgeUrl = process.env.WEBRTC_BRIDGE_URL || 'http://localhost:4000';
+            const phoneNumberId =
+                req.body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ?? '';
+            axios.post(`${bridgeUrl}/webhook/call`, {
+                phone_number_id: phoneNumberId,
+                value: changes,
+            }).catch((err: Error) =>
+                console.error('[WhatsApp] Failed to forward call event to bridge:', err.message)
+            );
+        }
+
         if (!changes?.messages) return;
 
         for (const msg of changes.messages) {

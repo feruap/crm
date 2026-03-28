@@ -18,6 +18,7 @@ import ScheduleMessageModal from '../../components/ScheduleMessageModal';
 import CatalogPanel from '../../components/CatalogPanel';
 import { apiFetch } from '../../hooks/useAuth';
 import { useSocket } from '../../hooks/useSocket';
+import { io as ioClient, Socket } from 'socket.io-client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Message {
@@ -50,6 +51,20 @@ interface Conversation {
 type TabFilter = 'all' | 'mine' | 'unread' | 'archived' | 'starred';
 type ChannelFilter = 'all' | 'whatsapp' | 'facebook' | 'instagram' | 'tiktok';
 type HandlerFilter = 'all' | 'bot' | 'human';
+
+// ── Calling types ─────────────────────────────────────────────────────────────
+interface IncomingCall {
+    callId: string;
+    from: string;
+    phoneNumberId: string;
+    timestamp: string;
+}
+
+type CallPhase = 'idle' | 'ringing' | 'connecting' | 'active';
+
+const BRIDGE_URL =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BRIDGE_URL) ||
+    'https://rtc.botonmedico.com';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const PROVIDER_COLOR: Record<string, string> = {
@@ -317,6 +332,176 @@ export default function InboxPage() {
         } catch (err) { console.error(err); }
     };
 
+    // ── Calling state ──────────────────────────────────────────────────────────
+    const [callPhase, setCallPhase] = useState<CallPhase>('idle');
+    const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+    const [callDuration, setCallDuration] = useState(0);
+    const [isMuted, setIsMuted] = useState(false);
+    const bridgeSocketRef = useRef<Socket | null>(null);
+    const localPcRef = useRef<RTCPeerConnection | null>(null);
+    const localStreamRef = useRef<MediaStream | null>(null);
+    const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const activeCallIdRef = useRef<string | null>(null);
+
+    // Connect to WebRTC bridge
+    useEffect(() => {
+        const socket = ioClient(BRIDGE_URL, {
+            transports: ['websocket', 'polling'],
+            autoConnect: true,
+            reconnection: true,
+        });
+        bridgeSocketRef.current = socket;
+
+        socket.on('connect', () =>
+            console.log('[Bridge] Connected to WebRTC bridge')
+        );
+
+        socket.on('incoming_call', (data: IncomingCall) => {
+            console.log('[Bridge] Incoming call from', data.from);
+            setIncomingCall(data);
+            setCallPhase('ringing');
+        });
+
+        socket.on('call_answer', async ({ callId, sdp }: { callId: string; sdp: string }) => {
+            const pc = localPcRef.current;
+            if (!pc || activeCallIdRef.current !== callId) return;
+            try {
+                await pc.setRemoteDescription({ type: 'answer', sdp });
+                console.log('[Bridge] Remote description set — awaiting connection');
+            } catch (err) {
+                console.error('[Bridge] setRemoteDescription failed:', err);
+            }
+        });
+
+        socket.on('ice_candidate', ({ callId, candidate }: { callId: string; candidate: RTCIceCandidateInit }) => {
+            const pc = localPcRef.current;
+            if (!pc || activeCallIdRef.current !== callId) return;
+            pc.addIceCandidate(candidate).catch(console.error);
+        });
+
+        socket.on('call_active', ({ startTime }: { callId: string; startTime: string }) => {
+            console.log('[Bridge] Call active since', startTime);
+            setCallPhase('active');
+            setCallDuration(0);
+            callTimerRef.current = setInterval(
+                () => setCallDuration(d => d + 1), 1000
+            );
+        });
+
+        socket.on('call_terminated', ({ callId, reason }: { callId: string; reason: string }) => {
+            console.log(`[Bridge] Call ${callId} terminated: ${reason}`);
+            if (activeCallIdRef.current === callId || callPhase === 'ringing') {
+                cleanupLocalCall();
+            }
+        });
+
+        socket.on('call_error', ({ callId, error }: { callId: string; error: string }) => {
+            console.error(`[Bridge] Call error for ${callId}:`, error);
+            cleanupLocalCall();
+        });
+
+        return () => {
+            socket.disconnect();
+            cleanupLocalCall();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const cleanupLocalCall = () => {
+        if (callTimerRef.current) clearInterval(callTimerRef.current);
+        localPcRef.current?.close();
+        localStreamRef.current?.getTracks().forEach(t => t.stop());
+        localPcRef.current = null;
+        localStreamRef.current = null;
+        activeCallIdRef.current = null;
+        setCallPhase('idle');
+        setIncomingCall(null);
+        setCallDuration(0);
+        setIsMuted(false);
+    };
+
+    const handleAcceptCall = async () => {
+        if (!incomingCall || !bridgeSocketRef.current) return;
+        const { callId } = incomingCall;
+        activeCallIdRef.current = callId;
+        setCallPhase('connecting');
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            localStreamRef.current = stream;
+
+            const iceServers: RTCIceServer[] = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                {
+                    urls: BRIDGE_URL.replace('https://', 'turn:').replace('http://', 'turn:') + ':3478',
+                    username: 'amunet',
+                    credential: '',
+                },
+            ];
+
+            const pc = new RTCPeerConnection({ iceServers });
+            localPcRef.current = pc;
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            pc.onicecandidate = ({ candidate }) => {
+                if (candidate) {
+                    bridgeSocketRef.current?.emit('agent_ice_candidate', { callId, candidate });
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                console.log('[Bridge] Browser PC state:', pc.connectionState);
+            };
+
+            // Receive remote audio (play automatically)
+            pc.ontrack = ({ streams }) => {
+                if (streams[0]) {
+                    const audio = new Audio();
+                    audio.srcObject = streams[0];
+                    audio.play().catch(console.error);
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            bridgeSocketRef.current.emit('agent_accept_call', {
+                callId,
+                sdp: pc.localDescription?.sdp ?? offer.sdp,
+            });
+        } catch (err) {
+            console.error('[Bridge] Failed to set up local call:', err);
+            cleanupLocalCall();
+        }
+    };
+
+    const handleRejectCall = () => {
+        if (!incomingCall || !bridgeSocketRef.current) return;
+        bridgeSocketRef.current.emit('agent_reject_call', { callId: incomingCall.callId });
+        cleanupLocalCall();
+    };
+
+    const handleEndCall = () => {
+        const callId = activeCallIdRef.current;
+        if (!callId || !bridgeSocketRef.current) return;
+        bridgeSocketRef.current.emit('agent_end_call', { callId });
+        cleanupLocalCall();
+    };
+
+    const handleToggleMute = () => {
+        const stream = localStreamRef.current;
+        if (!stream) return;
+        stream.getAudioTracks().forEach(t => { t.enabled = isMuted; });
+        setIsMuted(m => !m);
+    };
+
+    const formatDuration = (secs: number) => {
+        const m = Math.floor(secs / 60).toString().padStart(2, '0');
+        const s = (secs % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
     // ── Derived ────────────────────────────────────────────────────────────────
     const filtered = conversations.filter(c =>
         c.customer_name?.toLowerCase().includes(search.toLowerCase())
@@ -324,7 +509,7 @@ export default function InboxPage() {
     const conv = conversations.find(c => c.id === selected);
 
     return (
-        <div className="flex h-full">
+        <div className="flex h-full relative">
             {/* ── Column 1: Conversation list ── */}
             <div className="w-72 shrink-0 border-r bg-white flex flex-col">
                 {/* Header + search */}
@@ -754,6 +939,76 @@ export default function InboxPage() {
                 />
             )}
 
+            {/* ── Incoming Call Overlay (ringing) ── */}
+            {callPhase === 'ringing' && incomingCall && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-6 min-w-[300px]">
+                        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center animate-pulse">
+                            <Phone className="w-10 h-10 text-green-600" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Llamada entrante</p>
+                            <p className="text-2xl font-bold text-slate-800">{incomingCall.from}</p>
+                            <p className="text-sm text-slate-500 mt-1">WhatsApp</p>
+                        </div>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleRejectCall}
+                                className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center text-white transition-colors"
+                                title="Rechazar"
+                            >
+                                <Phone className="w-6 h-6 rotate-[135deg]" />
+                            </button>
+                            <button
+                                onClick={handleAcceptCall}
+                                className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center text-white transition-colors"
+                                title="Aceptar"
+                            >
+                                <Phone className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Connecting overlay ── */}
+            {callPhase === 'connecting' && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-4">
+                        <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+                        <p className="text-slate-700 font-medium">Conectando llamada…</p>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Active Call Bar (bottom of screen) ── */}
+            {callPhase === 'active' && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-2xl px-6 py-4 flex items-center gap-6 shadow-2xl min-w-[360px]">
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                        <Phone className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-semibold text-sm">{incomingCall?.from ?? activeCallIdRef.current}</p>
+                        <p className="text-xs text-green-400 font-mono">{formatDuration(callDuration)}</p>
+                    </div>
+                    <button
+                        onClick={handleToggleMute}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isMuted ? 'bg-yellow-500' : 'bg-slate-700 hover:bg-slate-600'}`}
+                        title={isMuted ? 'Activar micrófono' : 'Silenciar'}
+                    >
+                        {isMuted
+                            ? <Lucide.MicOff className="w-4 h-4" />
+                            : <Lucide.Mic className="w-4 h-4" />}
+                    </button>
+                    <button
+                        onClick={handleEndCall}
+                        className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"
+                        title="Terminar llamada"
+                    >
+                        <Phone className="w-4 h-4 rotate-[135deg]" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
