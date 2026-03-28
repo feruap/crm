@@ -174,6 +174,79 @@ const TIMEZONES = [
     'Europe/Madrid', 'Europe/London', 'UTC',
 ];
 
+// ── LlamadasTab ────────────────────────────────────────────────────────────────
+function LlamadasTab() {
+    const [enabled, setEnabled] = useState(false);
+    const [callMessage, setCallMessage] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            await apiFetch('/api/settings/llamadas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled, call_message: callMessage }),
+            });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch { /* ignore */ } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="p-8 max-w-2xl">
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">WhatsApp Llamadas</h2>
+            <p className="text-slate-500 text-sm mb-8">Configura la función de llamadas por WhatsApp Business</p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                    <p className="text-sm font-semibold text-amber-800">Importante: Solo números de EE.UU.</p>
+                    <p className="text-sm text-amber-700 mt-0.5">Las llamadas por WhatsApp Business actualmente solo están disponibles para números registrados en Estados Unidos.</p>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="font-semibold text-slate-800">Habilitar llamadas</h4>
+                        <p className="text-sm text-slate-500 mt-0.5">Permite realizar llamadas de voz a través de WhatsApp</p>
+                    </div>
+                    <button
+                        onClick={() => setEnabled(!enabled)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-blue-600' : 'bg-slate-200'}`}
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Mensaje al iniciar llamada</label>
+                    <textarea
+                        value={callMessage}
+                        onChange={e => setCallMessage(e.target.value)}
+                        rows={3}
+                        placeholder="ej: Hola, te estamos contactando por tu pedido..."
+                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                    />
+                </div>
+
+                <button
+                    onClick={save}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    {saved ? 'Guardado' : 'Guardar'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState('perfil');
@@ -206,6 +279,7 @@ export default function SettingsPage() {
                         { key: 'respuestas', label: 'Respuestas Rápidas', icon: <Zap className="w-4 h-4" /> },
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
                         { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
+                        { key: 'llamadas', label: 'WhatsApp Llamadas', icon: <Phone className="w-4 h-4" /> },
                     ].map(t => (
                         <button
                             key={t.key}
@@ -233,6 +307,7 @@ export default function SettingsPage() {
                 {activeTab === 'asignacion' && <AssignmentRulesPage />}
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
+                {activeTab === 'llamadas' && <LlamadasTab />}
             </div>
         </div>
     );
@@ -920,7 +995,7 @@ function CanalesTab() {
                 <div className="space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Canales configurados</h4>
                     {channels.map(ch => {
-                        const meta = PROVIDER_META[ch.provider];
+                        const meta = PROVIDER_META[ch.provider] || { color: 'bg-slate-400', icon: '💬', label: ch.provider };
                         return (
                             <div key={ch.id} className={`bg-white rounded-xl border shadow-sm p-4 flex items-center gap-4 ${!ch.is_active ? 'opacity-60' : ''}`}>
                                 <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-xl shrink-0`}>

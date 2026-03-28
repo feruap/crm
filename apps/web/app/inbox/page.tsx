@@ -7,7 +7,7 @@ const {
     CheckCircle, Plus, X, Check, Trash2, Tag, Star, Archive,
     MessageCircle, Image, FileText, Calendar, Clock, Sparkles,
     Zap, UserCheck, MessageSquare, ChevronDown, CheckCheck, MailCheck, MoreVertical, Filter,
-    DollarSign,
+    DollarSign, Phone,
 } = Lucide as any;
 
 import CustomerPanel from '../../components/CustomerPanel';
@@ -573,6 +573,14 @@ export default function InboxPage() {
                                 title="Marcar como leído"
                             >
                                 <MailCheck className="w-4 h-4 text-slate-500" />
+                            </button>
+
+                            {/* Llamar */}
+                            <button
+                                className="p-1.5 rounded-lg border bg-green-50 border-green-200 hover:bg-green-100 transition-colors"
+                                title="Llamar"
+                            >
+                                <Phone className="w-4 h-4 text-green-600" />
                             </button>
 
                             <div className="w-px h-6 bg-slate-200 mx-1" />
