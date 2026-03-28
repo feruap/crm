@@ -1,30 +1,65 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
+
 import { db } from './db';
-import { requireAuth, requireRole, normalizeRole, hashPassword } from './middleware/auth';
+import { initSocket } from './socket';
+import { runAlertsCron } from './routes/alerts';
+import { requireAuth } from './middleware/auth';
+
+import authRouter from './routes/auth';
 import conversationsRouter from './routes/conversations';
 import campaignsRouter from './routes/campaigns';
 import attributionsRouter from './routes/attributions';
 import webhooksRouter from './routes/webhooks';
-import ordersRouter from './routes/orders';
-import campaignMappingsRouter from './routes/campaign-mappings';
-import medicalProductsRouter from './routes/medical-products';
-import escalationRulesRouter from './routes/escalation-rules';
-import analyticsRouter from './routes/analytics';
-import inventoryRouter from './routes/inventory';
-import agentCommissionsRouter from './routes/agent-commissions';
-import authRouter from './routes/auth';
+import agentsRouter from './routes/agents';
+import customersRouter from './routes/customers';
+import productsRouter from './routes/products';
+import alertsRouter from './routes/alerts';
+import botRouter from './routes/bot';
+import teamsRouter from './routes/teams';
 import channelsRouter from './routes/channels';
+import flowsRouter from './routes/flows';
+import businessHoursRouter from './routes/business-hours';
+import quickRepliesRouter from './routes/quickReplies';
+import scheduledMsgsRouter from './routes/scheduledMessages';
+import eventsRouter from './routes/events';
+import analyticsRouter from './routes/analytics';
+import aiRouter from './routes/ai';
+import assignmentRulesRouter from './routes/assignmentRules';
+import bulkCampaignsRouter from './routes/bulkCampaigns';
+import widgetConfigRouter from './routes/widgetConfig';
+import simulatorRouter from './routes/simulator';
+import pipelinesRouter from './routes/pipelines';
+import automationsRouter from './routes/automations';
+import agentGroupsRouter from './routes/agent-groups';
+import knowledgeRouter from './routes/knowledge';
+import medicalProductsRouter from './routes/medical-products';
+import './workers/bulkSender'; // Start worker
 
-dotenv.config();                          // loads .env
-dotenv.config({ path: '.env.whatsapp' }); // loads WhatsApp credentials (won't override existing)
+dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+const httpServer = http.createServer(app);
 
-// ─── Health (public) ─────────────────────────
+// ─── Middleware ───────────────────────────────────────────────────────────────
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000' }));
+app.use(express.json({
+  limit: '5mb',
+  verify: (req: any, _res: any, buf: Buffer) => {
+    req.rawBody = buf;
+  }
+}));
+app.use(express.static('public'));
+
+// ─── Socket.io ───────────────────────────────────────────────────────────────
+initSocket(httpServer, process.env.CORS_ORIGIN || 'http://localhost:3000');
+
+// ─── Health ──────────────────────────────────────────────────────────────────
 app.get('/health', async (_req, res) => {
     try {
         await db.query('SELECT 1');
@@ -34,175 +69,369 @@ app.get('/health', async (_req, res) => {
     }
 });
 
-// ─── Legal pages (public, required by Meta) ──
-app.get('/legal/privacy', (_req, res) => {
-    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Política de Privacidad - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
-<h1>Política de Privacidad</h1>
-<p><strong>Última actualización:</strong> 22 de marzo de 2026</p>
-<p>Amunet CRM ("nosotros") opera la aplicación Amunet CRM. Esta página le informa sobre nuestras políticas con respecto a la recopilación, uso y divulgación de datos personales cuando utiliza nuestro servicio.</p>
-<h2>Información que recopilamos</h2>
-<p>Recopilamos información que usted nos proporciona directamente, como nombre, correo electrónico y datos de contacto cuando interactúa con nuestros servicios a través de Facebook Messenger, Instagram o WhatsApp.</p>
-<h2>Uso de la información</h2>
-<p>Utilizamos la información recopilada para: responder a sus consultas, proporcionar nuestros servicios de diagnóstico rápido, mejorar nuestro servicio al cliente y enviar comunicaciones relacionadas con sus pedidos.</p>
-<h2>Compartir información</h2>
-<p>No vendemos ni compartimos su información personal con terceros, excepto cuando sea necesario para proporcionar nuestros servicios o cuando la ley lo requiera.</p>
-<h2>Contacto</h2>
-<p>Si tiene preguntas sobre esta política, contáctenos en: fernando.ruiz@amunet.com.mx</p>
-</body></html>`);
-});
-
-app.get('/legal/terms', (_req, res) => {
-    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Términos y Condiciones - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
-<h1>Términos y Condiciones</h1>
-<p><strong>Última actualización:</strong> 22 de marzo de 2026</p>
-<p>Al utilizar la aplicación Amunet CRM y sus servicios de mensajería, usted acepta estos términos y condiciones.</p>
-<h2>Servicios</h2>
-<p>Amunet CRM proporciona servicios de atención al cliente y venta de pruebas de diagnóstico rápido a través de canales de mensajería como Facebook Messenger, Instagram y WhatsApp.</p>
-<h2>Uso aceptable</h2>
-<p>Usted se compromete a utilizar nuestros servicios de manera responsable y de acuerdo con las leyes aplicables.</p>
-<h2>Limitación de responsabilidad</h2>
-<p>Nuestros servicios se proporcionan "tal cual". No garantizamos la disponibilidad ininterrumpida del servicio.</p>
-<h2>Contacto</h2>
-<p>Para consultas: fernando.ruiz@amunet.com.mx</p>
-</body></html>`);
-});
-
-app.get('/legal/data-deletion', (_req, res) => {
-    res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Eliminación de Datos - Amunet CRM</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 20px">
-<h1>Solicitud de Eliminación de Datos</h1>
-<p>Si desea solicitar la eliminación de sus datos personales de nuestro sistema, envíe un correo a: fernando.ruiz@amunet.com.mx con el asunto "Solicitud de eliminación de datos".</p>
-<p>Procesaremos su solicitud en un plazo máximo de 30 días hábiles.</p>
-</body></html>`);
-});
-
-// ─── Auth (public) ───────────────────────────
+// ─── Public routes ───────────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
-
-// ─── Agents management (frontend uses /api/agents) ─
-
-// GET /api/agents — list all agents (gerente+)
-app.get('/api/agents', requireAuth, requireRole('gerente'), async (_req, res) => {
-    const result = await db.query(
-        `SELECT id, name, email, role, is_active, created_at FROM agents ORDER BY created_at ASC`
-    );
-    const agents = result.rows.map(a => ({ ...a, role: normalizeRole(a.role) }));
-    res.json(agents);
-});
-
-// POST /api/agents — create new agent (director+)
-app.post('/api/agents', requireAuth, requireRole('director'), async (req, res) => {
-    const { name, email, password, role = 'operador', salesking_agent_code } = req.body;
-    if (!name || !email || !password) {
-        res.status(400).json({ error: 'name, email y password requeridos' }); return;
-    }
-    const existing = await db.query('SELECT id FROM agents WHERE email = $1', [email.toLowerCase().trim()]);
-    if (existing.rows.length > 0) {
-        res.status(409).json({ error: 'Ya existe un agente con ese email' }); return;
-    }
-    // Map normalized role to DB role
-    const dbRole = role === 'superadmin' ? 'superadmin' : role === 'director' ? 'admin' : role === 'gerente' ? 'supervisor' : 'agent';
-    const hashed = hashPassword(password);
-    const result = await db.query(
-        `INSERT INTO agents (name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id, name, email, role, is_active`,
-        [name, email.toLowerCase().trim(), hashed, dbRole]
-    );
-    const a = result.rows[0];
-    res.status(201).json({ ...a, role: normalizeRole(a.role) });
-});
-
-// PUT /api/agents/:id — update agent (director+)
-app.put('/api/agents/:id', requireAuth, requireRole('gerente'), async (req, res) => {
-    const { name, role, is_active, salesking_agent_code } = req.body;
-    const updates: string[] = [];
-    const params: unknown[] = [];
-    if (name !== undefined) { params.push(name); updates.push(`name = $${params.length}`); }
-    if (role !== undefined) {
-        if (req.agent!.role !== 'director' && req.agent!.role !== 'superadmin') {
-            res.status(403).json({ error: 'Solo director o superadmin pueden cambiar roles' }); return;
-        }
-        const dbRole = role === 'superadmin' ? 'superadmin' : role === 'director' ? 'admin' : role === 'gerente' ? 'supervisor' : 'agent';
-        params.push(dbRole); updates.push(`role = $${params.length}`);
-    }
-    if (is_active !== undefined) { params.push(is_active); updates.push(`is_active = $${params.length}`); }
-    if (updates.length === 0) { res.status(400).json({ error: 'Nada que actualizar' }); return; }
-    params.push(req.params.id);
-    const result = await db.query(
-        `UPDATE agents SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING id, name, email, role, is_active`,
-        params
-    );
-    if (result.rows.length === 0) { res.status(404).json({ error: 'Agente no encontrado' }); return; }
-    const a = result.rows[0];
-    res.json({ ...a, role: normalizeRole(a.role) });
-});
-
-// DELETE /api/agents/:id — deactivate agent
-app.delete('/api/agents/:id', requireAuth, requireRole('director'), async (req, res) => {
-    await db.query('UPDATE agents SET is_active = FALSE WHERE id = $1', [req.params.id]);
-    res.json({ ok: true });
-});
-
-// POST /api/agents/:id/reset-password — reset agent password (director+)
-app.post('/api/agents/:id/reset-password', requireAuth, requireRole('director'), async (req, res) => {
-    const { new_password } = req.body;
-    if (!new_password || new_password.length < 6) {
-        res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' }); return;
-    }
-    const hashed = hashPassword(new_password);
-    await db.query('UPDATE agents SET password_hash = $1 WHERE id = $2', [hashed, req.params.id]);
-    res.json({ ok: true });
-});
-
-// ─── Webhooks (public — validated by signature) ──
 app.use('/api/webhooks', webhooksRouter);
 
-// ─── Facebook OAuth callback (public — FB redirects here, no auth needed) ──
-// This must be before the requireAuth channelsRouter mount
-import { handleOAuthCallback } from './routes/channels';
-app.get('/api/channels/oauth/callback', handleOAuthCallback);
+// ─── Protected routes ────────────────────────────────────────────────────────
+app.use('/api/conversations', requireAuth, conversationsRouter);
+app.use('/api/campaigns', (req, res, next) => {
+    // OAuth callbacks must be public — Facebook/Google redirect here without an auth token
+    if (req.method === 'GET' && (req.path === '/meta-oauth/callback' || req.path === '/google-oauth/callback')) return next();
+    return requireAuth(req, res, next);
+}, campaignsRouter);
 
-// ─── Protected Routes (require JWT) ──────────
-app.use('/api/conversations',     requireAuth, conversationsRouter);
-app.use('/api/campaigns',         requireAuth, campaignsRouter);
-app.use('/api/attributions',      requireAuth, attributionsRouter);
-app.use('/api/orders',            requireAuth, ordersRouter);
-app.use('/api/campaign-mappings', requireAuth, campaignMappingsRouter);
-app.use('/api/medical-products',  requireAuth, medicalProductsRouter);
-app.use('/api/inventory',         requireAuth, inventoryRouter);
-app.use('/api/agent-commissions', requireAuth, agentCommissionsRouter);
-app.use('/api/channels',          requireAuth, channelsRouter);
+// Attributions: la mayoría requiere auth, pero /woocommerce-sync y /salesking-sync
+// son webhooks públicos llamados por WooCommerce/SalesKing sin token
+app.use('/api/attributions', (req, res, next) => {
+    const publicPaths = ['/woocommerce-sync', '/salesking-sync'];
+    if (publicPaths.includes(req.path) && req.method === 'POST') {
+        return next(); // skip requireAuth
+    }
+    return requireAuth(req, res, next);
+}, attributionsRouter);
+app.use('/api/agents', requireAuth, agentsRouter);
+app.use('/api/customers', requireAuth, customersRouter);
+app.use('/api/products', requireAuth, productsRouter);
+app.use('/api/alerts', requireAuth, alertsRouter);
+app.use('/api/bot/knowledge', requireAuth, botRouter);
+app.use('/api/teams', requireAuth, teamsRouter);
+app.use('/api/channels', requireAuth, channelsRouter);
+app.use('/api/flows', requireAuth, flowsRouter);
+app.use('/api/settings/business-hours', requireAuth, businessHoursRouter);
+app.use('/api/quick-replies', requireAuth, quickRepliesRouter);
+app.use('/api/scheduled-messages', requireAuth, scheduledMsgsRouter);
+app.use('/api/events', requireAuth, eventsRouter);
+app.use('/api/analytics', requireAuth, analyticsRouter);
+app.use('/api/ai', requireAuth, aiRouter);
+app.use('/api/assignment-rules', requireAuth, assignmentRulesRouter);
+app.use('/api/bulk-campaigns', requireAuth, bulkCampaignsRouter);
+app.use('/api/widget-config', widgetConfigRouter);
+app.use('/api/simulator', requireAuth, simulatorRouter);
+app.use('/api/pipelines', requireAuth, pipelinesRouter);
+app.use('/api/automations', requireAuth, automationsRouter);
+app.use('/api/agent-groups', requireAuth, agentGroupsRouter);
+app.use('/api/knowledge', requireAuth, knowledgeRouter);
+app.use('/api/medical-products', requireAuth, medicalProductsRouter);
 
-// ─── Manager+ Routes (gerente or director) ───
-app.use('/api/escalation-rules',  requireAuth, requireRole('gerente'), escalationRulesRouter);
-app.use('/api/analytics',         requireAuth, requireRole('gerente'), analyticsRouter);
-
-// ─── AI Settings (director only) ─────────────
-app.post('/api/settings/ai', requireAuth, requireRole('director'), async (req, res) => {
-    const { provider, apiKey, model, systemPrompt, temperature, promptAdditions } = req.body;
-
-    await db.query(
-        `UPDATE ai_settings SET is_default = FALSE WHERE is_default = TRUE`
-    );
-
-    await db.query(
-        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default, prompt_additions)
-         VALUES ($1, $2, $3, $4, $5, TRUE, $6)
-         ON CONFLICT DO NOTHING`,
-        [provider, apiKey, model, systemPrompt, temperature ?? 0.7, promptAdditions || null]
-    );
-
-    res.json({ ok: true, provider });
+// ─── WooCommerce Settings ─────────────────────────────────────────────────────
+// Reads/writes wc_url, wc_key, wc_secret, wc_webhook_secret from the settings table.
+// These are the values the UI saves — the server reads them at runtime so no deploy needed.
+app.get('/api/settings/woocommerce', requireAuth, async (_req, res) => {
+    try {
+        const result = await db.query(
+            `SELECT key, value FROM settings WHERE key IN ('wc_url', 'wc_key', 'wc_secret', 'wc_webhook_secret')`
+        );
+        const map: Record<string, string> = {};
+        for (const r of result.rows) map[r.key] = r.value;
+        res.json({
+            wc_url: map['wc_url'] || '',
+            // Never return secrets in plaintext — return masked values so the UI knows they're set
+            wc_key: map['wc_key'] ? '••••••••' : '',
+            wc_secret: map['wc_secret'] ? '••••••••' : '',
+            wc_webhook_secret: map['wc_webhook_secret'] ? '••••••••' : '',
+            wc_key_set: !!map['wc_key'],
+            wc_secret_set: !!map['wc_secret'],
+            wc_webhook_secret_set: !!map['wc_webhook_secret'],
+        });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
 });
 
+app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
+    try {
+        const { wc_url, wc_key, wc_secret, wc_webhook_secret } = req.body as Record<string, string>;
+        const upsert = async (key: string, value: string | undefined) => {
+            if (value === undefined || value === '••••••••') return; // don't overwrite with masked placeholder
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [key, value]
+            );
+        };
+        await upsert('wc_url', wc_url);
+        await upsert('wc_key', wc_key);
+        await upsert('wc_secret', wc_secret);
+        await upsert('wc_webhook_secret', wc_webhook_secret);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
+// ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
-        `SELECT provider, model_name, system_prompt, temperature, is_default, prompt_additions
-         FROM ai_settings ORDER BY is_default DESC`
+        `SELECT provider, model_name, system_prompt, temperature, is_default, excluded_categories FROM ai_settings ORDER BY is_default DESC`
     );
     res.json(result.rows);
 });
 
-// ─── Start ────────────────────────────────────
+app.post('/api/settings/ai', requireAuth, async (req, res) => {
+    const { provider, apiKey, model, systemPrompt, temperature, excludedCategories } = req.body;
+
+    // If no new API key provided, keep the existing one from the current default config
+    let resolvedApiKey = apiKey;
+    if (!resolvedApiKey) {
+        const existing = await db.query(
+            `SELECT api_key_encrypted FROM ai_settings WHERE is_default = TRUE LIMIT 1`
+        );
+        resolvedApiKey = existing.rows[0]?.api_key_encrypted ?? null;
+    }
+
+    await db.query(`UPDATE ai_settings SET is_default = FALSE WHERE is_default = TRUE`);
+
+    // PG maps js arrays to postgres arrays naturally when passed via pg parameter
+    const categories = excludedCategories && Array.isArray(excludedCategories) ? excludedCategories : [];
+
+    await db.query(
+        `INSERT INTO ai_settings (provider, api_key_encrypted, model_name, system_prompt, temperature, is_default, excluded_categories)
+         VALUES ($1, $2, $3, $4, $5, TRUE, $6)`,
+        [provider, resolvedApiKey, model, systemPrompt, temperature ?? 0.7, categories]
+    );
+    res.json({ ok: true, provider });
+});
+
+// ─── Cron: alerts every 5 min ────────────────────────────────────────────────
+cron.schedule('*/5 * * * *', () => {
+    runAlertsCron().catch(console.error);
+});
+
+// ─── Cron: scheduled messages every minute ────────────────────────────────────
+cron.schedule('* * * * *', async () => {
+    try {
+        const now = new Date();
+        const pendingResult = await db.query(
+            `SELECT * FROM scheduled_messages WHERE status = 'pending' AND scheduled_at <= $1`,
+            [now]
+        );
+
+        for (const msg of pendingResult.rows) {
+            try {
+                // In a real app, we would call the channel provider API (WhatsApp, Meta)
+                // For this clone, we just insert into messages table and Socket.io will update the UI
+                const { conversation_id, channel_id, agent_id, content, media_url } = msg;
+
+                // Get customer_id from conversation
+                const conv = await db.query('SELECT customer_id FROM conversations WHERE id = $1', [conversation_id]);
+                const customer_id = conv.rows[0]?.customer_id;
+
+                await db.query(
+                    `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, media_url, message_type, handled_by)
+                     VALUES ($1, $2, $3, 'outbound', $4, $5, $6, 'human')`,
+                    [conversation_id, channel_id, customer_id, content, media_url, media_url ? 'image' : 'text']
+                );
+
+                await db.query(`UPDATE scheduled_messages SET status = 'sent', sent_at = NOW() WHERE id = $1`, [msg.id]);
+                console.log(`✅ Scheduled message ${msg.id} sent successfully.`);
+            } catch (err) {
+                console.error(`❌ Failed to send scheduled message ${msg.id}:`, err);
+                await db.query(`UPDATE scheduled_messages SET status = 'failed', error_message = $1 WHERE id = $2`, [String(err), msg.id]);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error in scheduled messages cron:', err);
+    }
+});
+
+// ─── Lead Stagnant Tracker Cron (Every hour) ──────────────────────────────────
+cron.schedule('0 * * * *', async () => {
+    try {
+        await db.query(`
+            UPDATE conversations
+            SET is_stagnant = TRUE
+            WHERE is_stagnant = FALSE
+              AND status = 'open'
+              AND last_stage_change + (stagnant_threshold_days * interval '1 day') < NOW()
+        `);
+    } catch (err) {
+        console.error('❌ Error in stagnant leads cron:', err);
+    }
+});
+
+// ─── Auto-Migration (Fase 7) ─────────────────────────────────────────────────
+async function runMigrations() {
+    try {
+        // 1. Check for initial schema
+        const hasAgents = await db.query(`
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'agents'
+            ) AS exists
+        `);
+
+        if (!hasAgents.rows[0].exists) {
+            console.log('📦 Initializing base schema from schema.sql...');
+            const schemaPath = path.join(__dirname, '../packages/db/schema.sql');
+            if (fs.existsSync(schemaPath)) {
+                const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+                // pg handle multiple statements if they are in one string
+                await db.query(schemaSql);
+                console.log('✅ Base schema initialized successfully.');
+            } else {
+                console.error('❌ schema.sql not found at', schemaPath);
+            }
+        }
+
+        // 2. run Fase 7 migrations...
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        // ... rest of migrations logic ...
+
+        const check = await db.query(`
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'agent_groups'
+            ) AS migrated
+        `);
+        if (check.rows[0].migrated) {
+            console.log('✅ Fase 7 migration already applied, skipping.');
+        } else {
+
+        console.log('📦 Running Fase 7 migration...');
+
+        // 7.1 Mark simulated conversations
+        await db.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_simulated BOOLEAN DEFAULT FALSE`);
+
+        // 7.2 Simulator session persistence
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS simulator_sessions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+                channel_id UUID REFERENCES channels(id),
+                customer_name TEXT,
+                customer_phone TEXT,
+                campaign_id UUID,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                UNIQUE(agent_id)
+            )
+        `);
+
+        // 7.3 Agent Groups
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS agent_groups (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT NOT NULL,
+                channel_id UUID REFERENCES channels(id),
+                strategy TEXT NOT NULL DEFAULT 'round_robin'
+                    CHECK (strategy IN ('round_robin', 'least_busy', 'random')),
+                current_index INT DEFAULT 0,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS agent_group_members (
+                group_id UUID REFERENCES agent_groups(id) ON DELETE CASCADE,
+                agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
+                PRIMARY KEY (group_id, agent_id)
+            )
+        `);
+
+        // 7.4 Visual flow support
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS flow_type TEXT DEFAULT 'simple'`);
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS nodes JSONB`);
+        await db.query(`ALTER TABLE bot_flows ADD COLUMN IF NOT EXISTS edges JSONB`);
+
+        // 7.5 Settings key-value store
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+
+        // 7.6 AI Settings config
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS ai_settings (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                provider TEXT NOT NULL,
+                api_key_encrypted TEXT,
+                model_name TEXT NOT NULL,
+                system_prompt TEXT,
+                temperature NUMERIC(3,2) DEFAULT 0.7,
+                is_default BOOLEAN DEFAULT FALSE,
+                excluded_categories TEXT[],
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+
+        console.log('✅ Fase 7 migration completed successfully!');
+        } // end else (migration not yet applied)
+    } catch (err) {
+        console.error('❌ Fase 7 migration error:', err);
+        // Don't crash the server — tables might partially exist
+    }
+
+    // ── Post-migration: add columns that may be missing ─────────────────────
+    const safeAlter = async (sql: string) => {
+        try { await db.query(sql); } catch (_) { /* column already exists */ }
+    };
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS wc_agent_id TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_agent_code TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS reset_token TEXT`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMPTZ`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS excluded_categories TEXT[]`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS model_name TEXT`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS temperature NUMERIC(3,2) DEFAULT 0.7`);
+    await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_instructions TEXT`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS automated_flow TEXT`);
+
+    // Ensure automations table exists (was missing from Fase 7)
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS automations (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT NOT NULL,
+                trigger_type TEXT NOT NULL DEFAULT 'message',
+                conditions JSONB DEFAULT '{}',
+                actions JSONB DEFAULT '{}',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        `);
+    } catch (_) { /* already exists */ }
+}
+
+// ─── Startup Initialization ──────────────────────────────────────────────────
+async function init() {
+    try {
+        console.log('Running startup initialization...');
+
+        // Run pending migrations first
+        await runMigrations();
+
+        const count = await db.query('SELECT COUNT(*) FROM agents');
+        if (parseInt(count.rows[0].count) === 0) {
+            const bcrypt = await import('bcryptjs');
+            const hash = await bcrypt.hash('admin123', 12);
+            await db.query(
+                `INSERT INTO agents (name, email, password_hash, role) VALUES ($1, $2, $3, $4)`,
+                ['Admin', 'admin@myalice.ai', hash, 'admin']
+            );
+            console.log('✅ Default admin user seeded: admin@myalice.ai / admin123');
+        } else {
+            console.log('System already has agents, skipping seed.');
+        }
+    } catch (err) {
+        console.error('❌ Initialization failed:', err);
+    }
+}
+
+// ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+httpServer.listen(Number(PORT), '0.0.0.0', async () => {
+    console.log(`Server + Socket.io running on port ${PORT} (0.0.0.0)`);
+    await init();
 });

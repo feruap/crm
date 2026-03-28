@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye } from 'lucide-react';
-import { useAuth } from '../../components/AuthProvider';
+import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye, BookOpen, Upload } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-crm.botonmedico.com';
 
@@ -478,6 +478,8 @@ export default function MedicalProductsPage() {
     const [activeTab, setActiveTab] = useState<'products' | 'gaps'>('products');
     const [gaps, setGaps] = useState<KnowledgeGap[]>([]);
     const [detailProduct, setDetailProduct] = useState<MedicalProduct | null>(null);
+    const [syncingMD, setSyncingMD] = useState(false);
+    const [mdSyncResult, setMdSyncResult] = useState<any>(null);
 
     useEffect(() => { fetchProducts(); }, [categoryFilter]);
     useEffect(() => { if (activeTab === 'gaps') fetchGaps(); }, [activeTab]);
@@ -518,6 +520,62 @@ export default function MedicalProductsPage() {
             fetchProducts();
         } catch { setSyncResult({ error: 'Error al importar productos de WC' }); }
         finally { setSyncingProducts(false); }
+    }
+
+    async function handleSyncKnowledgeMD() {
+        setSyncingMD(true); setMdSyncResult(null); setSyncResult(null);
+        try {
+            // Fetch the MD files from the public folder or prompt upload
+            // For now, use file input approach
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = '.md';
+            input.onchange = async () => {
+                const files = input.files;
+                if (!files || files.length === 0) { setSyncingMD(false); return; }
+
+                let medical_md = '';
+                let labs_md = '';
+
+                for (let i = 0; i < files.length; i++) {
+                    const f = files[i];
+                    const text = await f.text();
+                    if (f.name.includes('labs')) {
+                        labs_md = text;
+                    } else {
+                        medical_md = text;
+                    }
+                }
+
+                if (!medical_md && !labs_md) {
+                    setMdSyncResult({ error: 'No se detectaron archivos MD válidos' });
+                    setSyncingMD(false);
+                    return;
+                }
+
+                try {
+                    const res = await authFetch(`${API_URL}/api/knowledge/sync-md`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ medical_md, labs_md }),
+                    });
+                    const data = await res.json();
+                    setMdSyncResult(data);
+                    fetchProducts();
+                } catch (err: any) {
+                    setMdSyncResult({ error: err.message || 'Error de conexión' });
+                } finally {
+                    setSyncingMD(false);
+                }
+            };
+            input.click();
+            // If user cancels file picker
+            setTimeout(() => { if (syncingMD) setSyncingMD(false); }, 60000);
+        } catch {
+            setMdSyncResult({ error: 'Error iniciando sincronización' });
+            setSyncingMD(false);
+        }
     }
 
     async function handleSaveProduct(id: number, data: Record<string, unknown>) {
@@ -633,6 +691,12 @@ export default function MedicalProductsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={handleSyncKnowledgeMD} disabled={syncingMD}
+                        className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg hover:bg-emerald-200 text-sm font-medium disabled:opacity-50"
+                        title="Sube los archivos MD del Knowledge Base para generar entradas Q&A con embeddings">
+                        <BookOpen size={14} className={syncingMD ? 'animate-pulse' : ''} />
+                        {syncingMD ? 'Procesando MD...' : 'Sync Documentación → KB'}
+                    </button>
                     <button onClick={handleSyncProducts} disabled={syncingProducts}
                         className="flex items-center gap-1.5 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-200 text-sm font-medium disabled:opacity-50">
                         <RefreshCw size={14} className={syncingProducts ? 'animate-spin' : ''} />
@@ -656,6 +720,17 @@ export default function MedicalProductsPage() {
                             : `Sync: ${syncResult.synced} revisados, ${syncResult.updated} actualizados`
                     }
                     <button onClick={() => setSyncResult(null)} className="ml-2 underline">cerrar</button>
+                </div>
+            )}
+
+            {/* MD Sync result banner */}
+            {mdSyncResult && (
+                <div className={`mb-3 p-3 rounded-lg text-sm ${mdSyncResult.error ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'}`}>
+                    {mdSyncResult.error
+                        ? `Error: ${mdSyncResult.error}`
+                        : `✅ Documentación sincronizada: ${mdSyncResult.products_parsed} productos parseados (${mdSyncResult.medical_products} médico, ${mdSyncResult.lab_products} lab) → ${mdSyncResult.kb_entries_inserted} entradas KB, ${mdSyncResult.chunks_inserted} chunks, ${mdSyncResult.products_updated} productos actualizados${mdSyncResult.errors > 0 ? `, ${mdSyncResult.errors} errores` : ''}`
+                    }
+                    <button onClick={() => setMdSyncResult(null)} className="ml-2 underline">cerrar</button>
                 </div>
             )}
 
