@@ -10,6 +10,8 @@ import { db } from './db';
 import { initSocket } from './socket';
 import { runAlertsCron } from './routes/alerts';
 import { requireAuth } from './middleware/auth';
+// FIX 3.1: Import scheduled messages worker (auto-starts on import)
+import './queues/scheduledMessageQueue';
 
 import authRouter from './routes/auth';
 import conversationsRouter from './routes/conversations';
@@ -413,6 +415,18 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS presentaciones JSONB`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id)`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[]`);
+    // FIX 4.1: Agent load counter for fast escalation agent selection
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS active_conversation_count INTEGER NOT NULL DEFAULT 0`);
+
+    // FIX 2.2: Performance indexes (safe — IF NOT EXISTS)
+    const safeIndex = async (sql: string) => {
+        try { await db.query(sql); } catch (_) { /* index already exists */ }
+    };
+    await safeIndex(`CREATE INDEX IF NOT EXISTS idx_conversations_agent_status ON conversations (assigned_agent_id, status) WHERE status IN ('open', 'pending')`);
+    await safeIndex(`CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages (conversation_id, is_read, direction) WHERE is_read = FALSE AND direction = 'inbound'`);
+    await safeIndex(`CREATE INDEX IF NOT EXISTS idx_messages_conv_direction ON messages (conversation_id, direction, created_at DESC)`);
+    await safeIndex(`CREATE INDEX IF NOT EXISTS idx_scheduled_messages_pending ON scheduled_messages (scheduled_at) WHERE status = 'pending'`);
+    console.log('✅ Performance indexes ensured');
 
     // Ensure automations table exists (was missing from Fase 7)
     try {

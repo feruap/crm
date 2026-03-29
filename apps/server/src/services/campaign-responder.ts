@@ -74,16 +74,21 @@ export async function findCampaignMapping(
   } else {
     // Try matching by platform_campaign_id from ads_context_data or ref
     // For now, create the campaign on the fly if we have an ad_id
+    // FIX 4.2: Detect platform from referral source instead of hard-coding 'facebook'
+    const platform = referral.source === 'instagram' ? 'instagram' : 'facebook';
+    const platformCampaignId = referral.campaign_id || referral.ad_id;
+    const adTitle = referral.ads_context_data?.ad_title || `${platform} Ad ${referral.ad_id}`;
     const newCampaign = await db.query(
       `INSERT INTO campaigns (platform, platform_campaign_id, platform_ad_id, name, metadata)
-       VALUES ('facebook', $1, $2, $3, $4)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (platform, platform_campaign_id) DO UPDATE
            SET platform_ad_id = EXCLUDED.platform_ad_id, metadata = EXCLUDED.metadata
        RETURNING id, name`,
       [
+        platform,
+        platformCampaignId,
         referral.ad_id,
-        referral.ad_id,
-        referral.ads_context_data?.ad_title || `FB Ad ${referral.ad_id}`,
+        adTitle,
         JSON.stringify(referral),
       ]
     );

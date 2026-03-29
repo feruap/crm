@@ -347,16 +347,14 @@ export async function executeHandoff(
 
   let agentId: number | null = null;
 
+  // FIX 4.1: Use active_conversation_count instead of correlated subquery
   if (escalation.rule?.target_type === 'specific_agent' && escalation.rule.target_id) {
     agentId = escalation.rule.target_id;
   } else if (escalation.rule?.target_role) {
     const agent = await db.query<AgentRow>(
       `SELECT id FROM agents
        WHERE role = $1 AND is_active = TRUE
-       ORDER BY (
-           SELECT COUNT(*) FROM conversations
-           WHERE assigned_agent_id = agents.id AND status IN ('open', 'pending')
-       ) ASC
+       ORDER BY COALESCE(active_conversation_count, 0) ASC
        LIMIT 1`,
       [escalation.rule.target_role]
     );
@@ -365,37 +363,56 @@ export async function executeHandoff(
     const agent = await db.query<AgentRow>(
       `SELECT id FROM agents
        WHERE is_active = TRUE
-       ORDER BY (
-           SELECT COUNT(*) FROM conversations
-           WHERE assigned_agent_id = agents.id AND status IN ('open', 'pending')
-       ) ASC
+       ORDER BY COALESCE(active_conversation_count, 0) ASC
        LIMIT 1`
     );
     if (agent.rows.length > 0) agentId = agent.rows[0].id;
   }
 
-  await db.query(
-    `UPDATE conversations
-     SET assigned_agent_id = $1, handoff_summary = $2, escalation_reason = $3, updated_at = NOW()
-     WHERE id = $4`,
-    [agentId, summary, escalation.reason, conversationId]
-  );
+  // FIX 1.3: Atomic handoff — wrap in transaction
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
 
-  const profile = await getCustomerProfile(customerId);
+    await client.query(
+      `UPDATE conversations
+       SET assigned_agent_id = $1, handoff_summary = $2, escalation_reason = $3, updated_at = NOW()
+       WHERE id = $4`,
+      [agentId, summary, escalation.reason, conversationId]
+    );
 
-  await db.query(
-    `INSERT INTO handoff_events
-      (conversation_id, from_handler, to_agent_id, escalation_rule_id, trigger_reason, ai_summary, customer_profile_snapshot)
-     VALUES ($1, 'bot', $2, $3, $4, $5, $6)`,
-    [
-      conversationId,
-      agentId,
-      escalation.rule?.id || null,
-      escalation.reason,
-      summary,
-      profile ? JSON.stringify(profile) : null,
-    ]
-  );
+    // FIX 4.1: Increment agent load counter
+    if (agentId) {
+      await client.query(
+        `UPDATE agents SET active_conversation_count = COALESCE(active_conversation_count, 0) + 1
+         WHERE id = $1`,
+        [agentId]
+      );
+    }
+
+    const profile = await getCustomerProfile(customerId);
+
+    await client.query(
+      `INSERT INTO handoff_events
+        (conversation_id, from_handler, to_agent_id, escalation_rule_id, trigger_reason, ai_summary, customer_profile_snapshot)
+       VALUES ($1, 'bot', $2, $3, $4, $5, $6)`,
+      [
+        conversationId,
+        agentId,
+        escalation.rule?.id || null,
+        escalation.reason,
+        summary,
+        profile ? JSON.stringify(profile) : null,
+      ]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   return { agent_id: agentId, summary };
 }

@@ -465,7 +465,8 @@ export async function handleBotResponse(
         await sendOutboundReply(channelId, customerId, botReply);
     } catch (err: any) {
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
-        try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
+        // FIX 4.5: Replaced appendFileSync (blocks event loop, ephemeral in Docker) with async stderr
+        console.error(JSON.stringify({ level: 'error', ts: new Date().toISOString(), msg: 'Bot crash', err: err.message, stack: err.stack?.split('\n').slice(0,3) }));
 
         // Friendly fallback message for the customer — never expose internal errors
         const friendlyMessage = "¡Hola! Un momento, te atiendo enseguida. 😊";
