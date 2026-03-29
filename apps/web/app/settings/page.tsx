@@ -357,6 +357,266 @@ function EscalacionTab() {
     );
 }
 
+// ── EscalacionTab ───────────────────────────────────────────────────────────────
+interface EscalationRules {
+    low_confidence: boolean;
+    confidence_threshold: number;
+    customer_requests_human: boolean;
+    human_keywords: string[];
+    shipping_questions: boolean;
+    shipping_keywords: string[];
+    max_messages: boolean;
+    max_message_count: number;
+    frustrated_customer: boolean;
+    frustration_keywords: string[];
+    bot_24_7: boolean;
+    after_hours_bot_only: boolean;
+}
+
+const DEFAULT_RULES: EscalationRules = {
+    low_confidence: true, confidence_threshold: 0.5,
+    customer_requests_human: true, human_keywords: ['agente','humano','persona','representante','asesor'],
+    shipping_questions: true, shipping_keywords: ['envío','enviar','guía','paquete','entrega','rastreo'],
+    max_messages: true, max_message_count: 5,
+    frustrated_customer: true, frustration_keywords: ['molesto','enojado','furioso','terrible','pésimo'],
+    bot_24_7: true, after_hours_bot_only: true,
+};
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+    return (
+        <button
+            onClick={onChange}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-200'}`}
+        >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+    );
+}
+
+function EscalacionTab() {
+    const [rules, setRules] = useState<EscalationRules>(DEFAULT_RULES);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState('');
+
+    const [humanKwInput, setHumanKwInput] = useState('');
+    const [shippingKwInput, setShippingKwInput] = useState('');
+    const [frustrationKwInput, setFrustrationKwInput] = useState('');
+
+    useEffect(() => {
+        apiFetch('/api/settings/escalation-rules')
+            .then(r => r.json())
+            .then((data: EscalationRules) => {
+                setRules({ ...DEFAULT_RULES, ...data });
+                setHumanKwInput((data.human_keywords || DEFAULT_RULES.human_keywords).join(', '));
+                setShippingKwInput((data.shipping_keywords || DEFAULT_RULES.shipping_keywords).join(', '));
+                setFrustrationKwInput((data.frustration_keywords || DEFAULT_RULES.frustration_keywords).join(', '));
+            })
+            .catch(() => {
+                setHumanKwInput(DEFAULT_RULES.human_keywords.join(', '));
+                setShippingKwInput(DEFAULT_RULES.shipping_keywords.join(', '));
+                setFrustrationKwInput(DEFAULT_RULES.frustration_keywords.join(', '));
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const set = (field: keyof EscalationRules, value: any) =>
+        setRules(r => ({ ...r, [field]: value }));
+
+    const save = async () => {
+        setSaving(true);
+        setError('');
+        const payload: EscalationRules = {
+            ...rules,
+            human_keywords: humanKwInput.split(',').map(s => s.trim()).filter(Boolean),
+            shipping_keywords: shippingKwInput.split(',').map(s => s.trim()).filter(Boolean),
+            frustration_keywords: frustrationKwInput.split(',').map(s => s.trim()).filter(Boolean),
+        };
+        try {
+            const r = await apiFetch('/api/settings/escalation-rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!r.ok) throw new Error('Error al guardar');
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (e: any) {
+            setError(e.message || 'Error al guardar');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return (
+        <div className="p-8 flex items-center gap-2 text-slate-500">
+            <Loader2 className="w-5 h-5 animate-spin" /> Cargando reglas…
+        </div>
+    );
+
+    return (
+        <div className="p-8 max-w-2xl">
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">Reglas de Escalación</h2>
+            <p className="text-slate-500 text-sm mb-8">Define cuándo el bot debe transferir la conversación a un agente humano</p>
+
+            <div className="space-y-4">
+
+                {/* Low confidence */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Confianza baja del bot</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando la confianza en la respuesta esté por debajo del umbral</p>
+                        </div>
+                        <Toggle checked={rules.low_confidence} onChange={() => set('low_confidence', !rules.low_confidence)} />
+                    </div>
+                    {rules.low_confidence && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Umbral de confianza: <span className="text-blue-600 font-semibold">{rules.confidence_threshold.toFixed(2)}</span>
+                            </label>
+                            <input
+                                type="range" min={0} max={1} step={0.05}
+                                value={rules.confidence_threshold}
+                                onChange={e => set('confidence_threshold', parseFloat(e.target.value))}
+                                className="w-full accent-blue-600"
+                            />
+                            <div className="flex justify-between text-xs text-slate-400 mt-1">
+                                <span>0.00 (siempre escala)</span><span>1.00 (nunca escala)</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Customer requests human */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Cliente solicita agente humano</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente use palabras clave para pedir atención humana</p>
+                        </div>
+                        <Toggle checked={rules.customer_requests_human} onChange={() => set('customer_requests_human', !rules.customer_requests_human)} />
+                    </div>
+                    {rules.customer_requests_human && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras clave (separadas por coma)</label>
+                            <input
+                                type="text"
+                                value={humanKwInput}
+                                onChange={e => setHumanKwInput(e.target.value)}
+                                placeholder="agente, humano, persona, representante"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Shipping questions */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Preguntas de envío</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente pregunte sobre envíos o paquetes</p>
+                        </div>
+                        <Toggle checked={rules.shipping_questions} onChange={() => set('shipping_questions', !rules.shipping_questions)} />
+                    </div>
+                    {rules.shipping_questions && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras clave de envío (separadas por coma)</label>
+                            <input
+                                type="text"
+                                value={shippingKwInput}
+                                onChange={e => setShippingKwInput(e.target.value)}
+                                placeholder="envío, guía, paquete, entrega, rastreo"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Max messages */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Límite de mensajes del bot</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar tras N mensajes sin resolver el problema</p>
+                        </div>
+                        <Toggle checked={rules.max_messages} onChange={() => set('max_messages', !rules.max_messages)} />
+                    </div>
+                    {rules.max_messages && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Número máximo de mensajes del bot</label>
+                            <input
+                                type="number" min={1} max={50}
+                                value={rules.max_message_count}
+                                onChange={e => set('max_message_count', parseInt(e.target.value) || 1)}
+                                className="w-32 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Frustrated customer */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Cliente frustrado</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente exprese frustración o enojo</p>
+                        </div>
+                        <Toggle checked={rules.frustrated_customer} onChange={() => set('frustrated_customer', !rules.frustrated_customer)} />
+                    </div>
+                    {rules.frustrated_customer && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras de frustración (separadas por coma)</label>
+                            <input
+                                type="text"
+                                value={frustrationKwInput}
+                                onChange={e => setFrustrationKwInput(e.target.value)}
+                                placeholder="molesto, enojado, furioso, terrible, pésimo"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* 24/7 bot */}
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Bot activo 24/7</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">El bot responde siempre, incluso fuera de horario de atención</p>
+                        </div>
+                        <Toggle checked={rules.bot_24_7} onChange={() => set('bot_24_7', !rules.bot_24_7)} />
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Solo bot fuera de horario</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Fuera de horario laboral, no escalar a agentes humanos</p>
+                        </div>
+                        <Toggle checked={rules.after_hours_bot_only} onChange={() => set('after_hours_bot_only', !rules.after_hours_bot_only)} />
+                    </div>
+                </div>
+
+                {error && (
+                    <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                    </div>
+                )}
+
+                <button
+                    onClick={save}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    {saved ? 'Guardado' : 'Guardar cambios'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ── LlamadasTab ────────────────────────────────────────────────────────────────
 function LlamadasTab() {
     const [enabled, setEnabled] = useState(false);
