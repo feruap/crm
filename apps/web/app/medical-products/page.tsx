@@ -1,13 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-<<<<<<< HEAD
-import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye, BookOpen, Upload } from 'lucide-react';
-import { useAuth, apiFetch } from '../../hooks/useAuth';
-=======
 import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart, Package } from 'lucide-react';
 import { useAuth } from '../../components/AuthProvider';
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
 
 
 // ─────────────────────────────────────────────
@@ -92,18 +87,6 @@ interface MedicalProduct {
     units_per_box: number | null;
 }
 
-<<<<<<< HEAD
-interface KnowledgeGap {
-    id: number;
-    question: string;
-    customer_name: string | null;
-    product_name: string | null;
-    frequency: number;
-    status: string;
-    admin_notes: string | null;
-    resolved_answer: string | null;
-    created_at: string;
-=======
 interface FormData {
     wc_product_id: string;
     name: string;
@@ -158,7 +141,6 @@ function parsePresentaciones(str: string): Array<{ cantidad: number; precio: num
 function presentacionesToString(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
     if (!pres || pres.length === 0) return '';
     return pres.map(p => `${p.cantidad}:${p.precio}`).join(', ');
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
 }
 
 const CATEGORIES = [
@@ -172,16 +154,6 @@ const SAMPLE_TYPES = [
     'hisopo_orofaringeo', 'saliva', 'heces', 'esputo', 'secrecion',
 ];
 
-<<<<<<< HEAD
-// ─────────────────────────────────────────────
-// Semáforo dot component
-// ─────────────────────────────────────────────
-function Dot({ ok, title }: { ok: boolean; title?: string }) {
-    return (
-        <span title={title || ''} className={`inline-block w-3 h-3 rounded-full ${ok ? 'bg-green-500' : 'bg-red-400'}`} />
-    );
-}
-=======
 const PROFILES = ['laboratorio', 'farmacia', 'consultorio', 'hospital', 'clinica', 'punto_de_venta', 'distribuidor'];
 
 const METHODOLOGIES = ['inmunocromatografia', 'pcr_rapida', 'elisa', 'aglutinacion', 'fluorescencia', 'colorimetrica'];
@@ -205,7 +177,6 @@ const emptyForm: FormData = {
     palabras_clave: '', target_audience: 'ambos',
     presentaciones: '',
 };
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
 
 function CategoryBadge({ category }: { category: string }) {
     const colors: Record<string, string> = {
@@ -586,9 +557,6 @@ export default function MedicalProductsPage() {
         } catch { setError('Error cargando productos'); }
     }
 
-<<<<<<< HEAD
-    async function fetchGaps() {
-=======
     function openEdit(p: MedicalProduct) {
         setForm({
             wc_product_id: p.wc_product_id ? String(p.wc_product_id) : '',
@@ -652,7 +620,6 @@ export default function MedicalProductsPage() {
             presentaciones: parsePresentaciones(form.presentaciones),
         };
 
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
         try {
             const res = await authFetch(`/api/medical-products/knowledge-gaps?status=pending`);
             setGaps(await res.json());
@@ -754,13 +721,6 @@ export default function MedicalProductsPage() {
         fetchProducts();
     }
 
-<<<<<<< HEAD
-    async function resolveGap(gapId: number, status: string) {
-        await authFetch(`/api/medical-products/knowledge-gaps/${gapId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
-=======
     // ── Inline editing ──
     function startInlineEdit(p: MedicalProduct) {
         setInlineEditing(p.id);
@@ -773,24 +733,10 @@ export default function MedicalProductsPage() {
             specificity: p.specificity || '',
             target_audience: p.target_audience || 'ambos',
             presentaciones: presentacionesToString(p.presentaciones),
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
         });
         fetchGaps();
     }
 
-<<<<<<< HEAD
-    // ── Preparation scoring ──
-    function medScore(p: MedicalProduct): { done: number; total: number } {
-        const checks = [
-            !!(p.clinical_indications?.length > 0),
-            !!p.proposito_clinico,
-            !!p.escenarios_uso,
-            !!p.pitch_medico,
-            !!p.roi_medico,
-            !!(p.objeciones_medico?.length > 0),
-        ];
-        return { done: checks.filter(Boolean).length, total: checks.length };
-=======
     async function saveInlineEdit(id: number) {
         try {
             const body: Record<string, unknown> = {};
@@ -811,7 +757,6 @@ export default function MedicalProductsPage() {
             setInlineEditing(null);
             fetchProducts();
         } catch { setError('Error guardando'); }
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
     }
 
     function labScore(p: MedicalProduct): { done: number; total: number } {
@@ -954,24 +899,6 @@ export default function MedicalProductsPage() {
                                 placeholder="Buscar..."
                                 className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
-<<<<<<< HEAD
-                        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
-                            <option value="">Todas categorías</option>
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <div className="flex rounded-lg border border-slate-300 overflow-hidden">
-                            {([
-                                { key: 'all' as const, label: `Todos (${stats.total})` },
-                                { key: 'prepared' as const, label: `Listos (${stats.prepared})` },
-                                { key: 'unprepared' as const, label: `Faltan (${stats.unprepared})` },
-                            ]).map(({ key, label }) => (
-                                <button key={key} onClick={() => setPrepFilter(key)}
-                                    className={`px-2.5 py-1.5 text-xs font-medium ${
-                                        prepFilter === key
-                                            ? key === 'unprepared' ? 'bg-orange-500 text-white' : 'bg-blue-600 text-white'
-                                            : 'bg-white text-slate-600 hover:bg-slate-50'
-=======
                     </div>
 
                     {/* Section: Prices */}
@@ -1187,7 +1114,6 @@ export default function MedicalProductsPage() {
                                         form.recommended_profiles.includes(p)
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
                                     }`}>
                                     {label}
                                 </button>
@@ -1220,40 +1146,6 @@ export default function MedicalProductsPage() {
                         <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-<<<<<<< HEAD
-                                    <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[200px]">Producto</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Cat</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-right">Precio</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Uds/caja</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Muestra</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Sens.</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Tiempo</th>
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">KB</th>
-                                    {showMed && (
-                                        <th colSpan={medCols.length} className="px-2 py-1 text-center border-l border-slate-200">
-                                            <span className="text-emerald-700 font-bold flex items-center justify-center gap-1"><Stethoscope size={11} /> Médicos</span>
-                                        </th>
-                                    )}
-                                    {showLab && (
-                                        <th colSpan={labCols.length} className="px-2 py-1 text-center border-l border-slate-200">
-                                            <span className="text-violet-700 font-bold flex items-center justify-center gap-1"><FlaskConical size={11} /> Labs</span>
-                                        </th>
-                                    )}
-                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center border-l border-slate-200">Score</th>
-                                    <th className="px-2 py-2.5 text-center">Acc.</th>
-                                </tr>
-                                <tr className="bg-slate-50/50 border-b border-slate-100">
-                                    <th className="sticky left-0 bg-slate-50/50 z-10"></th>
-                                    <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
-                                    {showMed && medCols.map(c => (
-                                        <th key={c.key} className="px-1 py-1 text-[9px] text-slate-500 font-medium text-center border-l border-slate-100 first:border-l-slate-200">{c.label}</th>
-                                    ))}
-                                    {showLab && labCols.map(c => (
-                                        <th key={c.key} className="px-1 py-1 text-[9px] text-slate-500 font-medium text-center border-l border-slate-100 first:border-l-slate-200">{c.label}</th>
-                                    ))}
-                                    <th className="border-l border-slate-200"></th>
-                                    <th></th>
-=======
                                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Producto</th>
                                     <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Categoría</th>
                                     <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Público</th>
@@ -1267,20 +1159,15 @@ export default function MedicalProductsPage() {
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Audiencia</th>
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">KB</th>
                                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Acciones</th>
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
                                 </tr>
                             </thead>
                             <tbody>
                                 {filtered.length === 0 && (
-<<<<<<< HEAD
-                                    <tr><td colSpan={99} className="text-center py-12 text-slate-400">No hay productos{search ? ' que coincidan' : ''}</td></tr>
-=======
                                     <tr>
                                         <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
                                             No hay productos. Crea uno con el botón &quot;Nuevo Producto&quot;.
                                         </td>
                                     </tr>
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
                                 )}
                                 {filtered.map(p => {
                                     const ms = medScore(p);
@@ -1427,8 +1314,6 @@ export default function MedicalProductsPage() {
                                     </button>
                                 </div>
                             </div>
-<<<<<<< HEAD
-=======
 
                             {expandedId === p.id && (
                                 <div className="border-t border-slate-100 px-4 py-4 bg-slate-50">
@@ -1485,7 +1370,6 @@ export default function MedicalProductsPage() {
                                     </div>
                                 </div>
                             )}
->>>>>>> e00c63e (feat: add Presentaciones column to medical-products table UI)
                         </div>
                     ))}
                 </div>
