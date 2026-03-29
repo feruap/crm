@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart, Package } from 'lucide-react';
-import { useAuth } from '../../components/AuthProvider';
+import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart, Package, Stethoscope } from 'lucide-react';
+import { useAuth, apiFetch } from '../../hooks/useAuth';
 
 
 // ─────────────────────────────────────────────
@@ -754,7 +754,7 @@ export default function MedicalProductsPage() {
             if (inlineValues.target_audience !== undefined) body.target_audience = inlineValues.target_audience;
             if (inlineValues.presentaciones !== undefined) body.presentaciones = parsePresentaciones(inlineValues.presentaciones);
 
-            await authFetch(`${API_URL}/api/medical-products/${id}`, {
+            await authFetch(`/api/medical-products/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -1391,3 +1391,4 @@ export default function MedicalProductsPage() {
         </div>
     );
 }
+          
