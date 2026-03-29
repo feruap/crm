@@ -41,7 +41,8 @@ import automationsRouter from './routes/automations';
 import agentGroupsRouter from './routes/agent-groups';
 import knowledgeRouter from './routes/knowledge';
 import medicalProductsRouter from './routes/medical-products';
-import './workers/bulkSender'; // Start worker
+import './workers/bulkSender'; // Start bulk campaign worker
+import './workers/aiResponseWorker'; // Start AI response worker
 
 dotenv.config();
 
