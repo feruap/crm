@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, FileText, ChevronDown, ChevronRight, Beaker, Search, Save, X, ExternalLink, DollarSign, FlaskConical, Users, ShoppingCart, Package, Stethoscope } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileText, Search, RefreshCw, AlertCircle, ExternalLink, Users, FlaskConical, Stethoscope, DollarSign, X, Check, ChevronDown, Save, Eye, BookOpen, Upload } from 'lucide-react';
 import { useAuth, apiFetch } from '../../hooks/useAuth';
 
 
@@ -87,65 +87,16 @@ interface MedicalProduct {
     units_per_box: number | null;
 }
 
-interface FormData {
-    wc_product_id: string;
-    name: string;
-    sku: string;
-    diagnostic_category: string;
-    clinical_indications: string;
-    sample_type: string;
-    sensitivity: string;
-    specificity: string;
-    result_time: string;
-    methodology: string;
-    regulatory_approval: string;
-    complementary_product_ids: string;
-    recommended_profiles: string[];
-    contraindications: string;
-    interpretation_guide: string;
-    storage_conditions: string;
-    shelf_life: string;
-    price_range: string;
-    // New commercial fields
-    precio_publico: string;
-    precio_laboratorio: string;
-    precio_distribuidor: string;
-    url_tienda: string;
-    marca: string;
-    analito: string;
-    volumen_muestra: string;
-    punto_corte: string;
-    vida_util: string;
-    registro_sanitario: string;
-    pitch_venta: string;
-    ventaja_competitiva: string;
-    roi_medico: string;
-    palabras_clave: string;
-    target_audience: string;
-    presentaciones: string; // format: "cantidad:precio, cantidad:precio"
-}
-
-function formatMXN(n: number | null | undefined): string {
-    if (n == null || isNaN(n)) return '—';
-    return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatPresentaciones(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
-    if (!pres || pres.length === 0) return '—';
-    return pres.map(p => `Caja ${p.cantidad} pruebas: ${formatMXN(p.precio)}`).join(', ');
-}
-
-function parsePresentaciones(str: string): Array<{ cantidad: number; precio: number }> {
-    if (!str.trim()) return [];
-    return str.split(',').map(s => {
-        const parts = s.trim().split(':');
-        return { cantidad: Number(parts[0]?.trim()) || 0, precio: Number(parts[1]?.trim()) || 0 };
-    }).filter(p => p.cantidad > 0);
-}
-
-function presentacionesToString(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
-    if (!pres || pres.length === 0) return '';
-    return pres.map(p => `${p.cantidad}:${p.precio}`).join(', ');
+interface KnowledgeGap {
+    id: number;
+    question: string;
+    customer_name: string | null;
+    product_name: string | null;
+    frequency: number;
+    status: string;
+    admin_notes: string | null;
+    resolved_answer: string | null;
+    created_at: string;
 }
 
 const CATEGORIES = [
@@ -159,29 +110,14 @@ const SAMPLE_TYPES = [
     'hisopo_orofaringeo', 'saliva', 'heces', 'esputo', 'secrecion',
 ];
 
-const PROFILES = ['laboratorio', 'farmacia', 'consultorio', 'hospital', 'clinica', 'punto_de_venta', 'distribuidor'];
-
-const METHODOLOGIES = ['inmunocromatografia', 'pcr_rapida', 'elisa', 'aglutinacion', 'fluorescencia', 'colorimetrica'];
-
-const TARGET_AUDIENCES = [
-    { value: 'ambos', label: 'Médicos y Laboratorios' },
-    { value: 'medico', label: 'Solo Médicos' },
-    { value: 'laboratorio', label: 'Solo Laboratorios' },
-];
-
-const emptyForm: FormData = {
-    wc_product_id: '', name: '', sku: '', diagnostic_category: 'infecciosas',
-    clinical_indications: '', sample_type: '', sensitivity: '', specificity: '',
-    result_time: '', methodology: '', regulatory_approval: '', complementary_product_ids: '',
-    recommended_profiles: [], contraindications: '', interpretation_guide: '',
-    storage_conditions: '', shelf_life: '', price_range: 'media',
-    precio_publico: '', precio_laboratorio: '', precio_distribuidor: '',
-    url_tienda: '', marca: '', analito: '', volumen_muestra: '',
-    punto_corte: '', vida_util: '', registro_sanitario: '',
-    pitch_venta: '', ventaja_competitiva: '', roi_medico: '',
-    palabras_clave: '', target_audience: 'ambos',
-    presentaciones: '',
-};
+// ─────────────────────────────────────────────
+// Semáforo dot component
+// ─────────────────────────────────────────────
+function Dot({ ok, title }: { ok: boolean; title?: string }) {
+    return (
+        <span title={title || ''} className={`inline-block w-3 h-3 rounded-full ${ok ? 'bg-green-500' : 'bg-red-400'}`} />
+    );
+}
 
 function CategoryBadge({ category }: { category: string }) {
     const colors: Record<string, string> = {
@@ -562,69 +498,7 @@ export default function MedicalProductsPage() {
         } catch { setError('Error cargando productos'); }
     }
 
-    function openEdit(p: MedicalProduct) {
-        setForm({
-            wc_product_id: p.wc_product_id ? String(p.wc_product_id) : '',
-            name: p.name, sku: p.sku || '',
-            diagnostic_category: p.diagnostic_category,
-            clinical_indications: (p.clinical_indications || []).join(', '),
-            sample_type: p.sample_type || '',
-            sensitivity: p.sensitivity || '',
-            specificity: p.specificity || '',
-            result_time: p.result_time || '',
-            methodology: p.methodology || '',
-            regulatory_approval: p.regulatory_approval || '',
-            complementary_product_ids: (p.complementary_product_ids || []).join(', '),
-            recommended_profiles: p.recommended_profiles || [],
-            contraindications: p.contraindications || '',
-            interpretation_guide: p.interpretation_guide || '',
-            storage_conditions: p.storage_conditions || '',
-            shelf_life: p.shelf_life || '',
-            price_range: p.price_range || 'media',
-            precio_publico: p.precio_publico != null ? String(p.precio_publico) : '',
-            precio_laboratorio: p.precio_laboratorio != null ? String(p.precio_laboratorio) : '',
-            precio_distribuidor: p.precio_distribuidor != null ? String(p.precio_distribuidor) : '',
-            url_tienda: p.url_tienda || '',
-            marca: p.marca || '',
-            analito: p.analito || '',
-            volumen_muestra: p.volumen_muestra || '',
-            punto_corte: p.punto_corte || '',
-            vida_util: p.vida_util || '',
-            registro_sanitario: p.registro_sanitario || '',
-            pitch_venta: p.pitch_venta || '',
-            ventaja_competitiva: p.ventaja_competitiva || '',
-            roi_medico: p.roi_medico || '',
-            palabras_clave: (p.palabras_clave || []).join(', '),
-            target_audience: p.target_audience || 'ambos',
-            presentaciones: presentacionesToString(p.presentaciones),
-        });
-        setEditingId(p.id);
-        setShowForm(true);
-        setError('');
-    }
-
-    async function handleSave() {
-        if (!form.name || !form.diagnostic_category) {
-            setError('Nombre y categoría son requeridos');
-            return;
-        }
-        setSaving(true);
-        setError('');
-
-        const body = {
-            ...form,
-            wc_product_id: form.wc_product_id ? Number(form.wc_product_id) : null,
-            clinical_indications: form.clinical_indications.split(',').map((s: string) => s.trim()).filter(Boolean),
-            sensitivity: form.sensitivity ? Number(form.sensitivity) : null,
-            specificity: form.specificity ? Number(form.specificity) : null,
-            complementary_product_ids: form.complementary_product_ids.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n)),
-            precio_publico: form.precio_publico ? Number(form.precio_publico) : null,
-            precio_laboratorio: form.precio_laboratorio ? Number(form.precio_laboratorio) : null,
-            precio_distribuidor: form.precio_distribuidor ? Number(form.precio_distribuidor) : null,
-            palabras_clave: form.palabras_clave.split(',').map((s: string) => s.trim()).filter(Boolean),
-            presentaciones: parsePresentaciones(form.presentaciones),
-        };
-
+    async function fetchGaps() {
         try {
             const res = await authFetch(`/api/medical-products/knowledge-gaps?status=pending`);
             setGaps(await res.json());
@@ -726,42 +600,26 @@ export default function MedicalProductsPage() {
         fetchProducts();
     }
 
-    // ── Inline editing ──
-    function startInlineEdit(p: MedicalProduct) {
-        setInlineEditing(p.id);
-        setInlineValues({
-            precio_publico: p.precio_publico != null ? String(p.precio_publico) : '',
-            precio_laboratorio: p.precio_laboratorio != null ? String(p.precio_laboratorio) : '',
-            precio_distribuidor: p.precio_distribuidor != null ? String(p.precio_distribuidor) : '',
-            result_time: p.result_time || '',
-            sensitivity: p.sensitivity || '',
-            specificity: p.specificity || '',
-            target_audience: p.target_audience || 'ambos',
-            presentaciones: presentacionesToString(p.presentaciones),
+    async function resolveGap(gapId: number, status: string) {
+        await authFetch(`/api/medical-products/knowledge-gaps/${gapId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
         });
         fetchGaps();
     }
 
-    async function saveInlineEdit(id: number) {
-        try {
-            const body: Record<string, unknown> = {};
-            if (inlineValues.precio_publico !== undefined) body.precio_publico = inlineValues.precio_publico ? Number(inlineValues.precio_publico) : null;
-            if (inlineValues.precio_laboratorio !== undefined) body.precio_laboratorio = inlineValues.precio_laboratorio ? Number(inlineValues.precio_laboratorio) : null;
-            if (inlineValues.precio_distribuidor !== undefined) body.precio_distribuidor = inlineValues.precio_distribuidor ? Number(inlineValues.precio_distribuidor) : null;
-            if (inlineValues.result_time !== undefined) body.result_time = inlineValues.result_time;
-            if (inlineValues.sensitivity !== undefined) body.sensitivity = inlineValues.sensitivity ? Number(inlineValues.sensitivity) : null;
-            if (inlineValues.specificity !== undefined) body.specificity = inlineValues.specificity ? Number(inlineValues.specificity) : null;
-            if (inlineValues.target_audience !== undefined) body.target_audience = inlineValues.target_audience;
-            if (inlineValues.presentaciones !== undefined) body.presentaciones = parsePresentaciones(inlineValues.presentaciones);
-
-            await authFetch(`/api/medical-products/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            setInlineEditing(null);
-            fetchProducts();
-        } catch { setError('Error guardando'); }
+    // ── Preparation scoring ──
+    function medScore(p: MedicalProduct): { done: number; total: number } {
+        const checks = [
+            !!(p.clinical_indications?.length > 0),
+            !!p.proposito_clinico,
+            !!p.escenarios_uso,
+            !!p.pitch_medico,
+            !!p.roi_medico,
+            !!(p.objeciones_medico?.length > 0),
+        ];
+        return { done: checks.filter(Boolean).length, total: checks.length };
     }
 
     function labScore(p: MedicalProduct): { done: number; total: number } {
@@ -904,221 +762,22 @@ export default function MedicalProductsPage() {
                                 placeholder="Buscar..."
                                 className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
-                    </div>
-
-                    {/* Section: Prices */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                            <DollarSign size={14} /> Precios (sin IVA)
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Precio Público</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                                    <input type="number" step="0.01" value={form.precio_publico}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, precio_publico: e.target.value})}
-                                        placeholder="400.00"
-                                        className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Precio Laboratorio</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                                    <input type="number" step="0.01" value={form.precio_laboratorio}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, precio_laboratorio: e.target.value})}
-                                        placeholder="350.00"
-                                        className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Precio Distribuidor</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                                    <input type="number" step="0.01" value={form.precio_distribuidor}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, precio_distribuidor: e.target.value})}
-                                        placeholder="280.00"
-                                        className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section: Presentaciones */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                            <Package size={14} /> Presentaciones (Cajas)
-                        </h3>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">
-                                Formato: cantidad:precio separados por coma (ej: 2:400, 5:900, 10:1600)
-                            </label>
-                            <input type="text" value={form.presentaciones}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, presentaciones: e.target.value})}
-                                placeholder="2:400, 5:900, 10:1600"
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            {form.presentaciones && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {parsePresentaciones(form.presentaciones).map((p, idx) => (
-                                        <span key={idx} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 px-2.5 py-1 rounded-full text-xs font-medium">
-                                            <Package size={10} /> Caja {p.cantidad} pruebas: {formatMXN(p.precio)}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Section: Technical */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                            <FlaskConical size={14} /> Información Técnica
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Analito / Biomarcador</label>
-                                <input type="text" value={form.analito} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, analito: e.target.value})}
-                                    placeholder="Troponina I, CK-MB, Mioglobina"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Sensibilidad (%)</label>
-                                <input type="number" step="0.01" value={form.sensitivity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, sensitivity: e.target.value})}
-                                    placeholder="98.5"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Especificidad (%)</label>
-                                <input type="number" step="0.01" value={form.specificity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, specificity: e.target.value})}
-                                    placeholder="99.2"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Tiempo de resultado</label>
-                                <input type="text" value={form.result_time} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, result_time: e.target.value})}
-                                    placeholder="15 minutos"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Tipo de muestra</label>
-                                <select value={form.sample_type} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({...form, sample_type: e.target.value})}
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">Seleccionar...</option>
-                                    {SAMPLE_TYPES.map((s: string) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Volumen muestra</label>
-                                <input type="text" value={form.volumen_muestra} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, volumen_muestra: e.target.value})}
-                                    placeholder="10 μL"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Metodología</label>
-                                <select value={form.methodology} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({...form, methodology: e.target.value})}
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">Seleccionar...</option>
-                                    {METHODOLOGIES.map((m: string) => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Punto de corte</label>
-                                <input type="text" value={form.punto_corte} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, punto_corte: e.target.value})}
-                                    placeholder="0.5 ng/mL"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Almacenamiento</label>
-                                <input type="text" value={form.storage_conditions} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, storage_conditions: e.target.value})}
-                                    placeholder="2-30°C"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Vida útil</label>
-                                <input type="text" value={form.vida_util} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, vida_util: e.target.value})}
-                                    placeholder="24 meses"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Registro sanitario</label>
-                                <input type="text" value={form.registro_sanitario} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, registro_sanitario: e.target.value})}
-                                    placeholder="COFEPRIS, CE-IVD"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Aprobación regulatoria</label>
-                                <input type="text" value={form.regulatory_approval} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, regulatory_approval: e.target.value})}
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Section: Clinical & Sales */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                            <ShoppingCart size={14} /> Clínico y Ventas
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Indicaciones clínicas (separadas por coma)</label>
-                                <input type="text" value={form.clinical_indications} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, clinical_indications: e.target.value})}
-                                    placeholder="Infarto agudo, Síndrome coronario agudo, Dolor torácico"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Palabras clave (separadas por coma)</label>
-                                <input type="text" value={form.palabras_clave} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, palabras_clave: e.target.value})}
-                                    placeholder="troponina, corazón, infarto, cardiac"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Pitch de venta (1 oración)</label>
-                                <input type="text" value={form.pitch_venta} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, pitch_venta: e.target.value})}
-                                    placeholder="Diagnóstico de infarto en 15 minutos al lado del paciente"
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Ventaja competitiva</label>
-                                <input type="text" value={form.ventaja_competitiva} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, ventaja_competitiva: e.target.value})}
-                                    placeholder="vs laboratorio tradicional..."
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">ROI para el médico</label>
-                                <input type="text" value={form.roi_medico} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({...form, roi_medico: e.target.value})}
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-600 mb-1">Guía de interpretación</label>
-                                <textarea value={form.interpretation_guide} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({...form, interpretation_guide: e.target.value})}
-                                    rows={2} placeholder="Línea C (control) debe aparecer siempre..."
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Profiles */}
-                    <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-                            <Users size={14} /> Perfiles recomendados
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {PROFILES.map((p: string) => (
-                                <button key={p} type="button"
-                                    onClick={() => {
-                                        const current = form.recommended_profiles;
-                                        setForm({
-                                            ...form,
-                                            recommended_profiles: current.includes(p)
-                                                ? current.filter((x: string) => x !== p)
-                                                : [...current, p]
-                                        });
-                                    }}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                        form.recommended_profiles.includes(p)
-                                            ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+                            <option value="">Todas categorías</option>
+                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <div className="flex rounded-lg border border-slate-300 overflow-hidden">
+                            {([
+                                { key: 'all' as const, label: `Todos (${stats.total})` },
+                                { key: 'prepared' as const, label: `Listos (${stats.prepared})` },
+                                { key: 'unprepared' as const, label: `Faltan (${stats.unprepared})` },
+                            ]).map(({ key, label }) => (
+                                <button key={key} onClick={() => setPrepFilter(key)}
+                                    className={`px-2.5 py-1.5 text-xs font-medium ${
+                                        prepFilter === key
+                                            ? key === 'unprepared' ? 'bg-orange-500 text-white' : 'bg-blue-600 text-white'
+                                            : 'bg-white text-slate-600 hover:bg-slate-50'
                                     }`}>
                                     {label}
                                 </button>
@@ -1151,28 +810,43 @@ export default function MedicalProductsPage() {
                         <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Producto</th>
-                                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Categoría</th>
-                                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Público</th>
-                                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Lab</th>
-                                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Precio Dist.</th>
-                                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Presentaciones</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Sensib.</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Especif.</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Resultado</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Muestra</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Audiencia</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">KB</th>
-                                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-600 whitespace-nowrap">Acciones</th>
+                                    <th className="text-left px-3 py-2.5 font-semibold text-slate-700 sticky left-0 bg-slate-50 z-10 min-w-[200px]">Producto</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Cat</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-right">Precio</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Uds/caja</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Muestra</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Sens.</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">Tiempo</th>
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center">KB</th>
+                                    {showMed && (
+                                        <th colSpan={medCols.length} className="px-2 py-1 text-center border-l border-slate-200">
+                                            <span className="text-emerald-700 font-bold flex items-center justify-center gap-1"><Stethoscope size={11} /> Médicos</span>
+                                        </th>
+                                    )}
+                                    {showLab && (
+                                        <th colSpan={labCols.length} className="px-2 py-1 text-center border-l border-slate-200">
+                                            <span className="text-violet-700 font-bold flex items-center justify-center gap-1"><FlaskConical size={11} /> Labs</span>
+                                        </th>
+                                    )}
+                                    <th className="px-2 py-2.5 font-semibold text-slate-700 text-center border-l border-slate-200">Score</th>
+                                    <th className="px-2 py-2.5 text-center">Acc.</th>
+                                </tr>
+                                <tr className="bg-slate-50/50 border-b border-slate-100">
+                                    <th className="sticky left-0 bg-slate-50/50 z-10"></th>
+                                    <th></th><th></th><th></th><th></th><th></th><th></th><th></th>
+                                    {showMed && medCols.map(c => (
+                                        <th key={c.key} className="px-1 py-1 text-[9px] text-slate-500 font-medium text-center border-l border-slate-100 first:border-l-slate-200">{c.label}</th>
+                                    ))}
+                                    {showLab && labCols.map(c => (
+                                        <th key={c.key} className="px-1 py-1 text-[9px] text-slate-500 font-medium text-center border-l border-slate-100 first:border-l-slate-200">{c.label}</th>
+                                    ))}
+                                    <th className="border-l border-slate-200"></th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filtered.length === 0 && (
-                                    <tr>
-                                        <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
-                                            No hay productos. Crea uno con el botón &quot;Nuevo Producto&quot;.
-                                        </td>
-                                    </tr>
+                                    <tr><td colSpan={99} className="text-center py-12 text-slate-400">No hay productos{search ? ' que coincidan' : ''}</td></tr>
                                 )}
                                 {filtered.map(p => {
                                     const ms = medScore(p);
@@ -1200,35 +874,6 @@ export default function MedicalProductsPage() {
                                             {/* Sample */}
                                             <td className="px-2 py-2 text-center">
                                                 {p.sample_type ? <span className="text-slate-600">{p.sample_type.replace(/_/g, ' ').substring(0, 12)}</span> : <span className="text-red-400">-</span>}
-                                            </td>
-                                            {/* Presentaciones */}
-                                            <td className="px-3 py-2.5 text-left text-xs">
-                                                {isInline ? (
-                                                    <div>
-                                                        <input type="text" value={inlineValues.presentaciones || ''}
-                                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInlineValues({...inlineValues, presentaciones: e.target.value})}
-                                                            placeholder="2:400, 5:900"
-                                                            title="Formato: cantidad:precio, cantidad:precio"
-                                                            className="w-36 border border-blue-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                                                        <div className="text-[10px] text-slate-400 mt-0.5">qty:precio, ...</div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="min-w-[120px]">
-                                                        {p.presentaciones && p.presentaciones.length > 0 ? (
-                                                            <div className="flex flex-col gap-0.5">
-                                                                {p.presentaciones.map((pr: { cantidad: number; precio: number }, idx: number) => (
-                                                                    <span key={idx} className="inline-flex items-center gap-1 text-xs">
-                                                                        <Package size={10} className="text-violet-400" />
-                                                                        <span className="text-slate-700">Caja {pr.cantidad}:</span>
-                                                                        <span className="font-medium text-violet-700">{formatMXN(pr.precio)}</span>
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-slate-300">—</span>
-                                                        )}
-                                                    </div>
-                                                )}
                                             </td>
                                             {/* Sensitivity */}
                                             <td className="px-2 py-2 text-center">
@@ -1319,62 +964,6 @@ export default function MedicalProductsPage() {
                                     </button>
                                 </div>
                             </div>
-
-                            {expandedId === p.id && (
-                                <div className="border-t border-slate-100 px-4 py-4 bg-slate-50">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                        {/* Pricing column */}
-                                        <div className="space-y-2">
-                                            <h4 className="font-semibold text-slate-700 text-xs uppercase tracking-wide">Precios</h4>
-                                            <div className="text-sm">
-                                                <div className="flex justify-between"><span className="text-slate-500">Público:</span><span className="font-medium">{formatMXN(p.precio_publico)}</span></div>
-                                                <div className="flex justify-between"><span className="text-slate-500">Laboratorio:</span><span className="font-medium text-emerald-700">{formatMXN(p.precio_laboratorio)}</span></div>
-                                                <div className="flex justify-between"><span className="text-slate-500">Distribuidor:</span><span className="font-medium text-orange-700">{formatMXN(p.precio_distribuidor)}</span></div>
-                                            </div>
-                                            {p.presentaciones && p.presentaciones.length > 0 && (
-                                                <div className="mt-2 pt-2 border-t border-slate-200">
-                                                    <span className="text-xs text-slate-500 font-medium">Presentaciones:</span>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {p.presentaciones.map((pr: { cantidad: number; precio: number }, idx: number) => (
-                                                            <span key={idx} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full text-xs">
-                                                                <Package size={10} /> Caja {pr.cantidad}: {formatMXN(pr.precio)}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {p.pitch_venta && <p className="text-xs text-blue-700 italic mt-2">{p.pitch_venta}</p>}
-                                        </div>
-                                        {/* Technical column */}
-                                        <div className="space-y-2">
-                                            <h4 className="font-semibold text-slate-700 text-xs uppercase tracking-wide">Info Técnica</h4>
-                                            {p.analito && <div><span className="text-slate-500">Analito:</span> {p.analito}</div>}
-                                            {p.volumen_muestra && <div><span className="text-slate-500">Vol. muestra:</span> {p.volumen_muestra}</div>}
-                                            {p.punto_corte && <div><span className="text-slate-500">Cut-off:</span> {p.punto_corte}</div>}
-                                            {p.storage_conditions && <div><span className="text-slate-500">Almacén:</span> {p.storage_conditions}</div>}
-                                            {p.vida_util && <div><span className="text-slate-500">Vida útil:</span> {p.vida_util}</div>}
-                                            {p.registro_sanitario && <div><span className="text-slate-500">Registro:</span> {p.registro_sanitario}</div>}
-                                        </div>
-                                        {/* Clinical column */}
-                                        <div className="space-y-2">
-                                            <h4 className="font-semibold text-slate-700 text-xs uppercase tracking-wide">Clínico</h4>
-                                            {p.clinical_indications?.length > 0 && (
-                                                <div><span className="text-slate-500">Indicaciones:</span> {p.clinical_indications.join(', ')}</div>
-                                            )}
-                                            {p.interpretation_guide && <div><span className="text-slate-500">Interpretación:</span> {p.interpretation_guide}</div>}
-                                            {p.ventaja_competitiva && <div><span className="text-slate-500">Ventaja:</span> {p.ventaja_competitiva}</div>}
-                                            {p.roi_medico && <div><span className="text-slate-500">ROI:</span> {p.roi_medico}</div>}
-                                            {p.recommended_profiles?.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                    {p.recommended_profiles.map((pr: string) => (
-                                                        <span key={pr} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{pr}</span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>
@@ -1391,4 +980,3 @@ export default function MedicalProductsPage() {
         </div>
     );
 }
-          
