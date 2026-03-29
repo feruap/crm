@@ -20,7 +20,11 @@ router.get('/', async (_req: Request, res: Response) => {
                -- Linked bot flow (trigger_type = 'campaign')
                bf.id   AS bot_flow_id,
                bf.name AS bot_flow_name,
-               bf.is_active AS bot_flow_active
+               bf.is_active AS bot_flow_active,
+               -- Team routing
+               t.id    AS team_id,
+               t.name  AS team_name,
+               t.color AS team_color
         FROM campaigns c
         LEFT JOIN attributions a    ON a.campaign_id = c.id
         LEFT JOIN conversations conv ON conv.id = a.conversation_id
@@ -28,7 +32,8 @@ router.get('/', async (_req: Request, res: Response) => {
         LEFT JOIN bot_flows bf      ON bf.trigger_type = 'campaign'
                                    AND bf.is_active = TRUE
                                    AND (bf.trigger_config->>'campaign_id')::text = c.id::text
-        GROUP BY c.id, bf.id, bf.name, bf.is_active
+        LEFT JOIN teams t           ON t.id = c.team_id
+        GROUP BY c.id, bf.id, bf.name, bf.is_active, t.id, t.name, t.color
         ORDER BY c.created_at DESC
     `);
     res.json(result.rows);
@@ -846,6 +851,20 @@ router.get('/:id/attributions', async (req: Request, res: Response) => {
         [req.params.id]
     );
     res.json(result.rows);
+});
+
+// PATCH /api/campaigns/:id/team — assign or clear a team for campaign routing
+router.patch('/:id/team', async (req: Request, res: Response) => {
+    const { team_id } = req.body; // null to unassign
+    try {
+        await db.query(
+            `UPDATE campaigns SET team_id = $1 WHERE id = $2`,
+            [team_id || null, req.params.id]
+        );
+        res.json({ ok: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;

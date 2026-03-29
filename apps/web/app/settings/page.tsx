@@ -280,6 +280,8 @@ export default function SettingsPage() {
                         { key: 'asignacion', label: 'Reglas de Asignación', icon: <ArrowRightLeft className="w-4 h-4" /> },
                         { key: 'respuestas', label: 'Respuestas Rápidas', icon: <Zap className="w-4 h-4" /> },
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
+                        { key: 'escalacion', label: 'Escalación', icon: <Shield className="w-4 h-4" /> },
+                        { key: 'campañas', label: 'Campañas & Equipos', icon: <BarChart2 className="w-4 h-4" /> },
                         { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
                         { key: 'llamadas', label: 'WhatsApp Llamadas', icon: <Phone className="w-4 h-4" /> },
                     ].map(t => (
@@ -310,6 +312,8 @@ export default function SettingsPage() {
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
                 {activeTab === 'llamadas' && <LlamadasTab />}
+                {activeTab === 'escalacion' && <EscalacionTab />}
+                {activeTab === 'campañas' && <CampañasTab />}
             </div>
         </div>
     );
@@ -1176,6 +1180,8 @@ function HorariosTab() {
     const [timezone, setTimezone] = useState('America/Mexico_City');
     const [afterMsg, setAfterMsg] = useState('');
     const [autoReply, setAutoReply] = useState(true);
+    const [bot24_7, setBot24_7] = useState(true);
+    const [afterHoursBotOnly, setAfterHoursBotOnly] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -1188,6 +1194,8 @@ function HorariosTab() {
                 setTimezone(data.timezone);
                 setAfterMsg(data.after_hours_message);
                 setAutoReply(data.auto_reply_enabled);
+                setBot24_7(data.bot_24_7 !== false);
+                setAfterHoursBotOnly(!!data.after_hours_bot_only);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -1202,7 +1210,12 @@ function HorariosTab() {
         try {
             await apiFetch('/api/settings/business-hours', {
                 method: 'PATCH',
-                body: JSON.stringify({ hours, timezone, after_hours_message: afterMsg, auto_reply_enabled: autoReply }),
+                body: JSON.stringify({
+                    hours, timezone, after_hours_message: afterMsg,
+                    auto_reply_enabled: autoReply,
+                    bot_24_7: bot24_7,
+                    after_hours_bot_only: afterHoursBotOnly,
+                }),
             });
             setSaved(true); setTimeout(() => setSaved(false), 2500);
         } catch (e) { console.error(e); }
@@ -1285,6 +1298,33 @@ function HorariosTab() {
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-50 disabled:text-slate-400"
                 />
                 <p className="text-xs text-slate-400">Este mensaje se envía automáticamente cuando un cliente escribe fuera del horario configurado.</p>
+            </div>
+
+            {/* Bot availability */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                <h4 className="font-semibold text-slate-700 text-sm uppercase tracking-wide">Disponibilidad del Bot</h4>
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="font-medium text-slate-800 text-sm">Bot activo 24/7</p>
+                        <p className="text-xs text-slate-500 mt-0.5">El bot responde a cualquier hora, incluso cuando los agentes están disponibles</p>
+                    </div>
+                    <button onClick={() => setBot24_7(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${bot24_7 ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${bot24_7 ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="font-medium text-slate-800 text-sm">Fuera de horario: solo bot</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Cuando los agentes no están disponibles, el bot toma el control aunque se active una escalación</p>
+                    </div>
+                    <button onClick={() => setAfterHoursBotOnly(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${afterHoursBotOnly ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${afterHoursBotOnly ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                </div>
             </div>
 
             <button onClick={save} disabled={saving}
@@ -3100,6 +3140,281 @@ function WooCommerceWebhookSection() {
                     No se encontraron webhooks activos apuntando a tu servidor. Haz clic en &quot;Vincular&quot; para crearlos.
                 </p>
             ) : null}
+        </div>
+    );
+}
+
+// ── Escalación Tab ────────────────────────────────────────────────────────────
+interface EscalationRule {
+    enabled: boolean;
+    threshold?: number;
+    count?: number;
+}
+interface EscalationRules {
+    low_confidence: EscalationRule;
+    human_request:  EscalationRule;
+    shipping:       EscalationRule;
+    no_resolution:  EscalationRule;
+    frustrated:     EscalationRule;
+}
+
+function EscalacionTab() {
+    const defaultRules: EscalationRules = {
+        low_confidence: { enabled: true,  threshold: 0.5 },
+        human_request:  { enabled: true },
+        shipping:       { enabled: true },
+        no_resolution:  { enabled: true,  count: 5 },
+        frustrated:     { enabled: true },
+    };
+    const [rules, setRules] = useState<EscalationRules>(defaultRules);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        apiFetch('/api/settings/escalation-rules')
+            .then(r => r.json())
+            .then((data: EscalationRules) => setRules({ ...defaultRules, ...data }))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, []);
+
+    const update = (key: keyof EscalationRules, patch: Partial<EscalationRule>) => {
+        setRules(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+    };
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            await apiFetch('/api/settings/escalation-rules', {
+                method: 'POST',
+                body: JSON.stringify(rules),
+            });
+            setSaved(true); setTimeout(() => setSaved(false), 2500);
+        } catch (e) { console.error(e); }
+        finally { setSaving(false); }
+    };
+
+    if (loading) return <div className="p-10 flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>;
+
+    const RuleRow = ({ ruleKey, label, description, children }: {
+        ruleKey: keyof EscalationRules;
+        label: string;
+        description: string;
+        children?: React.ReactNode;
+    }) => {
+        const rule = rules[ruleKey];
+        return (
+            <div className="py-4 border-b last:border-b-0">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                        <p className="font-medium text-slate-800 text-sm">{label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+                        {rule.enabled && children && <div className="mt-2">{children}</div>}
+                    </div>
+                    <button
+                        onClick={() => update(ruleKey, { enabled: !rule.enabled })}
+                        className={`relative w-10 h-5 shrink-0 rounded-full transition-colors ${rule.enabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+                    >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${rule.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="p-10 max-w-2xl space-y-6">
+            <div>
+                <h3 className="text-2xl font-bold text-slate-800">Reglas de Escalación</h3>
+                <p className="text-slate-500 text-sm mt-1">Define cuándo el bot debe transferir la conversación a un agente humano.</p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex gap-3">
+                <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700">Cuando se activa una regla, el bot envía un mensaje de transferencia y asigna la conversación al agente menos ocupado del equipo correspondiente.</p>
+            </div>
+
+            <div className="bg-white rounded-xl border shadow-sm p-6">
+                <RuleRow
+                    ruleKey="low_confidence"
+                    label="Escalar cuando la confianza del bot es baja"
+                    description="El bot escalará si su nivel de confianza en la respuesta está por debajo del umbral configurado."
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-slate-500">Umbral:</span>
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            value={rules.low_confidence.threshold ?? 0.5}
+                            onChange={e => update('low_confidence', { threshold: parseFloat(e.target.value) })}
+                            className="flex-1"
+                        />
+                        <span className="text-xs font-mono text-slate-700 w-10 text-right">
+                            {((rules.low_confidence.threshold ?? 0.5) * 100).toFixed(0)}%
+                        </span>
+                    </div>
+                </RuleRow>
+
+                <RuleRow
+                    ruleKey="human_request"
+                    label="Escalar cuando el cliente pide hablar con un humano"
+                    description='Detecta palabras clave: "agente", "humano", "persona", "representante", "asesor", "operador"'
+                />
+
+                <RuleRow
+                    ruleKey="shipping"
+                    label="Escalar preguntas de envío y logística"
+                    description='Detecta palabras clave: "envío", "enviar", "guía", "paquete", "entrega", "rastreo", "tracking"'
+                />
+
+                <RuleRow
+                    ruleKey="no_resolution"
+                    label="Escalar después de X mensajes sin resolución"
+                    description="Si el cliente sigue escribiendo después de varios mensajes sin resolver su consulta."
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">Número de mensajes:</span>
+                        <input
+                            type="number" min="2" max="20"
+                            value={rules.no_resolution.count ?? 5}
+                            onChange={e => update('no_resolution', { count: parseInt(e.target.value) || 5 })}
+                            className="w-16 border rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        />
+                    </div>
+                </RuleRow>
+
+                <RuleRow
+                    ruleKey="frustrated"
+                    label="Escalar cuando el cliente está frustrado"
+                    description='Detecta sentimiento negativo: "molesto", "enojado", "terrible", "pésimo", "horrible"'
+                />
+            </div>
+
+            <button onClick={save} disabled={saving}
+                className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-60">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
+                    : saved ? <><CheckCircle className="w-4 h-4" /> Guardado</>
+                        : <><Save className="w-4 h-4" /> Guardar reglas</>}
+            </button>
+        </div>
+    );
+}
+
+// ── Campañas & Equipos Tab ────────────────────────────────────────────────────
+interface CampaignRow {
+    id: string;
+    name: string | null;
+    platform: string;
+    platform_campaign_id: string;
+    is_active: boolean;
+    team_id: string | null;
+    team_name: string | null;
+    team_color: string | null;
+    total_conversations: number;
+    created_at: string;
+}
+
+function CampañasTab() {
+    const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState<string | null>(null);
+    const [saved, setSaved] = useState<string | null>(null);
+
+    useEffect(() => {
+        Promise.all([
+            apiFetch('/api/campaigns').then(r => r.json()),
+            apiFetch('/api/teams').then(r => r.json()),
+        ]).then(([camps, ts]) => {
+            setCampaigns(camps);
+            setTeams(ts);
+        }).catch(console.error).finally(() => setLoading(false));
+    }, []);
+
+    const assignTeam = async (campaignId: string, teamId: string | null) => {
+        setSaving(campaignId);
+        try {
+            await apiFetch(`/api/campaigns/${campaignId}/team`, {
+                method: 'PATCH',
+                body: JSON.stringify({ team_id: teamId }),
+            });
+            setCampaigns(prev => prev.map(c =>
+                c.id === campaignId
+                    ? { ...c, team_id: teamId, team_name: teams.find(t => t.id === teamId)?.name ?? null }
+                    : c
+            ));
+            setSaved(campaignId);
+            setTimeout(() => setSaved(null), 2000);
+        } catch (e) { console.error(e); }
+        finally { setSaving(null); }
+    };
+
+    if (loading) return <div className="p-10 flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>;
+
+    const PLATFORM_ICONS: Record<string, string> = {
+        facebook: '📘', instagram: '📸', google: '🔍', tiktok: '🎵',
+    };
+
+    return (
+        <div className="p-10 max-w-3xl space-y-6">
+            <div>
+                <h3 className="text-2xl font-bold text-slate-800">Campañas & Equipos</h3>
+                <p className="text-slate-500 text-sm mt-1">Asigna un equipo de ventas a cada campaña publicitaria. Las conversaciones entrantes desde esa campaña se rutearán automáticamente.</p>
+            </div>
+
+            {campaigns.length === 0 ? (
+                <div className="bg-white rounded-xl border shadow-sm p-10 text-center">
+                    <BarChart2 className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">No hay campañas registradas aún.</p>
+                    <p className="text-slate-400 text-xs mt-1">Las campañas se crean automáticamente cuando llegan conversaciones desde anuncios de Meta.</p>
+                </div>
+            ) : (
+                <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                    <div className="px-6 py-3 bg-slate-50 border-b grid grid-cols-12 gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <span className="col-span-5">Campaña</span>
+                        <span className="col-span-2 text-center">Convs.</span>
+                        <span className="col-span-5">Equipo asignado</span>
+                    </div>
+                    <div className="divide-y">
+                        {campaigns.map(c => (
+                            <div key={c.id} className="px-6 py-3 grid grid-cols-12 gap-4 items-center">
+                                <div className="col-span-5 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base">{PLATFORM_ICONS[c.platform] ?? '📢'}</span>
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-slate-800 truncate">{c.name || c.platform_campaign_id}</p>
+                                            <p className="text-xs text-slate-400 truncate">{c.platform}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-span-2 text-center text-sm text-slate-600">{c.total_conversations ?? 0}</div>
+                                <div className="col-span-5 flex items-center gap-2">
+                                    <select
+                                        value={c.team_id ?? ''}
+                                        onChange={e => assignTeam(c.id, e.target.value || null)}
+                                        disabled={saving === c.id}
+                                        className="flex-1 border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+                                    >
+                                        <option value="">Sin equipo</option>
+                                        {teams.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                    {saving === c.id && <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />}
+                                    {saved === c.id && <Check className="w-4 h-4 text-green-500 shrink-0" />}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {teams.length === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex gap-3">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700">No hay equipos creados. Ve a <strong>Equipos</strong> para crear equipos de ventas primero.</p>
+                </div>
+            )}
         </div>
     );
 }

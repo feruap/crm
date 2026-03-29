@@ -13,6 +13,91 @@ import { deliverMessage } from '../services/message-sender';
 import { receiveStatusFromWC } from '../services/woocommerce';
 
 // ─────────────────────────────────────────────
+// Escalation helpers
+// ─────────────────────────────────────────────
+
+const ESCALATION_HUMAN_KW   = ['agente', 'humano', 'persona', 'representante', 'hablar con', 'operador', 'asesor', 'ejecutivo'];
+const ESCALATION_SHIPPING_KW = ['envío', 'envio', 'enviar', 'guía', 'guia', 'paquete', 'entrega', 'rastreo', 'tracking'];
+const ESCALATION_FRUSTRATED_KW = ['molesto', 'enojado', 'terrible', 'pésimo', 'pesimo', 'horrible', 'enojo', 'disgusto', 'fraude', 'estafa'];
+
+async function checkEscalation(
+    messageText: string,
+    conversationId: string,
+    confidence: number
+): Promise<{ shouldEscalate: boolean; reason: string }> {
+    try {
+        const row = await db.query(`SELECT value FROM business_settings WHERE key = 'escalation_rules' LIMIT 1`);
+        if (!row.rows[0]) return { shouldEscalate: false, reason: '' };
+
+        const rules = JSON.parse(row.rows[0].value);
+        const msgLower = messageText.toLowerCase();
+
+        if (rules.low_confidence?.enabled && confidence < (rules.low_confidence.threshold ?? 0.5)) {
+            return { shouldEscalate: true, reason: 'Confianza del bot baja' };
+        }
+        if (rules.human_request?.enabled && ESCALATION_HUMAN_KW.some(kw => msgLower.includes(kw))) {
+            return { shouldEscalate: true, reason: 'Cliente solicitó hablar con un humano' };
+        }
+        if (rules.shipping?.enabled && ESCALATION_SHIPPING_KW.some(kw => msgLower.includes(kw))) {
+            return { shouldEscalate: true, reason: 'Pregunta de envío/logística' };
+        }
+        if (rules.no_resolution?.enabled) {
+            const maxMsgs = rules.no_resolution.count ?? 5;
+            const cnt = await db.query(
+                `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
+                [conversationId]
+            );
+            if (parseInt(cnt.rows[0].count) >= maxMsgs) {
+                return { shouldEscalate: true, reason: `Sin resolución después de ${maxMsgs} mensajes` };
+            }
+        }
+        if (rules.frustrated?.enabled && ESCALATION_FRUSTRATED_KW.some(kw => msgLower.includes(kw))) {
+            return { shouldEscalate: true, reason: 'Cliente frustrado' };
+        }
+    } catch (_) { /* ignore — don't break bot if escalation check fails */ }
+    return { shouldEscalate: false, reason: '' };
+}
+
+async function resolveEscalationAgent(conversationId: string): Promise<string | null> {
+    try {
+        // Check if conversation is attributed to a campaign that has a team
+        const convRow = await db.query(
+            `SELECT camp.team_id
+             FROM attributions a
+             JOIN campaigns camp ON camp.id = a.campaign_id
+             WHERE a.conversation_id = $1 AND camp.team_id IS NOT NULL
+             LIMIT 1`,
+            [conversationId]
+        );
+        const teamId = convRow.rows[0]?.team_id;
+        if (teamId) {
+            const agentRow = await db.query(
+                `SELECT tm.agent_id FROM team_members tm
+                 JOIN agents ag ON ag.id = tm.agent_id
+                 WHERE tm.team_id = $1 AND ag.is_active = TRUE
+                 ORDER BY (
+                     SELECT COUNT(*) FROM conversations c2
+                     WHERE c2.assigned_agent_id = tm.agent_id AND c2.status IN ('open', 'pending')
+                 ) ASC LIMIT 1`,
+                [teamId]
+            );
+            if (agentRow.rows[0]) return agentRow.rows[0].agent_id;
+        }
+        // Fallback: least-busy active agent
+        const fallback = await db.query(
+            `SELECT id FROM agents WHERE is_active = TRUE
+             ORDER BY (
+                 SELECT COUNT(*) FROM conversations c2
+                 WHERE c2.assigned_agent_id = agents.id AND c2.status IN ('open', 'pending')
+             ) ASC LIMIT 1`
+        );
+        return fallback.rows[0]?.id ?? null;
+    } catch (_) {
+        return null;
+    }
+}
+
+// ─────────────────────────────────────────────
 // Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
 // ─────────────────────────────────────────────
 async function sendOutboundReply(
@@ -307,6 +392,33 @@ async function autoAttributeFromReferral(
         );
 
         console.log(`[Attribution] ${platform} ad ${adId} → conv ${conversationId}`);
+
+        // Campaign → Team routing: if campaign has a team, assign least-busy agent from that team
+        const campTeam = await db.query(
+            `SELECT team_id FROM campaigns WHERE id = $1 AND team_id IS NOT NULL LIMIT 1`,
+            [campaignId]
+        );
+        if (campTeam.rows[0]?.team_id) {
+            const teamId = campTeam.rows[0].team_id;
+            const agentRow = await db.query(
+                `SELECT tm.agent_id FROM team_members tm
+                 JOIN agents ag ON ag.id = tm.agent_id
+                 WHERE tm.team_id = $1 AND ag.is_active = TRUE
+                 ORDER BY (
+                     SELECT COUNT(*) FROM conversations c2
+                     WHERE c2.assigned_agent_id = tm.agent_id AND c2.status IN ('open', 'pending')
+                 ) ASC LIMIT 1`,
+                [teamId]
+            );
+            if (agentRow.rows[0]) {
+                await db.query(
+                    `UPDATE conversations SET assigned_agent_id = $1, assigned_team_id = $2, updated_at = NOW()
+                     WHERE id = $3`,
+                    [agentRow.rows[0].agent_id, teamId, conversationId]
+                );
+                console.log(`[CampaignTeam] Conv ${conversationId} → team ${teamId}, agent ${agentRow.rows[0].agent_id}`);
+            }
+        }
     } catch (err) {
         console.error('[Attribution] error:', err);
     }
@@ -412,6 +524,38 @@ export async function handleBotResponse(
                 conversationId
             );
             confidence = knowledgeHit ? knowledgeHit.confidence : 0.5;
+        }
+
+        // ── 3. Escalation check ──────────────────────────────────────────────
+        const escalation = await checkEscalation(messageText, conversationId, confidence);
+        if (escalation.shouldEscalate) {
+            const inHours = await isWithinBusinessHours();
+            let replyMsg: string;
+
+            if (!inHours) {
+                const bhRow = await db.query(`SELECT value FROM business_settings WHERE key = 'after_hours_message' LIMIT 1`);
+                replyMsg = bhRow.rows[0]?.value || 'Nuestro equipo te atenderá en el próximo horario de atención. ¡Gracias por contactarnos!';
+            } else {
+                replyMsg = 'Te conecto con un asesor especializado. Un momento por favor.';
+                const agentId = await resolveEscalationAgent(conversationId);
+                await db.query(
+                    `UPDATE conversations SET status = 'pending', assigned_agent_id = $1,
+                     escalation_reason = $2, updated_at = NOW() WHERE id = $3`,
+                    [agentId, escalation.reason, conversationId]
+                );
+                console.log(`[Escalation] Conv ${conversationId} → agent ${agentId} (${escalation.reason})`);
+            }
+
+            const escMsg = await db.query(
+                `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
+                 VALUES ($1, $2, $3, 'outbound', $4, 'bot', 1.0) RETURNING *`,
+                [conversationId, channelId, customerId, replyMsg]
+            );
+            emitNewMessage(conversationId, escMsg.rows[0]);
+            emitConversationUpdated(conversationId, { last_message: replyMsg, last_message_at: escMsg.rows[0].created_at });
+            getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+            await sendOutboundReply(channelId, customerId, replyMsg);
+            return;
         }
 
         const result = await db.query(

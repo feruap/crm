@@ -20,9 +20,11 @@ router.get('/', async (_req: Request, res: Response) => {
             open_time:  h.open_time?.slice(0, 5),   // HH:MM
             close_time: h.close_time?.slice(0, 5),
         })),
-        timezone:              settingsMap.timezone              ?? 'America/Mexico_City',
-        after_hours_message:   settingsMap.after_hours_message   ?? '',
-        auto_reply_enabled:    settingsMap.auto_reply_enabled    === 'true',
+        timezone:                settingsMap.timezone                ?? 'America/Mexico_City',
+        after_hours_message:     settingsMap.after_hours_message     ?? '',
+        auto_reply_enabled:      settingsMap.auto_reply_enabled      === 'true',
+        bot_24_7:                settingsMap.bot_24_7                !== 'false',
+        after_hours_bot_only:    settingsMap.after_hours_bot_only    === 'true',
     });
 });
 
@@ -62,6 +64,22 @@ router.patch('/', async (req: Request, res: Response) => {
             `INSERT INTO business_settings (key, value) VALUES ('auto_reply_enabled', $1)
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
             [auto_reply_enabled ? 'true' : 'false']
+        );
+    }
+
+    const { bot_24_7, after_hours_bot_only } = req.body;
+    if (bot_24_7 !== undefined) {
+        await db.query(
+            `INSERT INTO business_settings (key, value) VALUES ('bot_24_7', $1)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [bot_24_7 ? 'true' : 'false']
+        );
+    }
+    if (after_hours_bot_only !== undefined) {
+        await db.query(
+            `INSERT INTO business_settings (key, value) VALUES ('after_hours_bot_only', $1)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [after_hours_bot_only ? 'true' : 'false']
         );
     }
 

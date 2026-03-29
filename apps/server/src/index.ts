@@ -160,6 +160,39 @@ app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
     }
 });
 
+// ─── Escalation Rules Settings ───────────────────────────────────────────────
+const ESCALATION_DEFAULTS = {
+    low_confidence:  { enabled: true,  threshold: 0.5 },
+    human_request:   { enabled: true },
+    shipping:        { enabled: true },
+    no_resolution:   { enabled: true,  count: 5 },
+    frustrated:      { enabled: true },
+};
+
+app.get('/api/settings/escalation-rules', requireAuth, async (_req, res) => {
+    try {
+        const row = await db.query(
+            `SELECT value FROM business_settings WHERE key = 'escalation_rules' LIMIT 1`
+        );
+        res.json(row.rows[0] ? JSON.parse(row.rows[0].value) : ESCALATION_DEFAULTS);
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
+app.post('/api/settings/escalation-rules', requireAuth, async (req, res) => {
+    try {
+        await db.query(
+            `INSERT INTO business_settings (key, value) VALUES ('escalation_rules', $1)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [JSON.stringify(req.body)]
+        );
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+
 // ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
@@ -386,10 +419,14 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS ai_instructions TEXT`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS automated_flow TEXT`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id) ON DELETE SET NULL`);
     await safeAlter(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS brand_name TEXT`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS units_per_box INTEGER`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS presentaciones JSONB`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[]`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS assigned_team_id UUID REFERENCES teams(id) ON DELETE SET NULL`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS escalation_reason TEXT`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS handoff_summary TEXT`);
 
     // Ensure automations table exists (was missing from Fase 7)
     try {
