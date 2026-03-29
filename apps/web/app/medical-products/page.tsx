@@ -125,6 +125,11 @@ interface FormData {
     presentaciones: string; // format: "cantidad:precio, cantidad:precio"
 }
 
+function formatMXN(n: number | null | undefined): string {
+    if (n == null || isNaN(n)) return '—';
+    return `$${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function formatPresentaciones(pres: Array<{ cantidad: number; precio: number }> | null | undefined): string {
     if (!pres || pres.length === 0) return '—';
     return pres.map(p => `Caja ${p.cantidad} pruebas: ${formatMXN(p.precio)}`).join(', ');
