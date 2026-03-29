@@ -258,8 +258,13 @@ export async function getAIResponse(
         finalSystemPrompt += `\n\n=== CATÁLOGO DE PRODUCTOS DISPONIBLES ===\n`;
         finalSystemPrompt += `Tienes acceso al siguiente inventario:\n`;
         catalog.forEach((p: any) => {
-            const unitsLabel = p.units_per_box ? ` — Caja con ${p.units_per_box} pruebas` : '';
-            finalSystemPrompt += `- ${p.name} (Precio: $${p.price}${unitsLabel})\n`;
+            if (p.presentaciones && Array.isArray(p.presentaciones) && p.presentaciones.length > 1) {
+                const sizes = p.presentaciones.map((v: any) => `${v.size} ($${v.price})`).join(', ');
+                finalSystemPrompt += `- ${p.name} — Disponible en: ${sizes}\n`;
+            } else {
+                const unitsLabel = p.units_per_box ? ` — Caja con ${p.units_per_box} pruebas` : '';
+                finalSystemPrompt += `- ${p.name} (Precio: $${p.price}${unitsLabel})\n`;
+            }
         });
 
         finalSystemPrompt += `\n REGLAS DE ORO PARA VENTAS (MUY IMPORTANTE):\n`;
@@ -513,14 +518,15 @@ export async function getCatalogForAI(excludedCategories: string[]): Promise<any
             const wcIds = wcProductsCache.map((p: any) => p.id);
             if (wcIds.length > 0) {
                 const mpRes = await db.query(
-                    `SELECT wc_product_id, units_per_box FROM medical_products WHERE wc_product_id = ANY($1) AND units_per_box IS NOT NULL`,
+                    `SELECT wc_product_id, units_per_box, presentaciones FROM medical_products WHERE wc_product_id = ANY($1)`,
                     [wcIds]
                 );
-                const unitsMap: Record<number, number> = {};
-                for (const row of mpRes.rows) unitsMap[row.wc_product_id] = row.units_per_box;
+                const mpMap: Record<number, any> = {};
+                for (const row of mpRes.rows) mpMap[row.wc_product_id] = row;
                 wcProductsCache = wcProductsCache.map((p: any) => ({
                     ...p,
-                    units_per_box: unitsMap[p.id] ?? null,
+                    units_per_box: mpMap[p.id]?.units_per_box ?? null,
+                    presentaciones: mpMap[p.id]?.presentaciones ?? null,
                 }));
             }
         } catch (e) { /* units_per_box augment is non-critical */ }

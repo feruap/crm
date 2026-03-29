@@ -426,13 +426,36 @@ router.post('/sync-products', async (_req: Request, res: Response) => {
                 if (match) { units_per_box = parseInt(match[1], 10); break; }
             }
 
+            // Fetch variations for variable products
+            let presentaciones: any[] | null = null;
+            let wc_variation_ids: number[] | null = null;
+            if (wc.type === 'variable' && wc.variations?.length > 0) {
+                try {
+                    const varRes = await fetch(`${wcUrl}/wp-json/wc/v3/products/${wc.id}/variations?per_page=100`, {
+                        headers: { Authorization: `Basic ${Buffer.from(`${wcKey}:${wcSecret}`).toString('base64')}` }
+                    });
+                    if (varRes.ok) {
+                        const vars: any[] = await varRes.json();
+                        presentaciones = vars.map((v: any) => {
+                            const sizeAttr = v.attributes?.find((a: any) => /cantidad|presentacion|size|talla|unidad/i.test(a.name));
+                            const sizeLabel = sizeAttr?.option || v.attributes?.[0]?.option || `Variante ${v.id}`;
+                            return { size: sizeLabel, price: parseFloat(v.price) || 0, variation_id: v.id };
+                        });
+                        wc_variation_ids = vars.map((v: any) => v.id);
+                    }
+                } catch (_) { /* ignore variation fetch errors */ }
+            }
+
             await db.query(`
                 INSERT INTO medical_products (
                     wc_product_id, name, sku, diagnostic_category,
                     url_tienda, precio_publico, units_per_box, is_active, wc_last_sync,
-                    clinical_indications, recommended_profiles, complementary_product_ids
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(), '{}', '{}', '{}')
-            `, [wc.id, wc.name, wc.sku || null, category, wc.permalink, price, units_per_box]);
+                    clinical_indications, recommended_profiles, complementary_product_ids,
+                    presentaciones, wc_variation_ids
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(), '{}', '{}', '{}', $8, $9)
+            `, [wc.id, wc.name, wc.sku || null, category, wc.permalink, price, units_per_box,
+                presentaciones ? JSON.stringify(presentaciones) : null,
+                wc_variation_ids]);
 
             imported++;
             importedNames.push(wc.name);
