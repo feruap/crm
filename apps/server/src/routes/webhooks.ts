@@ -312,6 +312,28 @@ async function autoAttributeFromReferral(
     }
 }
 
+// Check if message should escalate to human based on rules
+async function shouldEscalate(messageText: string, botReply: string, confidence: number, msgCount: number): Promise<{escalate: boolean; reason: string}> {
+    try {
+        const r = await db.query(`SELECT value FROM settings WHERE key = 'escalation_rules'`);
+        if (!r.rows[0]?.value) return { escalate: false, reason: '' };
+        const rules = JSON.parse(r.rows[0].value);
+        const lower = messageText.toLowerCase();
+        
+        if (rules.low_confidence && confidence < (rules.confidence_threshold || 0.5))
+            return { escalate: true, reason: 'Confianza baja del bot' };
+        if (rules.customer_requests_human && (rules.human_keywords || []).some((k: string) => lower.includes(k)))
+            return { escalate: true, reason: 'Cliente solicita agente humano' };
+        if (rules.shipping_questions && (rules.shipping_keywords || []).some((k: string) => lower.includes(k)))
+            return { escalate: true, reason: 'Pregunta de envío/logística' };
+        if (rules.frustrated_customer && (rules.frustration_keywords || []).some((k: string) => lower.includes(k)))
+            return { escalate: true, reason: 'Cliente frustrado detectado' };
+        if (rules.max_messages && msgCount >= (rules.max_message_count || 5))
+            return { escalate: true, reason: `${msgCount} mensajes sin resolución` };
+    } catch (_) {}
+    return { escalate: false, reason: '' };
+}
+
 export async function handleBotResponse(
     conversationId: string,
     channelId: string,
@@ -414,10 +436,21 @@ export async function handleBotResponse(
             confidence = knowledgeHit ? knowledgeHit.confidence : 0.5;
         }
 
+        // Check escalation rules before sending bot reply
+        const msgCountRes = await db.query(`SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`, [conversationId]);
+        const inboundCount = parseInt(msgCountRes.rows[0].count, 10);
+        const esc = await shouldEscalate(messageText, botReply, confidence, inboundCount);
+        if (esc.escalate) {
+            // Escalate: send handoff message instead of bot reply, assign to available agent
+            botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
+            await db.query(`UPDATE conversations SET status = 'waiting', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`, [conversationId]);
+            console.log(`[Escalation] Conv ${conversationId}: ${esc.reason}`);
+        }
+
         const result = await db.query(
             `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', $5) RETURNING *`,
-            [conversationId, channelId, customerId, botReply, confidence]
+             VALUES ($1, $2, $3, 'outbound', $4, $5, $6) RETURNING *`,
+            [conversationId, channelId, customerId, botReply, esc.escalate ? 'escalation' : 'bot', confidence]
         );
 
         const insertedMessage = result.rows[0];

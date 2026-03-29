@@ -193,6 +193,28 @@ app.post('/api/settings/ai', requireAuth, async (req, res) => {
     res.json({ ok: true, provider });
 });
 
+// ─── Escalation Rules Settings ────────────────────────────────────────────────
+app.get('/api/settings/escalation-rules', requireAuth, async (_req, res) => {
+    try {
+        const r = await db.query(`SELECT value FROM settings WHERE key = 'escalation_rules'`);
+        res.json(r.rows[0]?.value ? JSON.parse(r.rows[0].value) : {
+            low_confidence: true, confidence_threshold: 0.5,
+            customer_requests_human: true, human_keywords: ['agente','humano','persona','representante','asesor'],
+            shipping_questions: true, shipping_keywords: ['envío','enviar','guía','paquete','entrega','rastreo'],
+            max_messages: true, max_message_count: 5,
+            frustrated_customer: true, frustration_keywords: ['molesto','enojado','terrible','pésimo','queja','horrible'],
+            bot_24_7: true, after_hours_bot_only: true
+        });
+    } catch (e) { res.json({}); }
+});
+
+app.post('/api/settings/escalation-rules', requireAuth, async (req, res) => {
+    try {
+        await db.query(`INSERT INTO settings (key, value) VALUES ('escalation_rules', $1) ON CONFLICT (key) DO UPDATE SET value = $1`, [JSON.stringify(req.body)]);
+        res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Cron: alerts every 5 min ────────────────────────────────────────────────
 cron.schedule('*/5 * * * *', () => {
     runAlertsCron().catch(console.error);
@@ -389,6 +411,7 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE channels ADD COLUMN IF NOT EXISTS brand_name TEXT`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS units_per_box INTEGER`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS presentaciones JSONB`);
+    await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id)`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[]`);
 
     // Ensure automations table exists (was missing from Fase 7)
