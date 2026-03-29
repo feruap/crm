@@ -193,6 +193,13 @@ export async function getAIResponse(
         }
     }
 
+    // 0b. Fetch customer name for personalized greeting
+    let customerName: string | null = null;
+    if (customerId) {
+        const nameRes = await db.query(`SELECT name FROM customers WHERE id = $1`, [customerId]);
+        customerName = nameRes.rows[0]?.name || null;
+    }
+
     // 1. Fetch excluded categories from DB
     const settingsRes = await db.query(`SELECT excluded_categories FROM ai_settings WHERE is_default = TRUE LIMIT 1`);
     const excludedCategories = settingsRes.rows[0]?.excluded_categories || ['cortesias'];
@@ -202,6 +209,11 @@ export async function getAIResponse(
 
     // 3. Inject catalog and instruction for Order Tracking into system prompt
     let finalSystemPrompt = systemPrompt;
+
+    // Inject customer name for personalized responses
+    if (customerName) {
+        finalSystemPrompt += `\n\n=== INFORMACIÓN DEL CLIENTE ===\nEl cliente se llama: ${customerName}. Dirígete a él/ella por su nombre de forma natural y cálida.`;
+    }
 
     if (knowledgeContext) {
         finalSystemPrompt += `\n\n=== CONOCIMIENTO PREVIO RELEVANTE ===\n${knowledgeContext}\nUsa este conocimiento si es relevante para la duda del cliente.`;
