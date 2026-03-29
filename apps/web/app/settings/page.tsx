@@ -176,6 +176,187 @@ const TIMEZONES = [
     'Europe/Madrid', 'Europe/London', 'UTC',
 ];
 
+// ── EscalacionTab ──────────────────────────────────────────────────────────────
+function EscalacionTab() {
+    const [rules, setRules] = useState({
+        low_confidence: true,
+        confidence_threshold: 0.5,
+        customer_requests_human: true,
+        human_keywords: ['agente', 'humano', 'persona', 'hablar con alguien', 'representante'],
+        shipping_questions: false,
+        shipping_keywords: ['envío', 'paquete', 'rastreo', 'tracking', 'entrega'],
+        max_messages: false,
+        max_message_count: 10,
+        frustrated_customer: false,
+        frustration_keywords: ['molesto', 'enojado', 'queja', 'terrible', 'pésimo', 'no sirve'],
+        bot_24_7: true,
+        after_hours_bot_only: true,
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        apiFetch('/api/settings/escalation-rules')
+            .then(r => r.json())
+            .then(data => { setRules(prev => ({ ...prev, ...data })); setLoading(false); })
+            .catch(() => setLoading(false));
+    }, []);
+
+    const update = (key: string, val: any) => setRules(prev => ({ ...prev, [key]: val }));
+
+    const save = async () => {
+        setSaving(true);
+        setError('');
+        try {
+            await apiFetch('/api/settings/escalation-rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(rules),
+            });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch {
+            setError('Error al guardar');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const Toggle = ({ label, desc, field }: { label: string; desc: string; field: string }) => (
+        <div className="flex items-center justify-between py-3">
+            <div>
+                <h4 className="font-semibold text-slate-800">{label}</h4>
+                <p className="text-sm text-slate-500 mt-0.5">{desc}</p>
+            </div>
+            <button
+                onClick={() => update(field, !(rules as any)[field])}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(rules as any)[field] ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${(rules as any)[field] ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+        </div>
+    );
+
+    const KeywordEditor = ({ label, field }: { label: string; field: string }) => {
+        const keywords = (rules as any)[field] || [];
+        const [input, setInput] = useState('');
+        return (
+            <div className="mt-2 mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                    {keywords.map((kw: string, i: number) => (
+                        <span key={i} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2.5 py-1 rounded-full">
+                            {kw}
+                            <button onClick={() => update(field, keywords.filter((_: any, j: number) => j !== i))} className="hover:text-red-500">×</button>
+                        </span>
+                    ))}
+                </div>
+                <div className="flex gap-2">
+                    <input
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && input.trim()) {
+                                update(field, [...keywords, input.trim()]);
+                                setInput('');
+                            }
+                        }}
+                        placeholder="Agregar palabra clave y presionar Enter"
+                        className="flex-1 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    <button
+                        onClick={() => { if (input.trim()) { update(field, [...keywords, input.trim()]); setInput(''); } }}
+                        className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-sm hover:bg-blue-100"
+                    >Agregar</button>
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) return <div className="p-8 text-slate-500">Cargando...</div>;
+
+    return (
+        <div className="p-8 max-w-2xl">
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">Reglas de Escalación</h2>
+            <p className="text-slate-500 text-sm mb-8">Configura cuándo el bot debe transferir la conversación a un agente humano</p>
+
+            {/* Bot 24/7 section */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 mb-6">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Comportamiento del Bot</h3>
+                <Toggle label="Bot disponible 24/7" desc="El bot responde automáticamente a cualquier hora del día" field="bot_24_7" />
+                <Toggle label="Solo bot fuera de horario" desc="Fuera del horario laboral, solo el bot responde (sin escalar)" field="after_hours_bot_only" />
+            </div>
+
+            {/* Escalation triggers */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 mb-6">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Disparadores de Escalación</h3>
+
+                <Toggle label="Confianza baja del bot" desc="Escalar cuando la respuesta del bot tiene baja confianza" field="low_confidence" />
+                {rules.low_confidence && (
+                    <div className="ml-4 mb-4 p-4 bg-slate-50 rounded-lg">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Umbral de confianza: <span className="text-blue-600 font-bold">{rules.confidence_threshold}</span>
+                        </label>
+                        <input
+                            type="range"
+                            min="0" max="1" step="0.05"
+                            value={rules.confidence_threshold}
+                            onChange={e => update('confidence_threshold', parseFloat(e.target.value))}
+                            className="w-full accent-blue-600"
+                        />
+                        <div className="flex justify-between text-xs text-slate-400 mt-1">
+                            <span>0 (escalar siempre)</span>
+                            <span>1 (nunca escalar)</span>
+                        </div>
+                    </div>
+                )}
+
+                <div className="border-t border-slate-100" />
+                <Toggle label="Cliente pide agente humano" desc="Escalar cuando el cliente usa palabras clave como 'agente' o 'hablar con alguien'" field="customer_requests_human" />
+                {rules.customer_requests_human && <KeywordEditor label="Palabras clave de solicitud de agente" field="human_keywords" />}
+
+                <div className="border-t border-slate-100" />
+                <Toggle label="Preguntas de envío" desc="Escalar consultas sobre envíos y rastreo de paquetes" field="shipping_questions" />
+                {rules.shipping_questions && <KeywordEditor label="Palabras clave de envío" field="shipping_keywords" />}
+
+                <div className="border-t border-slate-100" />
+                <Toggle label="Máximo de mensajes" desc="Escalar después de cierto número de mensajes del bot sin resolución" field="max_messages" />
+                {rules.max_messages && (
+                    <div className="ml-4 mb-4 p-4 bg-slate-50 rounded-lg">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Número máximo de mensajes del bot</label>
+                        <input
+                            type="number"
+                            min="1" max="50"
+                            value={rules.max_message_count}
+                            onChange={e => update('max_message_count', parseInt(e.target.value) || 5)}
+                            className="w-20 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        />
+                    </div>
+                )}
+
+                <div className="border-t border-slate-100" />
+                <Toggle label="Cliente frustrado" desc="Escalar cuando se detecta frustración en los mensajes" field="frustrated_customer" />
+                {rules.frustrated_customer && <KeywordEditor label="Palabras clave de frustración" field="frustration_keywords" />}
+            </div>
+
+            {/* Save */}
+            <div className="flex items-center gap-4">
+                <button
+                    onClick={save}
+                    disabled={saving}
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-all"
+                >
+                    {saving ? 'Guardando...' : 'Guardar reglas'}
+                </button>
+                {saved && <span className="text-green-600 text-sm font-medium">✓ Guardado correctamente</span>}
+                {error && <span className="text-red-600 text-sm font-medium">{error}</span>}
+            </div>
+        </div>
+    );
+}
+
 // ── LlamadasTab ────────────────────────────────────────────────────────────────
 function LlamadasTab() {
     const [enabled, setEnabled] = useState(false);
@@ -282,6 +463,7 @@ export default function SettingsPage() {
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
                         { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
                         { key: 'llamadas', label: 'WhatsApp Llamadas', icon: <Phone className="w-4 h-4" /> },
+                        { key: 'escalacion', label: 'Escalación', icon: <AlertCircle className="w-4 h-4" /> },
                     ].map(t => (
                         <button
                             key={t.key}
@@ -310,6 +492,7 @@ export default function SettingsPage() {
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
                 {activeTab === 'llamadas' && <LlamadasTab />}
+                {activeTab === 'escalacion' && <EscalacionTab />}
             </div>
         </div>
     );
