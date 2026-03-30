@@ -664,4 +664,3 @@ router.patch('/:id/close-deal', async (req: Request, res: Response) => {
 });
 
 export default router;
-                                                     
