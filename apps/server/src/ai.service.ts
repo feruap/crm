@@ -210,6 +210,9 @@ export async function getAIResponse(
     // 3. Inject catalog and instruction for Order Tracking into system prompt
     let finalSystemPrompt = systemPrompt;
 
+    // Instrucción de formato para WhatsApp (botones interactivos)
+    finalSystemPrompt += `\n\n=== FORMATO DE RESPUESTA ===\nCuando presentes opciones de producto o alternativas al cliente, SIEMPRE usa formato numerado así:\n1. Nombre del producto - breve descripción y precio\n2. Nombre del producto - breve descripción y precio\nMáximo 3 opciones numeradas. Esto permite que el cliente elija fácilmente con un botón. NO uses viñetas, asteriscos ni negritas para las opciones.`;
+
     // Inject customer name for personalized responses
     if (customerName) {
         finalSystemPrompt += `\n\n=== INFORMACIÓN DEL CLIENTE ===\nEl cliente se llama: ${customerName}. Dirígete a él/ella por su nombre de forma natural y cálida.`;

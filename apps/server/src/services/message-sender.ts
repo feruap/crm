@@ -44,20 +44,46 @@ interface SendAndSaveResult {
 // Detect numbered options in bot text and extract buttons (max 3 for WhatsApp)
 function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
   const lines = text.split('\n');
-  const optionPattern = /^\s*(\d+)\.\s*\*{0,2}(.+?)\*{0,2}[:：]?\s*(.*)/;
+  // Detect multiple formats: "1. Option", "1) Option", "- **Option**", emoji numbers
+  const patterns = [
+    /^\s*(\d+)[.)]\s*\*{0,2}(.+?)\*{0,2}\s*[-–—:]?\s*(.*)/,          // 1. Option or 1) Option
+    /^\s*[-•]\s*\*{0,2}(.+?)\*{0,2}\s*[-–—:]\s*(.*)/,                  // - **Option** - desc
+    /^\s*[①②③❶❷❸]\s*\*{0,2}(.+?)\*{0,2}/,                             // circled numbers
+  ];
   const buttons: Array<{ id: string; title: string }> = [];
   const bodyLines: string[] = [];
-  
+  let optionCount = 0;
+
   for (const line of lines) {
-    const match = line.match(optionPattern);
-    if (match && buttons.length < 3) {
-      const title = match[2].replace(/\*/g, '').trim().substring(0, 20); // WhatsApp max 20 chars
-      buttons.push({ id: `opt_${match[1]}`, title });
-    } else {
+    let matched = false;
+
+    // Try numbered pattern first (most common)
+    const numMatch = line.match(patterns[0]);
+    if (numMatch && buttons.length < 3) {
+      optionCount++;
+      const rawTitle = numMatch[2].replace(/\*/g, '').trim();
+      const title = rawTitle.substring(0, 20); // WhatsApp max 20 chars
+      buttons.push({ id: `opt_${optionCount}`, title });
+      matched = true;
+    }
+
+    // Try bullet pattern: "- **Prueba Dengue IgG** - Descripcion"
+    if (!matched) {
+      const bulletMatch = line.match(patterns[1]);
+      if (bulletMatch && buttons.length < 3) {
+        optionCount++;
+        const rawTitle = bulletMatch[1].replace(/\*/g, '').trim();
+        const title = rawTitle.substring(0, 20);
+        buttons.push({ id: `opt_${optionCount}`, title });
+        matched = true;
+      }
+    }
+
+    if (!matched) {
       bodyLines.push(line);
     }
   }
-  
+
   if (buttons.length >= 2) {
     return { bodyText: bodyLines.join('\n').trim(), buttons };
   }
