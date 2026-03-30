@@ -413,6 +413,14 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS presentaciones JSONB`);
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id)`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[]`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS active_conversation_count INTEGER NOT NULL DEFAULT 0`);
+
+    // Performance indexes
+    const safeIdx = async (sql: string) => { try { await db.query(sql); } catch (_) {} };
+    await safeIdx(`CREATE INDEX IF NOT EXISTS idx_conv_agent_status ON conversations (assigned_agent_id, status) WHERE status IN ('open','pending')`);
+    await safeIdx(`CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages (conversation_id, is_read, direction) WHERE is_read = FALSE AND direction = 'inbound'`);
+    await safeIdx(`CREATE INDEX IF NOT EXISTS idx_msg_conv_dir ON messages (conversation_id, direction, created_at DESC)`);
+    await safeIdx(`CREATE INDEX IF NOT EXISTS idx_sched_msg_pending ON scheduled_messages (scheduled_at) WHERE status = 'pending'`);
 
     // Ensure automations table exists (was missing from Fase 7)
     try {
@@ -462,3 +470,4 @@ httpServer.listen(Number(PORT), '0.0.0.0', async () => {
     console.log(`Server + Socket.io running on port ${PORT} (0.0.0.0)`);
     await init();
 });
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  

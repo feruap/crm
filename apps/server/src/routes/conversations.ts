@@ -14,17 +14,21 @@ router.get('/', async (req: Request, res: Response) => {
                a.name AS agent_name,
                ch.name AS channel_name, ch.provider AS channel_provider,
                c.pipeline_id, c.pipeline_stage_id,
-               (SELECT content FROM messages m WHERE m.conversation_id = c.id
-                ORDER BY m.created_at DESC LIMIT 1) AS last_message,
-               (SELECT created_at FROM messages m WHERE m.conversation_id = c.id
-                ORDER BY m.created_at DESC LIMIT 1) AS last_message_at,
-               (SELECT COUNT(*) FROM messages m
-                WHERE m.conversation_id = c.id AND m.is_read = FALSE
-                AND m.direction = 'inbound') AS unread_count
+               lm.content AS last_message,
+               lm.created_at AS last_message_at,
+               COALESCE(uc.unread_count, 0)::int AS unread_count
         FROM conversations c
         JOIN customers cu ON cu.id = c.customer_id
         LEFT JOIN agents a ON a.id = c.assigned_agent_id
         LEFT JOIN channels ch ON ch.id = c.channel_id
+        LEFT JOIN LATERAL (
+            SELECT content, created_at, handled_by FROM messages
+            WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1
+        ) lm ON true
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS unread_count FROM messages
+            WHERE conversation_id = c.id AND is_read = FALSE AND direction = 'inbound'
+        ) uc ON true
         WHERE 1=1
     `;
     const { archived, starred, label } = req.query;
@@ -70,10 +74,10 @@ router.get('/', async (req: Request, res: Response) => {
         params.push(req.query.pipeline_stage_id);
         query += ` AND c.pipeline_stage_id = $${params.length}`;
     }
-    // Filter by who is handling (bot or human) — derived from last outbound message
+    // Filter by who is handling — uses LATERAL join result
     if (handled_by) {
         params.push(handled_by);
-        query += ` AND (SELECT handled_by FROM messages WHERE conversation_id = c.id AND direction = 'outbound' ORDER BY created_at DESC LIMIT 1) = $${params.length}`;
+        query += ` AND lm.handled_by = $${params.length}`;
     }
 
     query += ` ORDER BY last_message_at DESC NULLS LAST`;
@@ -660,3 +664,4 @@ router.patch('/:id/close-deal', async (req: Request, res: Response) => {
 });
 
 export default router;
+                                                     
