@@ -465,8 +465,7 @@ export async function handleBotResponse(
         await sendOutboundReply(channelId, customerId, botReply);
     } catch (err: any) {
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
-        // FIX 4.5: Replaced appendFileSync (blocks event loop) with async stderr
-        console.error(JSON.stringify({ level: 'error', ts: new Date().toISOString(), msg: 'Bot crash', err: err.message, stack: err.stack?.split('\n').slice(0,3) }));
+        try { require('fs').appendFileSync('/tmp/bot_crash.log', `[${new Date().toISOString()}] Bot Error: ${err.message}\n${err.stack}\n`); } catch (_) { /* ignore log write failures in Docker */ }
 
         // Friendly fallback message for the customer — never expose internal errors
         const friendlyMessage = "¡Hola! Un momento, te atiendo enseguida. 😊";
@@ -1149,4 +1148,29 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// Webchat — Receive UTM data from chat wi
+// Webchat — Receive UTM data from chat widget
+// ──────────────────────────────────────────────────────────────────────────
+router.post('/webchat-utm', async (req: Request, res: Response) => {
+    try {
+        const { customer_id, conversation_id, utm_data } = req.body;
+        if (!customer_id || !utm_data) {
+            res.status(400).json({ error: 'customer_id and utm_data are required' });
+            return;
+        }
+
+        if (conversation_id) {
+            await db.query(
+                `UPDATE conversations SET utm_data = $1 WHERE id = $2`,
+                [JSON.stringify(utm_data), conversation_id]
+            );
+        }
+
+        await recordUTMTouchpoint(customer_id, utm_data);
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Webchat UTM error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+export default router;
