@@ -1,20 +1,14 @@
-import { Queue } from 'bullmq';
-import { connection } from '../queues';
+// AI Response Queue — disabled until worker infrastructure is ready
+// This file exists to prevent import errors but the queue is not active
+// Bot responses are processed inline in webhooks.ts handleBotResponse
 
 export interface AIJobData {
-  conversationId: string;
-  channelId: string;
-  customerId: string;
-  messageText: string;
-  inboundMsgId: string;
+    conversationId: string;
+    channelId: string;
+    customerId: string;
+    messageText: string;
+    inboundMsgId: string;
 }
 
-export const aiResponseQueue = new Queue<AIJobData>('ai-response', {
-  connection: connection as any,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
-    removeOnComplete: 500,
-    removeOnFail: 200,
-  },
-});
+// Placeholder — queue not initialized to avoid Redis dependency issues
+export const aiResponseQueue: any = null;

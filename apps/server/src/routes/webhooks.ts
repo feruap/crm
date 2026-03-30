@@ -11,7 +11,8 @@ import { executeHandoff } from '../services/escalation-engine';
 import { recordTouchpoint, findCampaignMapping, sendCampaignAutoReply, recordUTMTouchpoint } from '../services/campaign-responder';
 import { deliverMessage } from '../services/message-sender';
 import { receiveStatusFromWC } from '../services/woocommerce';
-import { aiResponseQueue } from '../queues/aiResponseQueue';
+// AI queue disabled — processing inline until worker infrastructure is ready
+// import { aiResponseQueue } from '../queues/aiResponseQueue';
 
 // ─────────────────────────────────────────────
 // Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
@@ -418,32 +419,7 @@ export async function handleBotResponse(
             console.error('[BotFlow] Error matching flow:', flowErr);
         }
 
-        // ── 2. Enqueue AI response job (processed asynchronously with retries) ─
-        await aiResponseQueue.add('process', {
-            conversationId,
-            channelId,
-            customerId,
-            messageText,
-            inboundMsgId: inboundMsgId || '',
-        });
-        return;
-
-        // ── Legacy inline path (kept for reference — unreachable after queue) ─
-        // eslint-disable-next-line no-unreachable
-        const settings = await db.query(
-            `SELECT provider, api_key_encrypted, system_prompt, model_name
-             FROM ai_settings WHERE is_default = TRUE LIMIT 1`
-        );
-        if (settings.rows.length === 0) return;
-
-        const { provider: aiProvider, api_key_encrypted, system_prompt: rawPrompt, model_name } = settings.rows[0];
-
-        // Inject channel brand name into system prompt
-        const chBrand = await db.query(`SELECT brand_name, name FROM channels WHERE id = $1`, [channelId]);
-        const brandName = chBrand.rows[0]?.brand_name || chBrand.rows[0]?.name || 'Amunet';
-        const system_prompt = rawPrompt ? rawPrompt.replace(/Amunet/gi, brandName) : rawPrompt;
-
-        // ── 2. Fallback: RAG + AI response (original behavior) ───────────────
+        // ── 2. RAG + AI response (inline processing) ───────────────
         const settings = await db.query(
             `SELECT provider, api_key_encrypted, system_prompt, model_name
              FROM ai_settings WHERE is_default = TRUE LIMIT 1`
@@ -1180,53 +1156,4 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
             }
 
             await db.query(
-                `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (external_order_id) DO UPDATE
-                     SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
-                [
-                    externalOrderId,
-                    customerId,
-                    order.total,
-                    order.currency?.toUpperCase() || 'MXN',
-                    newStatus,
-                    JSON.stringify(order.line_items || []),
-                    order.date_created || new Date().toISOString(),
-                ]
-            );
-        }
-
-        res.sendStatus(200);
-    } catch (err) {
-        console.error('WooCommerce webhook error:', err);
-        res.sendStatus(500);
-    }
-});
-
-// ──────────────────────────────────────────────────────────────────────────
-// Webchat — Receive UTM data from chat widget
-// ──────────────────────────────────────────────────────────────────────────
-router.post('/webchat-utm', async (req: Request, res: Response) => {
-    try {
-        const { customer_id, conversation_id, utm_data } = req.body;
-        if (!customer_id || !utm_data) {
-            res.status(400).json({ error: 'customer_id and utm_data are required' });
-            return;
-        }
-
-        if (conversation_id) {
-            await db.query(
-                `UPDATE conversations SET utm_data = $1 WHERE id = $2`,
-                [JSON.stringify(utm_data), conversation_id]
-            );
-        }
-
-        await recordUTMTouchpoint(customer_id, utm_data);
-        res.json({ ok: true });
-    } catch (err) {
-        console.error('Webchat UTM error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-export default router;
+                
