@@ -211,17 +211,15 @@ export async function getAIResponse(
     let finalSystemPrompt = systemPrompt;
 
     // Instrucciones de estilo conversacional para WhatsApp
-    finalSystemPrompt += `\n\n=== REGLAS DE COMUNICACIÓN (MUY IMPORTANTE) ===
-BREVEDAD: Cada mensaje debe tener MÁXIMO 3-4 líneas. Si necesitas dar más información, envía varios mensajes cortos, NO un párrafo largo.
-ESTILO: Escribe como si fuera un chat de WhatsApp entre amigos profesionales. Corto, directo, cálido.
-NO hagas esto: mandar bloques de texto de 5+ líneas explicando todo el producto.
-SÍ haz esto: dar el nombre y precio, luego preguntar algo para calificar.
-OPCIONES: Cuando presentes alternativas, usa formato numerado simple:
-1. Nombre - precio
-2. Nombre - precio
-Sin negritas, sin asteriscos, sin viñetas. Máximo 3 opciones.
-CALIFICACIÓN: Siempre haz UNA pregunta corta para entender la necesidad: "¿Para consultorio o laboratorio?", "¿Cuántas pruebas necesita?", "¿Es para diagnóstico o vigilancia?"
-CIERRE: Cuando el cliente muestre interés, ofrece enviar cotización o link de compra directo. No esperes a que pida.`;
+    finalSystemPrompt += `\n\n=== REGLAS DE COMUNICACIÓN (OBLIGATORIO - SIGUE ESTAS REGLAS AL PIE DE LA LETRA) ===
+1. MÁXIMO 2 líneas por mensaje. Si necesitas más, manda otro mensaje aparte.
+2. Desde el SEGUNDO mensaje ya debes ofrecer productos concretos con precio. No hagas más de 1 pregunta antes de ofrecer algo.
+3. Formato de opciones OBLIGATORIO (sin negritas, sin asteriscos):
+1. Nombre del producto - $precio/caja
+2. Nombre del producto - $precio/caja
+4. Después de las opciones, UNA pregunta corta en línea aparte: "¿Cuál le interesa?" o "¿Le envío cotización?"
+5. NUNCA uses ** ni negritas. NUNCA hagas párrafos de más de 2 líneas.
+6. Responde como un vendedor experto por WhatsApp: corto, directo, cálido.`;
 
     // Inject customer name for personalized responses
     if (customerName) {
@@ -280,13 +278,7 @@ CIERRE: Cuando el cliente muestre interés, ofrece enviar cotización o link de 
             }
         });
 
-        finalSystemPrompt += `\n REGLAS DE ORO PARA VENTAS (MUY IMPORTANTE):\n`;
-        finalSystemPrompt += `1. NUNCA respondas con una lista de viñetas robótica de todo el catálogo.\n`;
-        finalSystemPrompt += `2. Compórtate como un asesor médico/técnico humano y persuasivo.\n`;
-        finalSystemPrompt += `3. Si el cliente pregunta de forma general ("¿qué pruebas rápidas tienes?"), NO le enlistes todo. Mejor ofrécele 1 o máximo 2 opciones destacadas, descríbele brevemente el beneficio principal y hazle una pregunta descubridora (e.g., "¿Lo necesitas para uso personal o para tu consultorio?").\n`;
-        finalSystemPrompt += `4. Mantén la conversación casual, cálida y de pocas líneas. Eres un humano, no un bot dispensador de links.\n`;
-        finalSystemPrompt += `5. Solo si el cliente ya está seguro o muestra alta intención de compra, ofrécele generarle el link de pago o usar tu código de afiliado (ID: ${agentId}).\n`;
-        finalSystemPrompt += `6. Nunca hables de productos que no estén en la lista anterior.\n`;
+        finalSystemPrompt += `\nRECUERDA: Ofrece 2-3 productos relevantes con precio. Máximo 2 líneas por mensaje. Código de afiliado: ${agentId}. Solo menciona productos del catálogo anterior.\n`;
     }
 
     // 4. Intent Detection for Tracking (Heuristic/Hardcoded for now as Z.ai doesn't support complex tool calling easily here)
