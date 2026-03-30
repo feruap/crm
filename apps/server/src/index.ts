@@ -10,8 +10,8 @@ import { db } from './db';
 import { initSocket } from './socket';
 import { runAlertsCron } from './routes/alerts';
 import { requireAuth } from './middleware/auth';
-// FIX 3.1: Import scheduled messages worker (auto-starts on import)
-import './queues/scheduledMessageQueue';
+// Scheduled messages worker — disabled until Redis/BullMQ fully configured
+// import './queues/scheduledMessageQueue';
 
 import authRouter from './routes/auth';
 import conversationsRouter from './routes/conversations';
@@ -42,7 +42,8 @@ import agentGroupsRouter from './routes/agent-groups';
 import knowledgeRouter from './routes/knowledge';
 import medicalProductsRouter from './routes/medical-products';
 import './workers/bulkSender'; // Start bulk campaign worker
-import './workers/aiResponseWorker'; // Start AI response worker
+// AI response worker — disabled until queue infrastructure is ready
+// import './workers/aiResponseWorker';
 
 dotenv.config();
 
@@ -474,6 +475,4 @@ async function init() {
 // ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 httpServer.listen(Number(PORT), '0.0.0.0', async () => {
-    console.log(`Server + Socket.io running on port ${PORT} (0.0.0.0)`);
-    await init();
-});
+    console.log(`S
