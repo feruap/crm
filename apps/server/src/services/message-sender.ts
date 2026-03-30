@@ -42,6 +42,36 @@ interface SendAndSaveResult {
 }
 
 // Detect numbered options in bot text and extract buttons (max 3 for WhatsApp)
+// Strip common product prefixes to create a short, meaningful button title (max 20 chars)
+function shortenTitle(raw: string): string {
+  let s = raw;
+  // Remove common prefixes (case-insensitive)
+  const prefixes = [
+    /^prueba\s+r[aá]pida\s+de\s+/i,
+    /^prueba\s+de\s+/i,
+    /^prueba\s+/i,
+    /^kit\s+de\s+detecci[oó]n\s+de\s+/i,
+    /^kit\s+de\s+/i,
+    /^test\s+r[aá]pido\s+de\s+/i,
+    /^test\s+de\s+/i,
+    /^panel\s+de\s+/i,
+    /^reactivo\s+para\s+/i,
+  ];
+  for (const p of prefixes) {
+    const shortened = s.replace(p, '');
+    if (shortened !== s && shortened.length >= 3) {
+      s = shortened;
+      break;
+    }
+  }
+  // Truncate to 20 chars at a word boundary if possible
+  if (s.length <= 20) return s.trim();
+  const truncated = s.substring(0, 20);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 10) return truncated.substring(0, lastSpace).trim();
+  return truncated.trim();
+}
+
 export function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
   const lines = text.split('\n');
   const buttons: Array<{ id: string; title: string }> = [];
@@ -49,17 +79,15 @@ export function extractButtons(text: string): { bodyText: string; buttons: Array
   let optionCount = 0;
 
   for (const line of lines) {
-    // Match: "1. Product name - description" or "1. **Product name** - description"
     const numMatch = line.match(/^\s*(\d+)[.)]\s*(.+)/);
     if (numMatch && buttons.length < 3) {
       optionCount++;
-      // Strip markdown bold, get text before dash/colon separator
       let rawTitle = numMatch[2].replace(/\*\*/g, '').replace(/\*/g, '').trim();
-      // If there's a separator (- or :), take only the part before it as title
+      // Take text before separator (- or :) as product name
       const sepIdx = rawTitle.search(/\s[-–—:]\s/);
       if (sepIdx > 0) rawTitle = rawTitle.substring(0, sepIdx);
-      const title = rawTitle.substring(0, 20).trim(); // WhatsApp max 20 chars
-      if (title.length >= 3) { // Minimum 3 chars for a meaningful button
+      const title = shortenTitle(rawTitle);
+      if (title.length >= 3) {
         buttons.push({ id: `opt_${optionCount}`, title });
       } else {
         bodyLines.push(line);
@@ -69,15 +97,18 @@ export function extractButtons(text: string): { bodyText: string; buttons: Array
     }
   }
 
-  // Validate: need 2+ buttons, each >= 3 chars
   if (buttons.length >= 2) {
-    // If titles are duplicates after truncation, use "Opción 1", "Opción 2" etc.
+    // Ensure unique titles
     const uniqueTitles = new Set(buttons.map(b => b.title));
     if (uniqueTitles.size < buttons.length) {
-      console.log(`[Buttons] Duplicate titles detected, using numbered fallback`);
-      buttons.forEach((b, i) => { b.title = `Opción ${i + 1}`; });
+      // Try prepending option number
+      buttons.forEach((b, i) => { b.title = `${i+1}. ${b.title}`.substring(0, 20); });
+      const retryUnique = new Set(buttons.map(b => b.title));
+      if (retryUnique.size < buttons.length) {
+        buttons.forEach((b, i) => { b.title = `Opción ${i + 1}`; });
+      }
     }
-    console.log(`[Buttons] Sending ${buttons.length} buttons:`, buttons.map(b => b.title));
+    console.log(`[Buttons] Sending ${buttons.length}:`, buttons.map(b => b.title));
     return { bodyText: bodyLines.join('\n').trim(), buttons };
   }
   return null;
