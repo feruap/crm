@@ -44,51 +44,40 @@ interface SendAndSaveResult {
 // Detect numbered options in bot text and extract buttons (max 3 for WhatsApp)
 export function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
   const lines = text.split('\n');
-  // Detect multiple formats: "1. Option", "1) Option", "- **Option**", emoji numbers
-  const patterns = [
-    /^\s*(\d+)[.)]\s*\*{0,2}(.+?)\*{0,2}\s*[-–—:]?\s*(.*)/,          // 1. Option or 1) Option
-    /^\s*[-•]\s*\*{0,2}(.+?)\*{0,2}\s*[-–—:]\s*(.*)/,                  // - **Option** - desc
-    /^\s*[①②③❶❷❸]\s*\*{0,2}(.+?)\*{0,2}/,                             // circled numbers
-  ];
   const buttons: Array<{ id: string; title: string }> = [];
   const bodyLines: string[] = [];
   let optionCount = 0;
 
   for (const line of lines) {
-    let matched = false;
-
-    // Try numbered pattern first (most common)
-    const numMatch = line.match(patterns[0]);
+    // Match: "1. Product name - description" or "1. **Product name** - description"
+    const numMatch = line.match(/^\s*(\d+)[.)]\s*(.+)/);
     if (numMatch && buttons.length < 3) {
       optionCount++;
-      const rawTitle = numMatch[2].replace(/\*/g, '').trim();
-      const title = rawTitle.substring(0, 20); // WhatsApp max 20 chars
-      buttons.push({ id: `opt_${optionCount}`, title });
-      matched = true;
-    }
-
-    // Try bullet pattern: "- **Prueba Dengue IgG** - Descripcion"
-    if (!matched) {
-      const bulletMatch = line.match(patterns[1]);
-      if (bulletMatch && buttons.length < 3) {
-        optionCount++;
-        const rawTitle = bulletMatch[1].replace(/\*/g, '').trim();
-        const title = rawTitle.substring(0, 20);
+      // Strip markdown bold, get text before dash/colon separator
+      let rawTitle = numMatch[2].replace(/\*\*/g, '').replace(/\*/g, '').trim();
+      // If there's a separator (- or :), take only the part before it as title
+      const sepIdx = rawTitle.search(/\s[-–—:]\s/);
+      if (sepIdx > 0) rawTitle = rawTitle.substring(0, sepIdx);
+      const title = rawTitle.substring(0, 20).trim(); // WhatsApp max 20 chars
+      if (title.length >= 3) { // Minimum 3 chars for a meaningful button
         buttons.push({ id: `opt_${optionCount}`, title });
-        matched = true;
+      } else {
+        bodyLines.push(line);
       }
-    }
-
-    if (!matched) {
+    } else {
       bodyLines.push(line);
     }
   }
 
+  // Validate: need 2+ buttons, titles must be unique, each >= 3 chars
   if (buttons.length >= 2) {
-    console.log(`[Buttons] Detected ${buttons.length} buttons:`, buttons.map(b => b.title));
-    return { bodyText: bodyLines.join('\n').trim(), buttons };
+    const uniqueTitles = new Set(buttons.map(b => b.title));
+    if (uniqueTitles.size === buttons.length) {
+      console.log(`[Buttons] Sending ${buttons.length} buttons:`, buttons.map(b => b.title));
+      return { bodyText: bodyLines.join('\n').trim(), buttons };
+    }
+    console.log(`[Buttons] Duplicate titles, falling back to text`);
   }
-  console.log(`[Buttons] No buttons detected (found ${buttons.length}). First 200 chars:`, text.substring(0, 200));
   return null;
 }
 
