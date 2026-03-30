@@ -59,19 +59,46 @@ async function sendOutboundReply(
             const url = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
             console.log(`📤 Sending WhatsApp reply to ${recipientId} via phone ${phoneNumberId}`);
 
+            // Detect interactive buttons in the reply
+            const { extractButtons } = require('../services/message-sender');
+            const interactive = typeof extractButtons === 'function' ? extractButtons(replyText) : null;
+
+            let msgBody: Record<string, unknown>;
+            if (interactive && interactive.buttons.length >= 2) {
+                console.log(`[Buttons] Sending interactive buttons:`, interactive.buttons.map((b: any) => b.title));
+                msgBody = {
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: recipientId,
+                    type: 'interactive',
+                    interactive: {
+                        type: 'button',
+                        body: { text: interactive.bodyText.substring(0, 1024) },
+                        action: {
+                            buttons: interactive.buttons.map((b: any) => ({
+                                type: 'reply',
+                                reply: { id: b.id, title: b.title }
+                            }))
+                        }
+                    }
+                };
+            } else {
+                msgBody = {
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: recipientId,
+                    type: 'text',
+                    text: { preview_url: false, body: replyText },
+                };
+            }
+
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`,
                 },
-                body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    recipient_type: 'individual',
-                    to: recipientId,
-                    type: 'text',
-                    text: { preview_url: false, body: replyText },
-                }),
+                body: JSON.stringify(msgBody),
             });
 
             if (!response.ok) {
@@ -1148,29 +1175,5 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// Webchat — Receive UTM data from chat widget
-// ──────────────────────────────────────────────────────────────────────────
-router.post('/webchat-utm', async (req: Request, res: Response) => {
-    try {
-        const { customer_id, conversation_id, utm_data } = req.body;
-        if (!customer_id || !utm_data) {
-            res.status(400).json({ error: 'customer_id and utm_data are required' });
-            return;
-        }
-
-        if (conversation_id) {
-            await db.query(
-                `UPDATE conversations SET utm_data = $1 WHERE id = $2`,
-                [JSON.stringify(utm_data), conversation_id]
-            );
-        }
-
-        await recordUTMTouchpoint(customer_id, utm_data);
-        res.json({ ok: true });
-    } catch (err) {
-        console.error('Webchat UTM error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
+// Webchat — Receive UTM data from chat
 export default router;

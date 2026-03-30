@@ -42,7 +42,7 @@ interface SendAndSaveResult {
 }
 
 // Detect numbered options in bot text and extract buttons (max 3 for WhatsApp)
-function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
+export function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: string; title: string }> } | null {
   const lines = text.split('\n');
   // Detect multiple formats: "1. Option", "1) Option", "- **Option**", emoji numbers
   const patterns = [
