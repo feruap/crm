@@ -196,8 +196,8 @@ export async function getAIResponse(
     // 0b. Fetch customer name for personalized greeting
     let customerName: string | null = null;
     if (customerId) {
-        const nameRes = await db.query(`SELECT name FROM customers WHERE id = $1`, [customerId]);
-        customerName = nameRes.rows[0]?.name || null;
+        const nameRes = await db.query(`SELECT display_name FROM customers WHERE id = $1`, [customerId]);
+        customerName = nameRes.rows[0]?.display_name || null;
     }
 
     // 1. Fetch excluded categories from DB
