@@ -69,14 +69,16 @@ export function extractButtons(text: string): { bodyText: string; buttons: Array
     }
   }
 
-  // Validate: need 2+ buttons, titles must be unique, each >= 3 chars
+  // Validate: need 2+ buttons, each >= 3 chars
   if (buttons.length >= 2) {
+    // If titles are duplicates after truncation, use "Opción 1", "Opción 2" etc.
     const uniqueTitles = new Set(buttons.map(b => b.title));
-    if (uniqueTitles.size === buttons.length) {
-      console.log(`[Buttons] Sending ${buttons.length} buttons:`, buttons.map(b => b.title));
-      return { bodyText: bodyLines.join('\n').trim(), buttons };
+    if (uniqueTitles.size < buttons.length) {
+      console.log(`[Buttons] Duplicate titles detected, using numbered fallback`);
+      buttons.forEach((b, i) => { b.title = `Opción ${i + 1}`; });
     }
-    console.log(`[Buttons] Duplicate titles, falling back to text`);
+    console.log(`[Buttons] Sending ${buttons.length} buttons:`, buttons.map(b => b.title));
+    return { bodyText: bodyLines.join('\n').trim(), buttons };
   }
   return null;
 }
