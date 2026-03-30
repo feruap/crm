@@ -25,7 +25,7 @@ const BOT_CONFIDENCE_THRESHOLD = 0.82;
 // Simple in-memory cache for WooCommerce products
 let wcProductsCache: any[] | null = null;
 let wcProductsCacheTime = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes (reduced WC fetch frequency)
 
 // ─────────────────────────────────────────────
 // Semantic search against knowledge_base
@@ -547,6 +547,11 @@ export async function getCatalogForAI(excludedCategories: string[]): Promise<any
         return filterCatalog(wcProductsCache, excludedCategories);
     } catch (err) {
         console.error('Failed to fetch WC catalog for AI:', err);
+        // Fallback: return stale cache instead of empty — bot keeps working
+        if (wcProductsCache) {
+            console.log('[Catalog] Using stale cache as fallback');
+            return filterCatalog(wcProductsCache, excludedCategories);
+        }
         return [];
     }
 }
