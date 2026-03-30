@@ -2226,7 +2226,7 @@ function IntegracionesTab() {
                     </div>
                 </div>
                 <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600 space-y-1">
-                    <p className="font-medium text-slate-700">Webhook WooCommerce → MyAlice</p>
+                    <p className="font-medium text-slate-700">Webhook WooCommerce → Amunet</p>
                     <p className="text-slate-500">Configura en WC Admin → Ajustes → Avanzado → Webhooks:</p>
                     <div className="flex items-center gap-2 mt-1">
                         <code className="bg-white border px-2 py-1 rounded text-xs flex-1">{base}/api/attributions/woocommerce-sync</code>
@@ -2266,7 +2266,7 @@ function IntegracionesTab() {
                 </div>
                 {skEnabled && (
                     <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600 space-y-1">
-                        <p className="font-medium text-slate-700">Webhook SalesKing → MyAlice</p>
+                        <p className="font-medium text-slate-700">Webhook SalesKing → Amunet</p>
                         <p className="text-slate-500">Configura en SalesKing → Settings → Webhooks:</p>
                         <div className="flex items-center gap-2 mt-1">
                             <code className="bg-white border px-2 py-1 rounded text-xs flex-1">{base}/api/attributions/salesking-sync</code>

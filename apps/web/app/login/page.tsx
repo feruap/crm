@@ -74,7 +74,7 @@ export default function LoginPage() {
                     <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
                         <MessageSquare className="w-6 h-6 text-white" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">MyAlice</h1>
+                    <h1 className="text-2xl font-bold text-white">Amunet</h1>
                     <p className="text-slate-400 text-sm mt-1">CRM Omnicanal con IA</p>
                 </div>
 

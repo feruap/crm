@@ -5,8 +5,8 @@ import Sidebar from '../components/Sidebar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-    title: 'MyAlice Clone',
-    description: 'CRM omnicanal con IA multi-modelo',
+    title: 'Amunet CRM',
+    description: 'CRM Omnicanal con IA para Productos Médicos',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

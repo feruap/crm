@@ -42,7 +42,7 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="mb-10 px-3 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-500/30">A</div>
-                <span className="text-white font-bold text-xl tracking-tight hidden md:block">MyAlice</span>
+                <span className="text-white font-bold text-xl tracking-tight hidden md:block">Amunet</span>
             </div>
 
             <nav className="flex flex-col gap-1.5 flex-1">

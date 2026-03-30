@@ -299,7 +299,42 @@ export default function KanbanPage() {
 
             <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
                 {!currentPipeline ? (
-                    <div className="flex items-center justify-center w-full h-full text-slate-400">Cargando embudo...</div>
+                    <div className="flex flex-col items-center justify-center w-full h-full text-slate-400 gap-4">
+                        {pipelines.length === 0 ? (
+                            <>
+                                <p className="text-lg font-semibold text-slate-500">No hay pipelines configurados</p>
+                                <p className="text-sm">Crea tu primer pipeline para organizar tu embudo de ventas</p>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await apiFetch('/api/pipelines', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    name: 'Ventas',
+                                                    description: 'Pipeline principal de ventas',
+                                                    stages: [
+                                                        { name: 'Nuevo Lead', color: '#3B82F6', order_index: 0 },
+                                                        { name: 'Contactado', color: '#F59E0B', order_index: 1 },
+                                                        { name: 'Cotización', color: '#8B5CF6', order_index: 2 },
+                                                        { name: 'Negociación', color: '#EC4899', order_index: 3 },
+                                                        { name: 'Cerrado Ganado', color: '#10B981', order_index: 4 },
+                                                        { name: 'Cerrado Perdido', color: '#EF4444', order_index: 5 },
+                                                    ]
+                                                }),
+                                            });
+                                            window.location.reload();
+                                        } catch (err) { console.error(err); }
+                                    }}
+                                    className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+                                >
+                                    + Crear Pipeline de Ventas
+                                </button>
+                            </>
+                        ) : (
+                            <p>Cargando embudo...</p>
+                        )}
+                    </div>
                 ) : stages.length === 0 ? (
                     <div className="flex items-center justify-center w-full h-full text-slate-400">Este embudo aún no tiene etapas configuradas.</div>
                 ) : stages.map((stage: any) => {
