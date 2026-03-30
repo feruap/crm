@@ -11,8 +11,6 @@ import { executeHandoff } from '../services/escalation-engine';
 import { recordTouchpoint, findCampaignMapping, sendCampaignAutoReply, recordUTMTouchpoint } from '../services/campaign-responder';
 import { deliverMessage } from '../services/message-sender';
 import { receiveStatusFromWC } from '../services/woocommerce';
-// AI queue disabled — processing inline until worker infrastructure is ready
-// import { aiResponseQueue } from '../queues/aiResponseQueue';
 
 // ─────────────────────────────────────────────
 // Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
@@ -211,93 +209,60 @@ async function resolveOrCreateConversation(
     referralData?: any,
     utmData?: any
 ): Promise<{ conversationId: string; isNew: boolean }> {
-    const client = await db.connect();
+    const existing = await db.query(
+        `SELECT id FROM conversations
+         WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
+         ORDER BY created_at DESC LIMIT 1`,
+        [customerId, channelId]
+    );
+    if (existing.rows.length > 0) return { conversationId: existing.rows[0].id, isNew: false };
+
+    // Create new conversation with referral/UTM data
+    const conv = await db.query(
+        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [customerId, channelId, referralData ? JSON.stringify(referralData) : null, utmData ? JSON.stringify(utmData) : null]
+    );
+    const convId = conv.rows[0].id;
+
+    // AUTO-ASSIGNMENT LOGIC
     try {
-        await client.query('BEGIN');
-
-        // Lock any existing open/pending conversation to prevent concurrent inserts
-        const existing = await client.query(
-            `SELECT id FROM conversations
-             WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
-             ORDER BY created_at DESC LIMIT 1
-             FOR UPDATE SKIP LOCKED`,
-            [customerId, channelId]
-        );
-        if (existing.rows.length > 0) {
-            await client.query('COMMIT');
-            return { conversationId: existing.rows[0].id, isNew: false };
-        }
-
-        // Atomic insert — ON CONFLICT DO NOTHING handles concurrent inserts
-        const conv = await client.query(
-            `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
-             VALUES ($1, $2, $3, $4)
-             ON CONFLICT DO NOTHING
-             RETURNING id`,
-            [customerId, channelId,
-             referralData ? JSON.stringify(referralData) : null,
-             utmData ? JSON.stringify(utmData) : null]
+        const rules = await db.query(
+            `SELECT * FROM assignment_rules 
+             WHERE is_active = TRUE AND (channel_id = $1 OR channel_id IS NULL)
+             ORDER BY channel_id NULLS LAST LIMIT 1`,
+            [channelId]
         );
 
-        if (conv.rows.length === 0) {
-            // Another concurrent transaction inserted first — fetch it
-            const fallback = await client.query(
-                `SELECT id FROM conversations
-                 WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
-                 ORDER BY created_at DESC LIMIT 1`,
-                [customerId, channelId]
-            );
-            await client.query('COMMIT');
-            return { conversationId: fallback.rows[0].id, isNew: false };
-        }
+        if (rules.rows.length > 0) {
+            const rule = rules.rows[0];
+            let agentId = null;
 
-        const convId = conv.rows[0].id;
+            if (rule.strategy === 'round_robin' && rule.agent_ids?.length > 0) {
+                const index = rule.current_index % rule.agent_ids.length;
+                agentId = rule.agent_ids[index];
 
-        // AUTO-ASSIGNMENT LOGIC
-        try {
-            const rules = await client.query(
-                `SELECT * FROM assignment_rules
-                 WHERE is_active = TRUE AND (channel_id = $1 OR channel_id IS NULL)
-                 ORDER BY channel_id NULLS LAST LIMIT 1`,
-                [channelId]
-            );
-
-            if (rules.rows.length > 0) {
-                const rule = rules.rows[0];
-                let agentId = null;
-
-                if (rule.strategy === 'round_robin' && rule.agent_ids?.length > 0) {
-                    const index = rule.current_index % rule.agent_ids.length;
-                    agentId = rule.agent_ids[index];
-
-                    await client.query(
-                        'UPDATE assignment_rules SET current_index = current_index + 1 WHERE id = $1',
-                        [rule.id]
-                    );
-                } else if (rule.strategy === 'random' && rule.agent_ids?.length > 0) {
-                    agentId = rule.agent_ids[Math.floor(Math.random() * rule.agent_ids.length)];
-                }
-
-                if (agentId) {
-                    await client.query(
-                        'UPDATE conversations SET assigned_agent_id = $1 WHERE id = $2',
-                        [agentId, convId]
-                    );
-                    console.log(`[AutoAssign] Conv ${convId} assigned to agent ${agentId} via rule "${rule.name}"`);
-                }
+                // Update current_index for next time
+                await db.query(
+                    'UPDATE assignment_rules SET current_index = current_index + 1 WHERE id = $1',
+                    [rule.id]
+                );
+            } else if (rule.strategy === 'random' && rule.agent_ids?.length > 0) {
+                agentId = rule.agent_ids[Math.floor(Math.random() * rule.agent_ids.length)];
             }
-        } catch (err) {
-            console.error('[AutoAssign] Error:', err);
-        }
 
-        await client.query('COMMIT');
-        return { conversationId: convId, isNew: true };
+            if (agentId) {
+                await db.query(
+                    'UPDATE conversations SET assigned_agent_id = $1 WHERE id = $2',
+                    [agentId, convId]
+                );
+                console.log(`[AutoAssign] Conv ${convId} assigned to agent ${agentId} via rule "${rule.name}"`);
+            }
+        }
     } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-    } finally {
-        client.release();
+        console.error('[AutoAssign] Error:', err);
     }
+
+    return { conversationId: convId, isNew: true };
 }
 
 // ─────────────────────────────────────────────
@@ -374,16 +339,17 @@ export async function handleBotResponse(
     channelId: string,
     customerId: string,
     messageText: string,
-    referral?: Record<string, any>,
-    inboundMsgId?: string
+    referral?: Record<string, any>
 ): Promise<void> {
     try {
         const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
 
-        // ── 1. Check for matching bot_flow (handled inline for low latency) ──
+        // ── 1. Check for matching bot_flow ────────────────────────────────────
         try {
+            // Determine context for flow matching
             const channel = await db.query(`SELECT provider, provider_config->>'brand_name' AS brand_name FROM channels WHERE id = $1`, [channelId]);
             const provider = channel.rows[0]?.provider || 'whatsapp';
+            // channelBrandName moved to outer scope as brandName
 
             const msgCount = await db.query(
                 `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
@@ -391,6 +357,7 @@ export async function handleBotResponse(
             );
             const isFirstMessage = parseInt(msgCount.rows[0].count) <= 1;
 
+            // Check campaign attribution
             const attribution = await db.query(
                 `SELECT campaign_id FROM attributions WHERE conversation_id = $1 LIMIT 1`,
                 [conversationId]
@@ -414,12 +381,14 @@ export async function handleBotResponse(
                     await executeVisualFlow(matchedFlow, conversationId, channelId, customerId, messageText);
                     return;
                 }
+                // For simple flows, we could use the steps field — for now fall through to RAG+AI
             }
         } catch (flowErr) {
             console.error('[BotFlow] Error matching flow:', flowErr);
+            // Fall through to RAG+AI
         }
 
-        // ── 2. RAG + AI response (inline processing) ───────────────
+        // ── 2. Fallback: RAG + AI response (original behavior) ───────────────
         const settings = await db.query(
             `SELECT provider, api_key_encrypted, system_prompt, model_name
              FROM ai_settings WHERE is_default = TRUE LIMIT 1`
@@ -496,7 +465,7 @@ export async function handleBotResponse(
         await sendOutboundReply(channelId, customerId, botReply);
     } catch (err: any) {
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
-        // FIX 4.5: Replaced appendFileSync (blocks event loop, ephemeral in Docker) with async stderr
+        // FIX 4.5: Replaced appendFileSync (blocks event loop) with async stderr
         console.error(JSON.stringify({ level: 'error', ts: new Date().toISOString(), msg: 'Bot crash', err: err.message, stack: err.stack?.split('\n').slice(0,3) }));
 
         // Friendly fallback message for the customer — never expose internal errors
@@ -1156,4 +1125,28 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
             }
 
             await db.query(
-                
+                `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (external_order_id) DO UPDATE
+                     SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
+                [
+                    externalOrderId,
+                    customerId,
+                    order.total,
+                    order.currency?.toUpperCase() || 'MXN',
+                    newStatus,
+                    JSON.stringify(order.line_items || []),
+                    order.date_created || new Date().toISOString(),
+                ]
+            );
+        }
+
+        res.sendStatus(200);
+    } catch (err) {
+        console.error('WooCommerce webhook error:', err);
+        res.sendStatus(500);
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Webchat — Receive UTM data from chat wi
