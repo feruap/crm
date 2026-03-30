@@ -7,6 +7,7 @@ try {
 
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
+    redis.on('error', (err: Error) => console.error('[ScheduledMessages] Redis error (non-fatal):', err.message));
 
     const scheduledMsgQueue = new Queue('scheduled-messages', {
         connection: redis,
@@ -38,19 +39,17 @@ try {
                     [channelId]
                 );
                 if (chRes.rows.length > 0) {
-                    // Insert message and deliver
-                    await db.query(
+                    // Insert message and get its ID for delivery tracking
+                    const msgRes = await db.query(
                         `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, message_type, handled_by)
-                         VALUES ($1, $2, $3, 'outbound', $4, 'text', 'agent')`,
+                         VALUES ($1, $2, $3, 'outbound', $4, 'text', 'agent') RETURNING id`,
                         [conversationId, channelId, customerId, content]
                     );
+                    const messageId = msgRes.rows[0].id;
 
-                    // Use the existing sendOutboundReply pattern
+                    // Deliver via message-sender with correct arguments
                     const { deliverMessage } = require('../services/message-sender');
-                    const ch = chRes.rows[0];
-                    const config = typeof ch.provider_config === 'string'
-                        ? JSON.parse(ch.provider_config) : ch.provider_config;
-                    await deliverMessage(ch.provider, config, customerId, content);
+                    await deliverMessage(messageId, conversationId, customerId, channelId, content);
                 }
 
                 await db.query(

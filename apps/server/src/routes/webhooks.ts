@@ -43,8 +43,8 @@ async function sendOutboundReply(
         const recipientId = eiResult.rows[0].provider_id;
 
         if (provider === 'whatsapp') {
-            // Get access token: first from channel config, then from business_settings, then from env
-            let accessToken = config.access_token;
+            // Get access token: channel config (try both field names for backward compat), then business_settings, then env
+            let accessToken = config.access_token || config.whatsapp_access_token;
             if (!accessToken) {
                 const tokenRow = await db.query(`SELECT value FROM business_settings WHERE key = 'meta_access_token' LIMIT 1`);
                 accessToken = tokenRow.rows[0]?.value || process.env.META_ACCESS_TOKEN;
