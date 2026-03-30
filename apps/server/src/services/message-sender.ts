@@ -85,8 +85,10 @@ function extractButtons(text: string): { bodyText: string; buttons: Array<{ id: 
   }
 
   if (buttons.length >= 2) {
+    console.log(`[Buttons] Detected ${buttons.length} buttons:`, buttons.map(b => b.title));
     return { bodyText: bodyLines.join('\n').trim(), buttons };
   }
+  console.log(`[Buttons] No buttons detected (found ${buttons.length}). First 200 chars:`, text.substring(0, 200));
   return null;
 }
 
