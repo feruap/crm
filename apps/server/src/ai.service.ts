@@ -200,6 +200,23 @@ export async function getAIResponse(
         customerName = nameRes.rows[0]?.display_name || null;
     }
 
+    // 0c. Fetch conversation history for context (last 10 messages)
+    let conversationHistory: Array<{role: string; content: string}> = [];
+    if (conversationId) {
+        try {
+            const histRes = await db.query(
+                \`SELECT direction, content FROM messages
+                 WHERE conversation_id = $1 AND content IS NOT NULL AND content != ''
+                 ORDER BY created_at DESC LIMIT 10\`,
+                [conversationId]
+            );
+            conversationHistory = histRes.rows.reverse().map((m: any) => ({
+                role: m.direction === 'inbound' ? 'user' : 'assistant',
+                content: m.content,
+            }));
+        } catch (_) { /* non-critical */ }
+    }
+
     // 1. Fetch excluded categories from DB
     const settingsRes = await db.query(`SELECT excluded_categories FROM ai_settings WHERE is_default = TRUE LIMIT 1`);
     const excludedCategories = settingsRes.rows[0]?.excluded_categories || ['cortesias'];
@@ -306,7 +323,7 @@ export async function getAIResponse(
     console.log(`🧠 AI Request: provider=${provider}, model=${model}`);
     switch (provider) {
         case 'deepseek':
-            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, model || 'deepseek-chat', 'https://api.deepseek.com/v1/chat/completions');
+            return getOpenAICompatibleResponse(finalSystemPrompt, userMessage, apiKey, model || 'deepseek-chat', 'https://api.deepseek.com/v1/chat/completions', 3, 0.7, 1500, conversationHistory);
         case 'claude':
             return getClaudeResponse(finalSystemPrompt, userMessage, apiKey);
         case 'gemini':
@@ -341,7 +358,8 @@ async function getOpenAICompatibleResponse(
     url: string,
     maxRetries: number = 3,
     temperature: number = 0.7,
-    maxTokens: number = 1500
+    maxTokens: number = 1500,
+    history: Array<{role: string; content: string}> = []
 ): Promise<string> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         if (attempt > 0) {
@@ -362,6 +380,7 @@ async function getOpenAICompatibleResponse(
                     model: model,
                     messages: [
                         { role: 'system', content: systemPrompt },
+                        ...history.slice(-8),
                         { role: 'user', content: userMessage },
                     ],
                     temperature: temperature,
