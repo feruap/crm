@@ -220,13 +220,7 @@ export async function getAIResponse(
 4. Después de las opciones, UNA pregunta corta en línea aparte: "¿Cuál le interesa?" o "¿Le envío cotización?"
 5. NUNCA uses ** ni negritas. NUNCA hagas párrafos de más de 2 líneas.
 6. Responde como un vendedor experto por WhatsApp: corto, directo, cálido.
-7. CROSS-SELL OBLIGATORIO: Cuando el cliente confirme un pedido o pida link de pago, SIEMPRE sugiere UN producto complementario especifico con precio. Ejemplos:
-- Si pide pruebas de Dengue, sugiere "Combo Influenza + Covid + RSV" porque son febriles similares
-- Si pide VIH, sugiere "Sifilis + Hepatitis B" como panel de ETS completo
-- Si pide pruebas cardiacas, sugiere "Dimero D" para triage toracico completo
-- Si pide H. pylori, sugiere "Sangre oculta" como complemento gastrointestinal
-- Si pide embarazo, sugiere "panel prenatal" o "Glucosa"
-No preguntes si quiere algo mas de forma generica. Ofrece EL producto especifico por nombre y precio.`;
+7. CROSS-SELL: Cuando el cliente confirme un pedido, sugiere UN producto complementario del catalogo con nombre y precio. Usa SOLO productos que existan en el catalogo de arriba. Si en la base de conocimiento hay info de cross-sells o productos complementarios, usala. No inventes productos que no esten en el catalogo.`;
 
     // Inject customer name for personalized responses
     if (customerName) {
