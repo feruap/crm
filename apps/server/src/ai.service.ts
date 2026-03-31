@@ -350,22 +350,29 @@ async function getOpenAICompatibleResponse(
             await new Promise(r => setTimeout(r, waitSec * 1000));
         }
         console.log(`🔑 API call (attempt ${attempt + 1}): model=${model}, url=${url.split('/').pop()}, temp=${temperature}`);
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userMessage },
-                ],
-                temperature: temperature,
-                max_tokens: maxTokens,
-            }),
-        });
+        let res;
+        try {
+            res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userMessage },
+                    ],
+                    temperature: temperature,
+                    max_tokens: maxTokens,
+                }),
+            });
+        } catch (fetchErr: any) {
+            console.error(`🔴 Network error (attempt ${attempt + 1}): ${fetchErr.message}`);
+            if (attempt < maxRetries - 1) continue; // retry on network errors
+            throw fetchErr;
+        }
         if (res.ok) {
             const data: any = await res.json();
             console.log(`✅ AI response received (attempt ${attempt + 1})`);
