@@ -364,10 +364,10 @@ async function getOpenAICompatibleResponse(
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         if (attempt > 0) {
             const waitSec = (attempt + 1) * 2; // 4s, 6s
-            console.log(`⏳ Rate limit hit, waiting ${waitSec}s before retry ${attempt + 1}/${maxRetries}...`);
+            console.log("⏳ Rate limit hit, waiting " + waitSec + "s before retry " + (attempt + 1) + "/" + maxRetries + "...");
             await new Promise(r => setTimeout(r, waitSec * 1000));
         }
-        console.log(`🔑 API call (attempt ${attempt + 1}): model=${model}, url=${url.split('/').pop()}, temp=${temperature}`);
+        console.log("🔑 API call (attempt " + (attempt + 1) + "): model=" + model + ", temp=" + temperature);
         let res;
         try {
             res = await fetch(url, {
@@ -387,13 +387,13 @@ async function getOpenAICompatibleResponse(
                 }),
             });
         } catch (fetchErr: any) {
-            console.error(`🔴 Network error (attempt ${attempt + 1}): ${fetchErr.message}`);
+            console.error("🔴 Network error (attempt " + (attempt + 1) + "): " + fetchErr.message);
             if (attempt < maxRetries - 1) continue; // retry on network errors
             throw fetchErr;
         }
         if (res.ok) {
             const data: any = await res.json();
-            console.log(`✅ AI response received (attempt ${attempt + 1})`);
+            console.log("✅ AI response received (attempt " + (attempt + 1) + ")");
             return data.choices[0].message.content;
         }
         let errText = '';
