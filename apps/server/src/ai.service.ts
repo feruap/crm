@@ -378,11 +378,10 @@ async function getOpenAICompatibleResponse(
                 },
                 body: JSON.stringify({
                     model: model,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        ...history.slice(-8),
-                        { role: 'user', content: userMessage },
-                    ],
+                    messages: [{ role: 'system', content: systemPrompt }].concat(
+                        (history || []).slice(-8),
+                        [{ role: 'user', content: userMessage }]
+                    ),
                     temperature: temperature,
                     max_tokens: maxTokens,
                 }),
