@@ -32,7 +32,16 @@ Start-Process -FilePath "C:\Program Files\Git\bin\git.exe" -ArgumentList "-C C:\
 ```
 
 ## Archivos que se corrompen
-Al editar archivos desde la VM de Cowork, se insertan null bytes (\x00). Después de cada edición, limpiar:
+Al editar archivos desde la VM de Cowork, se insertan null bytes (\x00).
+
+**Prevención automática:** El hook `.githooks/pre-commit` limpia null bytes antes de cada commit.
+Activarlo una sola vez en la máquina:
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit  # solo en Linux/Mac
+```
+
+**Limpieza manual (si aún necesario):**
 ```python
 python3 -c "
 with open('ARCHIVO', 'rb') as f: data = f.read()
@@ -43,9 +52,26 @@ if b'\x00' in data:
 
 ## Deploy
 - Coolify dashboard: https://cool.botonmedico.com/
-- Auto-deploy ROTO — requiere deploy manual via botón "Redeploy" en Coolify
 - Proyecto: "CRM Boton Medico" → production → crm-api-server + crm-web
 - DNS Docker fijado a 8.8.8.8 y 8.8.4.4 (Custom Docker Options)
+
+### Auto-deploy (actualmente roto — pasos para arreglar)
+Las GitHub App keys en Coolify son dummy. Para habilitar auto-deploy:
+1. **Opción A — GitHub App (recomendada):** En Coolify > Settings > Git, crear o conectar una GitHub App real con App ID y Private Key válidos. Luego en el repo de GitHub > Settings > Webhooks, verificar que el webhook de Coolify esté activo y apunte a https://cool.botonmedico.com/webhooks/github
+2. **Opción B — Deploy Key (SSH):** En cada servicio de Coolify, generar un Deploy Key SSH y agregarlo al repo en GitHub > Settings > Deploy Keys. Más simple pero se configura por servicio.
+3. Después de configurar, activar "Auto Deploy" en cada servicio de Coolify (crm-api-server y crm-web)
+
+### Arreglar Auto-deploy (Coolify + GitHub)
+El auto-deploy falla porque los credentials de la GitHub App en Coolify son dummy.
+Pasos para arreglarlo:
+1. En GitHub → Settings → Developer settings → GitHub Apps → crear nueva App (o usar la existente)
+2. Generar un Private Key (.pem) y anotar el App ID y Installation ID
+3. En Coolify → Source → GitHub App → ingresar App ID, Private Key real
+4. En el repo GitHub → Settings → Webhooks → verificar que exista el webhook de Coolify con URL `https://cool.botonmedico.com/webhooks/source/github/...` y que tenga el secret correcto
+5. En Coolify, en el proyecto "CRM Boton Medico", activar "Auto Deploy" en cada servicio
+6. Alternativa más simple: usar Deploy Key (SSH) en lugar de GitHub App:
+   - Coolify genera un SSH key por servicio
+   - Agregar como Deploy Key en GitHub repo → Settings → Deploy keys
 
 ## Archivos Clave
 | Archivo | Descripción |
@@ -91,7 +117,7 @@ Mi Perfil, Usuarios, Equipos, Canales & Webhooks, Horarios, Configuración IA, R
 - Equipos: médicos, lab humano, lab alimentos, soporte
 
 ## Bugs Conocidos
-- Auto-deploy Coolify roto (GitHub App keys dummy)
-- Embeddings no funcionan (vectores en cero, text fallback)
-- Null bytes al editar desde VM
-- Scheduled messages worker creado pero imports deshabilitados
+- Auto-deploy Coolify roto (GitHub App keys dummy) — ver sección Deploy para pasos de fix
+- ~~Embeddings no funcionan~~ ARREGLADO: deepseek usa Gemini como fallback via GEMINI_API_KEY; z_ai usa su API real
+- ~~Null bytes al editar desde VM~~ ARREGLADO: pre-commit hook en .githooks/pre-commit (activar con `git config core.hooksPath .githooks`)
+- ~~Scheduled messages worker creado pero imports deshabilitados~~ ARREGLADO: worker importado en index.ts; POST route encola jobs BullMQ con delay

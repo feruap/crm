@@ -87,7 +87,10 @@ export async function generateEmbedding(
         case 'gemini':
             return generateGeminiEmbedding(text, apiKey);
         case 'deepseek':
-            // DeepSeek does not offer embeddings; return zero vector
+            // DeepSeek does not offer embeddings; use Gemini if key is available
+            if (process.env.GEMINI_API_KEY) {
+                return generateGeminiEmbedding(text, process.env.GEMINI_API_KEY);
+            }
             return new Array(1536).fill(0);
         case 'claude':
             // Anthropic does not offer embeddings; use Gemini if key is available
@@ -96,8 +99,8 @@ export async function generateEmbedding(
             }
             return new Array(1536).fill(0);
         case 'z_ai':
-            // Z.ai/Zhipu does not have a working embedding model — skip API call
-            return new Array(1536).fill(0);
+            // Z.ai/Zhipu — use their embedding API
+            return generateZaiEmbedding(text, apiKey);
         default:
             return new Array(1536).fill(0);
     }

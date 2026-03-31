@@ -40,6 +40,7 @@ import agentGroupsRouter from './routes/agent-groups';
 import knowledgeRouter from './routes/knowledge';
 import medicalProductsRouter from './routes/medical-products';
 import './workers/bulkSender'; // Start worker
+import './queues/scheduledMessageQueue'; // Start scheduled messages worker
 
 dotenv.config();
 

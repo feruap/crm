@@ -28,13 +28,14 @@ router.post('/', async (req: Request, res: Response) => {
         return;
     }
 
-    // Get channel_id from conversation
-    const conv = await db.query('SELECT channel_id FROM conversations WHERE id = $1', [conversation_id]);
+    // Get channel_id and customer_id from conversation
+    const conv = await db.query('SELECT channel_id, customer_id FROM conversations WHERE id = $1', [conversation_id]);
     if (conv.rows.length === 0) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
     }
     const channelId = conv.rows[0].channel_id;
+    const customerId = conv.rows[0].customer_id;
 
     const result = await db.query(
         `INSERT INTO scheduled_messages (conversation_id, agent_id, channel_id, content, media_url, scheduled_at)
@@ -43,7 +44,30 @@ router.post('/', async (req: Request, res: Response) => {
         [conversation_id, agentId, channelId, content, media_url, scheduled_at]
     );
 
-    res.status(201).json(result.rows[0]);
+    const scheduled = result.rows[0];
+
+    // Enqueue BullMQ job with delay so worker delivers at scheduled_at
+    try {
+        const { scheduledMsgQueue } = require('../queues/scheduledMessageQueue');
+        if (scheduledMsgQueue) {
+            const delayMs = Math.max(0, new Date(scheduled_at).getTime() - Date.now());
+            await scheduledMsgQueue.add(
+                'send-scheduled-message',
+                {
+                    scheduledMessageId: scheduled.id,
+                    conversationId: conversation_id,
+                    channelId,
+                    customerId,
+                    content,
+                },
+                { delay: delayMs }
+            );
+        }
+    } catch (err: any) {
+        console.warn('[ScheduledMessages] Failed to enqueue job (non-fatal):', err.message);
+    }
+
+    res.status(201).json(scheduled);
 });
 
 // DELETE /api/scheduled-messages/:id

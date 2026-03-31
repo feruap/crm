@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""
+Pre-commit hook: detect and clean null bytes (\x00) from staged files.
+Activate once with: git config core.hooksPath .githooks
+"""
+import subprocess, sys, os
+
+result = subprocess.run(
+    ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
+    capture_output=True, text=True
+)
+files = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
+
+cleaned = []
+for filepath in files:
+    if not os.path.isfile(filepath):
+        continue
+    try:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        if b'\x00' in data:
+            clean = data.replace(b'\x00', b'')
+            with open(filepath, 'wb') as f:
+                f.write(clean)
+            subprocess.run(['git', 'add', filepath], check=True)
+            cleaned.append(filepath)
+    except Exception:
+        pass
+
+if cleaned:
+    print(f"[pre-commit] Cleaned null bytes from: {', '.join(cleaned)}")
+
+sys.exit(0)
