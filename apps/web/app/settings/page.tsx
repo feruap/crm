@@ -78,7 +78,7 @@ const PROVIDER_META = {
         label: 'WhatsApp Business',
         color: 'bg-green-500',
         icon: '💬',
-        fields: ['phone_number_id', 'whatsapp_number', 'access_token', 'webhook_secret', 'brand_name'],
+        fields: ['phone_number_id', 'whatsapp_number', 'access_token', 'webhook_secret'],
         subtypes: null,
         setupLink: 'https://developers.facebook.com/apps/',
         setupInstructions: [
@@ -94,7 +94,7 @@ const PROVIDER_META = {
         label: 'Facebook',
         color: 'bg-blue-600',
         icon: '📘',
-        fields: ['page_id', 'page_username', 'access_token', 'app_secret', 'webhook_secret', 'brand_name'],
+        fields: ['page_id', 'page_username', 'access_token', 'app_secret', 'webhook_secret'],
         subtypes: [
             { value: 'messenger', label: 'Messenger (DMs)' },
             { value: 'feed', label: 'Feed (comentarios en posts/anuncios)' },
@@ -112,7 +112,7 @@ const PROVIDER_META = {
         label: 'Instagram',
         color: 'bg-pink-500',
         icon: '📸',
-        fields: ['ig_account_id', 'ig_username', 'access_token', 'webhook_secret', 'brand_name'],
+        fields: ['ig_account_id', 'ig_username', 'access_token', 'webhook_secret'],
         subtypes: [
             { value: 'chat', label: 'Direct (mensajes directos)' },
             { value: 'comments', label: 'Comentarios en posts/anuncios' },
@@ -130,7 +130,7 @@ const PROVIDER_META = {
         label: 'TikTok for Business',
         color: 'bg-slate-900',
         icon: '🎵',
-        fields: ['tiktok_open_id', 'access_token', 'webhook_secret', 'brand_name'],
+        fields: ['tiktok_open_id', 'access_token', 'webhook_secret'],
         subtypes: null,
         setupLink: 'https://ads.tiktok.com/marketing_api/docs',
         setupInstructions: [
@@ -1404,7 +1404,7 @@ function CanalesTab() {
                                 <div key={field}>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
                                         {FIELD_LABELS[field] ?? field}
-                                        {(field === 'webhook_secret' || field === 'brand_name') && <span className="text-slate-400 font-normal"> (opcional)</span>}
+                                        {field === 'webhook_secret' && <span className="text-slate-400 font-normal"> (opcional)</span>}
                                     </label>
                                     <input
                                         type={field.includes('token') || field.includes('secret') ? 'password' : 'text'}
