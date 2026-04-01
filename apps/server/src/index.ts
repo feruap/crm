@@ -251,7 +251,14 @@ app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
 // instead of reading from env vars. Auth via X-Bridge-Secret header.
 app.get('/api/bridge/config', async (req, res) => {
     const secret = req.headers['x-bridge-secret'];
-    const expected = process.env.BRIDGE_API_SECRET;
+    // Check DB first for bridge_api_secret, then env var
+    let expected = process.env.BRIDGE_API_SECRET;
+    if (!expected) {
+        try {
+            const s = await db.query(`SELECT value FROM settings WHERE key = 'bridge_api_secret' LIMIT 1`);
+            expected = s.rows[0]?.value;
+        } catch { /* ignore */ }
+    }
     if (!expected || secret !== expected) {
         res.status(401).json({ error: 'Unauthorized' });
         return;
