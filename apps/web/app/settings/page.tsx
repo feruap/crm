@@ -440,12 +440,18 @@ function LlamadasTab() {
     const [enabled, setEnabled] = useState(false);
     const [callMessage, setCallMessage] = useState('');
     const [callNumber, setCallNumber] = useState('');
+    const [metaAccessToken, setMetaAccessToken] = useState('');
+    const [metaAppSecret, setMetaAppSecret] = useState('');
+    const [metaPhoneNumberIds, setMetaPhoneNumberIds] = useState('');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
         apiFetch('/api/settings/llamadas').then(r => r.json()).then((d: any) => {
-            if (d) { setEnabled(!!d.enabled); setCallMessage(d.call_message || ''); setCallNumber(d.call_number || ''); }
+            if (d) {
+                setEnabled(!!d.enabled); setCallMessage(d.call_message || ''); setCallNumber(d.call_number || '');
+                setMetaPhoneNumberIds(d.meta_phone_number_ids || '');
+            }
         }).catch(() => {});
     }, []);
 
@@ -455,9 +461,15 @@ function LlamadasTab() {
             await apiFetch('/api/settings/llamadas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled, call_message: callMessage, call_number: callNumber }),
+                body: JSON.stringify({
+                    enabled, call_message: callMessage, call_number: callNumber,
+                    meta_access_token: metaAccessToken || undefined,
+                    meta_app_secret: metaAppSecret || undefined,
+                    meta_phone_number_ids: metaPhoneNumberIds || undefined,
+                }),
             });
             setSaved(true);
+            setMetaAccessToken(''); setMetaAppSecret('');
             setTimeout(() => setSaved(false), 2000);
         } catch { /* ignore */ } finally {
             setSaving(false);
@@ -501,6 +513,46 @@ function LlamadasTab() {
                         placeholder="ej: Hola, te estamos contactando por tu pedido..."
                         className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
                     />
+                </div>
+
+                <button
+                    onClick={save}
+                    disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    {saved ? 'Guardado' : 'Guardar'}
+                </button>
+            </div>
+
+            {/* Meta API Configuration */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4 mt-6">
+                <h4 className="font-semibold text-slate-800">Configuración Meta API (WhatsApp Calling)</h4>
+                <p className="text-xs text-slate-500">Credenciales de Meta para el bridge WebRTC. Deja en blanco para mantener los valores actuales.</p>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Meta Access Token</label>
+                    <input type="password" value={metaAccessToken}
+                        onChange={e => setMetaAccessToken(e.target.value)}
+                        placeholder="••••••••••••••••••••"
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Meta App Secret</label>
+                    <input type="password" value={metaAppSecret}
+                        onChange={e => setMetaAppSecret(e.target.value)}
+                        placeholder="••••••••••••••••••••"
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number IDs (separados por coma)</label>
+                    <input type="text" value={metaPhoneNumberIds}
+                        onChange={e => setMetaPhoneNumberIds(e.target.value)}
+                        placeholder="ej: 956844914189695,1057669834098796"
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <p className="text-xs text-slate-500 mt-1">Los IDs de los números de teléfono registrados en Meta Business. Se obtienen desde Meta for Developers.</p>
                 </div>
 
                 <button
