@@ -143,19 +143,19 @@ async function generateZaiEmbedding(text: string, apiKey: string): Promise<numbe
 
 async function generateGeminiEmbedding(text: string, apiKey: string): Promise<number[]> {
     const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: 'models/text-embedding-004',
+                model: 'models/gemini-embedding-001',
                 content: { parts: [{ text }] },
             }),
         }
     );
     if (!res.ok) throw new Error(`Gemini embedding failed: ${res.status}`);
     const data: any = await res.json();
-    // text-embedding-004 returns 768 dims; pad/truncate to 1536 for pgvector schema
+    // gemini-embedding-001 returns 768 dims; pad/truncate to 1536 for pgvector schema
     const values: number[] = data.embedding.values;
     return values.concat(new Array(Math.max(0, 1536 - values.length)).fill(0)).slice(0, 1536);
 }
