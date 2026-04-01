@@ -246,6 +246,30 @@ app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Bridge Config API (for webrtc-bridge dynamic config) ────────────────────
+// The webrtc-bridge calls this endpoint to get its config from the CRM DB
+// instead of reading from env vars. Auth via X-Bridge-Secret header.
+app.get('/api/bridge/config', async (req, res) => {
+    const secret = req.headers['x-bridge-secret'];
+    const expected = process.env.BRIDGE_API_SECRET;
+    if (!expected || secret !== expected) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+    }
+    try {
+        const keys = ['meta_access_token', 'meta_app_secret', 'meta_phone_number_ids', 'llamadas_enabled'];
+        const r = await db.query(`SELECT key, value FROM settings WHERE key = ANY($1)`, [keys]);
+        const map: Record<string, string> = {};
+        r.rows.forEach((row: any) => { map[row.key] = row.value; });
+        res.json({
+            meta_access_token: map['meta_access_token'] || process.env.META_ACCESS_TOKEN || '',
+            meta_app_secret: map['meta_app_secret'] || process.env.META_APP_SECRET || '',
+            meta_phone_number_ids: map['meta_phone_number_ids'] || process.env.META_PHONE_NUMBER_IDS || process.env.META_PHONE_NUMBER_ID || '',
+            enabled: map['llamadas_enabled'] === 'true',
+        });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Escalation Rules Settings ────────────────────────────────────────────────
 app.get('/api/settings/escalation-rules', requireAuth, async (_req, res) => {
     try {

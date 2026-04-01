@@ -73,6 +73,14 @@ Pasos para arreglarlo:
    - Coolify genera un SSH key por servicio
    - Agregar como Deploy Key en GitHub repo → Settings → Deploy keys
 
+## WebRTC Bridge Integration
+El webrtc-bridge (repo feruap/rtc.git, deploy en /opt/webrtc-bridge) ahora puede obtener su config dinámicamente del CRM via:
+- **Endpoint:** GET https://api-crm.botonmedico.com/api/bridge/config
+- **Auth:** Header `X-Bridge-Secret: <BRIDGE_API_SECRET>`
+- **Response:** `{ meta_access_token, meta_app_secret, meta_phone_number_ids, enabled }`
+- **Pendiente en el bridge:** Modificar el código del bridge para que al iniciar (y cada 5 min) consulte este endpoint y actualice su config. Actualmente lee de env vars.
+- **BRIDGE_API_SECRET:** Configurar el mismo valor en Coolify env vars de crm-api-server y webrtc-bridge.
+
 ## Archivos Clave
 | Archivo | Descripción |
 |---------|-------------|
