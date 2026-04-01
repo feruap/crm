@@ -439,8 +439,15 @@ function EscalacionTab() {
 function LlamadasTab() {
     const [enabled, setEnabled] = useState(false);
     const [callMessage, setCallMessage] = useState('');
+    const [callNumber, setCallNumber] = useState('');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        apiFetch('/api/settings/llamadas').then(r => r.json()).then((d: any) => {
+            if (d) { setEnabled(!!d.enabled); setCallMessage(d.call_message || ''); setCallNumber(d.call_number || ''); }
+        }).catch(() => {});
+    }, []);
 
     const save = async () => {
         setSaving(true);
@@ -448,7 +455,7 @@ function LlamadasTab() {
             await apiFetch('/api/settings/llamadas', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled, call_message: callMessage }),
+                body: JSON.stringify({ enabled, call_message: callMessage, call_number: callNumber }),
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
@@ -462,14 +469,6 @@ function LlamadasTab() {
             <h2 className="text-2xl font-bold text-slate-800 mb-1">WhatsApp Llamadas</h2>
             <p className="text-slate-500 text-sm mb-8">Configura la función de llamadas por WhatsApp Business</p>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                    <p className="text-sm font-semibold text-amber-800">Importante: Solo números de EE.UU.</p>
-                    <p className="text-sm text-amber-700 mt-0.5">Las llamadas por WhatsApp Business actualmente solo están disponibles para números registrados en Estados Unidos.</p>
-                </div>
-            </div>
-
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
@@ -482,6 +481,15 @@ function LlamadasTab() {
                     >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Número de WhatsApp para llamadas</label>
+                    <input type="text" value={callNumber}
+                        onChange={e => setCallNumber(e.target.value)}
+                        placeholder="ej: 2222436390"
+                        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <p className="text-xs text-slate-500 mt-1">Número registrado en WhatsApp Business desde el cual se realizan las llamadas.</p>
                 </div>
 
                 <div>
@@ -1562,6 +1570,7 @@ function HorariosTab() {
 function AITab() {
     const [provider, setProvider] = useState('deepseek');
     const [apiKey, setApiKey] = useState('');
+    const [geminiApiKey, setGeminiApiKey] = useState('');
     const [model, setModel] = useState('');
     const [prompt, setPrompt] = useState('');
     const [temp, setTemp] = useState(0.7);
@@ -1617,6 +1626,7 @@ function AITab() {
                 body: JSON.stringify({
                     provider,
                     apiKey: apiKey || undefined,
+                    geminiApiKey: geminiApiKey || undefined,
                     model,
                     systemPrompt: prompt,
                     temperature: temp,
@@ -1625,6 +1635,7 @@ function AITab() {
             });
             setSaved(true);
             setApiKey(''); // Clear key field after save (key is now stored)
+            setGeminiApiKey('');
             setTimeout(() => setSaved(false), 3000);
         } catch (e) { console.error(e); }
         finally { setSaving(false); }
@@ -1694,6 +1705,21 @@ function AITab() {
                             💡 Z.ai: usa el formato <span className="font-mono bg-violet-50 px-1 rounded">AppId.AppSecret</span> — se genera JWT automáticamente.
                         </p>
                     )}
+                </div>
+
+                {/* Gemini API Key for Embeddings */}
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                        API Key Embeddings (Gemini)
+                        <span className="ml-2 text-xs font-normal text-slate-400">(deja en blanco para mantener la actual)</span>
+                    </label>
+                    <input type="password" value={geminiApiKey}
+                        onChange={e => setGeminiApiKey(e.target.value)}
+                        placeholder="••••••••••••••••••••••••••••••"
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <p className="text-xs text-slate-500 mt-1">
+                        Se usa para generar embeddings de la base de conocimiento. Obtén tu key gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" className="text-blue-600 underline">aistudio.google.com</a>
+                    </p>
                 </div>
 
                 {/* Temperature */}

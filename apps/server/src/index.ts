@@ -166,11 +166,25 @@ app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(
         `SELECT provider, model_name, system_prompt, temperature, is_default, excluded_categories FROM ai_settings ORDER BY is_default DESC`
     );
-    res.json(result.rows);
+    const geminiRow = await db.query(`SELECT value FROM settings WHERE key = 'gemini_api_key'`);
+    const rows = result.rows.map((r: any, i: number) => ({
+        ...r,
+        gemini_api_key_set: i === 0 ? !!geminiRow.rows[0]?.value : false,
+    }));
+    res.json(rows);
 });
 
 app.post('/api/settings/ai', requireAuth, async (req, res) => {
-    const { provider, apiKey, model, systemPrompt, temperature, excludedCategories } = req.body;
+    const { provider, apiKey, geminiApiKey, model, systemPrompt, temperature, excludedCategories } = req.body;
+
+    // Save Gemini API key to settings table if provided
+    if (geminiApiKey) {
+        await db.query(
+            `INSERT INTO settings (key, value, updated_at) VALUES ('gemini_api_key', $1, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+            [geminiApiKey]
+        );
+    }
 
     // If no new API key provided, keep the existing one from the current default config
     let resolvedApiKey = apiKey;
@@ -194,6 +208,40 @@ app.post('/api/settings/ai', requireAuth, async (req, res) => {
     res.json({ ok: true, provider });
 });
 
+// ─── WhatsApp Llamadas Settings ──────────────────────────────────────────────
+app.get('/api/settings/llamadas', requireAuth, async (_req, res) => {
+    try {
+        const keys = ['llamadas_enabled', 'llamadas_call_message', 'llamadas_call_number'];
+        const r = await db.query(`SELECT key, value FROM settings WHERE key = ANY($1)`, [keys]);
+        const map: Record<string, string> = {};
+        r.rows.forEach((row: any) => { map[row.key] = row.value; });
+        res.json({
+            enabled: map['llamadas_enabled'] === 'true',
+            call_message: map['llamadas_call_message'] || '',
+            call_number: map['llamadas_call_number'] || '',
+        });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
+    try {
+        const { enabled, call_message, call_number } = req.body;
+        const pairs: [string, string][] = [
+            ['llamadas_enabled', String(!!enabled)],
+            ['llamadas_call_message', call_message || ''],
+            ['llamadas_call_number', call_number || ''],
+        ];
+        for (const [k, v] of pairs) {
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [k, v]
+            );
+        }
+        res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Escalation Rules Settings ────────────────────────────────────────────────
 app.get('/api/settings/escalation-rules', requireAuth, async (_req, res) => {
     try {
@@ -212,6 +260,37 @@ app.get('/api/settings/escalation-rules', requireAuth, async (_req, res) => {
 app.post('/api/settings/escalation-rules', requireAuth, async (req, res) => {
     try {
         await db.query(`INSERT INTO settings (key, value) VALUES ('escalation_rules', $1) ON CONFLICT (key) DO UPDATE SET value = $1`, [JSON.stringify(req.body)]);
+        res.json({ ok: true });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Llamadas (WhatsApp Calls) Settings ──────────────────────────────────────
+app.get('/api/settings/llamadas', requireAuth, async (_req, res) => {
+    try {
+        const r = await db.query(`SELECT key, value FROM settings WHERE key IN ('llamadas_enabled', 'llamadas_call_message', 'whatsapp_call_number')`);
+        const map: Record<string, string> = {};
+        for (const row of r.rows) map[row.key] = row.value;
+        res.json({
+            enabled: map['llamadas_enabled'] === 'true',
+            call_message: map['llamadas_call_message'] ?? '',
+            call_number: map['whatsapp_call_number'] ?? '2222436390',
+        });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
+    try {
+        const { enabled, call_message, call_number } = req.body;
+        const upsert = async (key: string, value: string) => {
+            await db.query(
+                `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW())
+                 ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+                [key, value]
+            );
+        };
+        await upsert('llamadas_enabled', String(!!enabled));
+        if (call_message !== undefined) await upsert('llamadas_call_message', call_message);
+        if (call_number !== undefined) await upsert('whatsapp_call_number', call_number);
         res.json({ ok: true });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

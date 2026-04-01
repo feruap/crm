@@ -78,6 +78,15 @@ export async function findBestAnswer(
 // ─────────────────────────────────────────────
 // Generate embedding via the configured AI provider
 // ─────────────────────────────────────────────
+// Helper: get Gemini API key from DB first, then env var fallback
+async function getGeminiApiKey(): Promise<string | null> {
+    try {
+        const r = await db.query(`SELECT value FROM settings WHERE key = 'gemini_api_key' LIMIT 1`);
+        if (r.rows[0]?.value) return r.rows[0].value;
+    } catch { /* ignore */ }
+    return process.env.GEMINI_API_KEY || null;
+}
+
 export async function generateEmbedding(
     text: string,
     provider: AIProvider,
@@ -86,18 +95,18 @@ export async function generateEmbedding(
     switch (provider) {
         case 'gemini':
             return generateGeminiEmbedding(text, apiKey);
-        case 'deepseek':
+        case 'deepseek': {
             // DeepSeek does not offer embeddings; use Gemini if key is available
-            if (process.env.GEMINI_API_KEY) {
-                return generateGeminiEmbedding(text, process.env.GEMINI_API_KEY);
-            }
+            const gKey = await getGeminiApiKey();
+            if (gKey) return generateGeminiEmbedding(text, gKey);
             return new Array(1536).fill(0);
-        case 'claude':
+        }
+        case 'claude': {
             // Anthropic does not offer embeddings; use Gemini if key is available
-            if (process.env.GEMINI_API_KEY) {
-                return generateGeminiEmbedding(text, process.env.GEMINI_API_KEY);
-            }
+            const gKey = await getGeminiApiKey();
+            if (gKey) return generateGeminiEmbedding(text, gKey);
             return new Array(1536).fill(0);
+        }
         case 'z_ai':
             // Z.ai/Zhipu — use their embedding API
             return generateZaiEmbedding(text, apiKey);
