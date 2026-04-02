@@ -1363,7 +1363,24 @@ function CanalesTab() {
 
             {/* Connect new channel */}
             <div className="space-y-3">
-                <h4 className="font-semibold text-slate-700 text-sm">Conectar canal</h4>
+                <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-slate-700 text-sm">Conectar canal</h4>
+                    <button
+                        onClick={async () => {
+                            try {
+                                const r = await apiFetch('/api/channels/auto-discover', { method: 'POST' });
+                                const d = await r.json();
+                                if (d.ok) {
+                                    alert(`Auto-descubrimiento completado:\n${d.pages_found} páginas encontradas\n${d.channels_created} canales creados\n\n${d.details?.join('\n') || 'Todos ya estaban conectados'}`);
+                                    window.location.reload();
+                                } else { alert('Error: ' + (d.error || 'Desconocido')); }
+                            } catch (e: any) { alert('Error: ' + e.message); }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 font-medium"
+                    >
+                        <Zap className="w-3.5 h-3.5" /> Auto-descubrir canales
+                    </button>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                     {(Object.keys(PROVIDER_META) as Array<keyof typeof PROVIDER_META>).map(provider => {
                         const meta = PROVIDER_META[provider];

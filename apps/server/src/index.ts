@@ -246,6 +246,48 @@ app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Auto-discover Facebook/Instagram channels from Meta ─────────────────────
+app.post('/api/channels/auto-discover', requireAuth, async (_req, res) => {
+    try {
+        // Get Meta token from settings or env
+        const tokenRow = await db.query(`SELECT value FROM settings WHERE key='meta_access_token'`);
+        const secretRow = await db.query(`SELECT value FROM settings WHERE key='meta_app_secret'`);
+        const TOKEN = tokenRow.rows[0]?.value || process.env.META_ACCESS_TOKEN;
+        const SECRET = secretRow.rows[0]?.value || process.env.META_APP_SECRET || '';
+        if (!TOKEN) { res.status(400).json({ error: 'No Meta Access Token configured. Go to Settings > WhatsApp Llamadas and save your Meta Access Token.' }); return; }
+
+        // Fetch pages from Graph API
+        const fbRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=name,id,access_token,instagram_business_account&limit=50&access_token=${TOKEN}`);
+        const fbData: any = await fbRes.json();
+        if (!fbData.data) { res.status(400).json({ error: 'Graph API error: ' + (fbData.error?.message || JSON.stringify(fbData)) }); return; }
+
+        const existing = await db.query(`SELECT provider_config->>'page_id' as page_id, provider_config->>'ig_account_id' as ig_id FROM channels`);
+        const existingPageIds = new Set(existing.rows.map((r: any) => r.page_id).filter(Boolean));
+        const existingIgIds = new Set(existing.rows.map((r: any) => r.ig_id).filter(Boolean));
+
+        const created: string[] = [];
+        for (const page of fbData.data) {
+            const config = { page_id: page.id, access_token: page.access_token, app_secret: SECRET, brand_name: page.name };
+            // Messenger
+            if (!existingPageIds.has(page.id)) {
+                await db.query(`INSERT INTO channels(name,provider,subtype,provider_config,status) VALUES($1,'facebook','messenger',$2,'active')`,
+                    [page.name + ' (Messenger)', JSON.stringify(config)]);
+                await db.query(`INSERT INTO channels(name,provider,subtype,provider_config,status) VALUES($1,'facebook','feed',$2,'active')`,
+                    [page.name + ' (Feed)', JSON.stringify(config)]);
+                created.push(`FB: ${page.name} (Messenger + Feed)`);
+            }
+            // Instagram
+            if (page.instagram_business_account && !existingIgIds.has(page.instagram_business_account.id)) {
+                const igConfig = { ig_account_id: page.instagram_business_account.id, access_token: page.access_token, brand_name: page.name };
+                await db.query(`INSERT INTO channels(name,provider,subtype,provider_config,status) VALUES($1,'instagram','chat',$2,'active')`,
+                    [page.name + ' (Instagram)', JSON.stringify(igConfig)]);
+                created.push(`IG: ${page.name}`);
+            }
+        }
+        res.json({ ok: true, pages_found: fbData.data.length, channels_created: created.length, details: created });
+    } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Bridge Config API (for webrtc-bridge dynamic config) ────────────────────
 // The webrtc-bridge calls this endpoint to get its config from the CRM DB
 // instead of reading from env vars. Auth via X-Bridge-Secret header.
