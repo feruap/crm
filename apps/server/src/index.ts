@@ -257,15 +257,15 @@ app.post('/api/channels/auto-discover', requireAuth, async (_req, res) => {
         if (!TOKEN) { res.status(400).json({ error: 'No Meta Access Token configured. Go to Settings > WhatsApp Llamadas and save your Meta Access Token.' }); return; }
 
         // Fetch pages from Graph API
-        // Try me/accounts first (user token), fallback to business owned_pages (system user token)
-        let fbRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=name,id,access_token,instagram_business_account&limit=50&access_token=${TOKEN}`);
+        // Try me/accounts first (user token), then business owned_pages (system user token)
+        const fields = 'name,id,access_token,instagram_business_account';
+        let fbRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?fields=${fields}&limit=50&access_token=${TOKEN}`);
         let fbData: any = await fbRes.json();
         if (fbData.error) {
-            // System user token — get business pages instead
-            const bizRes = await fetch(`https://graph.facebook.com/v21.0/me?fields=id&access_token=${TOKEN}`);
-            const bizData: any = await bizRes.json();
-            // Try owned_pages from the business
-            fbRes = await fetch(`https://graph.facebook.com/v21.0/${bizData.id}/accounts?fields=name,id,access_token,instagram_business_account&limit=50&access_token=${TOKEN}`);
+            // System user token — try business owned_pages
+            const bizRow = await db.query(`SELECT value FROM settings WHERE key='meta_business_id'`);
+            const bizId = bizRow.rows[0]?.value || process.env.META_BUSINESS_ID || '127569324913739';
+            fbRes = await fetch(`https://graph.facebook.com/v21.0/${bizId}/owned_pages?fields=${fields}&limit=50&access_token=${TOKEN}`);
             fbData = await fbRes.json();
         }
         if (!fbData.data) { res.status(400).json({ error: 'Graph API error: ' + (fbData.error?.message || JSON.stringify(fbData)) }); return; }
