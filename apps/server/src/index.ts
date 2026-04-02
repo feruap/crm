@@ -211,7 +211,7 @@ app.post('/api/settings/ai', requireAuth, async (req, res) => {
 // ─── WhatsApp Llamadas Settings ──────────────────────────────────────────────
 app.get('/api/settings/llamadas', requireAuth, async (_req, res) => {
     try {
-        const keys = ['llamadas_enabled', 'llamadas_call_message', 'llamadas_call_number', 'meta_phone_number_ids'];
+        const keys = ['llamadas_enabled', 'llamadas_call_message', 'llamadas_call_number', 'meta_phone_number_ids', 'visitor_greeting_template'];
         const r = await db.query(`SELECT key, value FROM settings WHERE key = ANY($1)`, [keys]);
         const map: Record<string, string> = {};
         r.rows.forEach((row: any) => { map[row.key] = row.value; });
@@ -220,18 +220,20 @@ app.get('/api/settings/llamadas', requireAuth, async (_req, res) => {
             call_message: map['llamadas_call_message'] || '',
             call_number: map['llamadas_call_number'] || '',
             meta_phone_number_ids: map['meta_phone_number_ids'] || '',
+            visitor_greeting_template: map['visitor_greeting_template'] || '',
         });
     } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/settings/llamadas', requireAuth, async (req, res) => {
     try {
-        const { enabled, call_message, call_number, meta_access_token, meta_app_secret, meta_phone_number_ids } = req.body;
+        const { enabled, call_message, call_number, visitor_greeting_template, meta_access_token, meta_app_secret, meta_phone_number_ids } = req.body;
         const pairs: [string, string][] = [
             ['llamadas_enabled', String(!!enabled)],
             ['llamadas_call_message', call_message || ''],
             ['llamadas_call_number', call_number || ''],
         ];
+        if (visitor_greeting_template !== undefined) pairs.push(['visitor_greeting_template', visitor_greeting_template]);
         if (meta_access_token) pairs.push(['meta_access_token', meta_access_token]);
         if (meta_app_secret) pairs.push(['meta_app_secret', meta_app_secret]);
         if (meta_phone_number_ids) pairs.push(['meta_phone_number_ids', meta_phone_number_ids]);

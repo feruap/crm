@@ -430,6 +430,29 @@ export async function handleBotResponse(
         const customPrompt = chBrand.rows[0]?.custom_prompt || '';
         const system_prompt = rawPrompt ? rawPrompt.replace(/Amunet/gi, brandName) : rawPrompt;
 
+        // Visitor tracking: fetch browsing context from WordPress (first message only)
+        let visitorContext = '';
+        try {
+            const msgCount = await db.query('SELECT COUNT(*) as c FROM messages WHERE conversation_id=$1', [conversationId]);
+            if (parseInt(msgCount.rows[0]?.c) <= 1) {
+                const phone = await db.query('SELECT display_name FROM customers WHERE id=$1', [customerId]);
+                const customerPhone = phone.rows[0]?.display_name || '';
+                if (customerPhone && /^\d{10,15}$/.test(customerPhone)) {
+                    const wcUrl = process.env.WC_URL || 'https://tst.amunet.com.mx';
+                    const vRes = await fetch(`${wcUrl}/wp-json/amunet-tracker/v1/visitor/${customerPhone}`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
+                    if (vRes?.ok) {
+                        const vData: any = await vRes.json();
+                        if (vData.found && vData.products_visited) {
+                            const tpl = await db.query("SELECT value FROM settings WHERE key='visitor_greeting_template'");
+                            const template = tpl.rows[0]?.value || 'El cliente visitó estos productos en la web: {productos_visitados}. Salúdalo mencionando su interés en esos productos y ofrece ayuda personalizada.';
+                            visitorContext = template.replace('{productos_visitados}', vData.products_visited);
+                            if (vData.utm_source) visitorContext += ` Llegó desde: ${vData.utm_source}.`;
+                        }
+                    }
+                }
+            }
+        } catch { /* non-fatal */ }
+
         const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
         const knowledgeHit = await findBestAnswer(messageText, embedding);
 
@@ -453,6 +476,9 @@ export async function handleBotResponse(
             }
             if (customPrompt) {
                 finalSystemPrompt += '\n\nInstrucciones adicionales para este canal:\n' + customPrompt;
+            }
+            if (visitorContext) {
+                finalSystemPrompt += '\n\nContexto de navegación del cliente:\n' + visitorContext;
             }
             botReply = await getAIResponse(
                 aiProvider as any,

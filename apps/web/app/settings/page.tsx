@@ -443,6 +443,7 @@ function LlamadasTab() {
     const [metaAccessToken, setMetaAccessToken] = useState('');
     const [metaAppSecret, setMetaAppSecret] = useState('');
     const [metaPhoneNumberIds, setMetaPhoneNumberIds] = useState('');
+    const [visitorTemplate, setVisitorTemplate] = useState('');
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
 
@@ -451,6 +452,7 @@ function LlamadasTab() {
             if (d) {
                 setEnabled(!!d.enabled); setCallMessage(d.call_message || ''); setCallNumber(d.call_number || '');
                 setMetaPhoneNumberIds(d.meta_phone_number_ids || '');
+                setVisitorTemplate(d.visitor_greeting_template || '');
             }
         }).catch(() => {});
     }, []);
@@ -463,6 +465,7 @@ function LlamadasTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     enabled, call_message: callMessage, call_number: callNumber,
+                    visitor_greeting_template: visitorTemplate,
                     meta_access_token: metaAccessToken || undefined,
                     meta_app_secret: metaAppSecret || undefined,
                     meta_phone_number_ids: metaPhoneNumberIds || undefined,
@@ -523,6 +526,16 @@ function LlamadasTab() {
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                     {saved ? 'Guardado' : 'Guardar'}
                 </button>
+            </div>
+
+            {/* Visitor Greeting Template */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4 mt-6">
+                <h4 className="font-semibold text-slate-800">Saludo con contexto de navegación web</h4>
+                <p className="text-xs text-slate-500">Cuando un cliente visita tu sitio web y luego contacta por WhatsApp, el bot usa esta plantilla. Usa <code className="bg-slate-100 px-1 rounded">&#123;productos_visitados&#125;</code> como placeholder. Requiere el plugin Amunet Visitor Tracker en WordPress.</p>
+                <textarea value={visitorTemplate} onChange={e => setVisitorTemplate(e.target.value)}
+                    rows={2}
+                    placeholder="ej: El cliente visitó: {productos_visitados}. Salúdalo mencionando su interés."
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
             </div>
 
             {/* Meta API Configuration */}
