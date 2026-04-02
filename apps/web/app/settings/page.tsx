@@ -7,7 +7,7 @@ const {
     Check, ChevronDown, ChevronUp, Shield, Zap, Phone,
     Facebook, Instagram, Globe, AlertCircle, Save,
     UserPlus, Lock, ShoppingBag, BarChart2, Link, RefreshCw,
-    Eye, EyeOff, ChevronRight, ArrowRightLeft,
+    Eye, EyeOff, ChevronRight, ArrowRightLeft, Search,
 } = Lucide as any;
 
 import AssignmentRulesPage from './assignment/page';
@@ -1183,6 +1183,8 @@ function CanalesTab() {
     const [editChannel, setEditChannel] = useState<Channel | null>(null);
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
+    const [autoDiscovering, setAutoDiscovering] = useState(false);
+    const [autoDiscoverMsg, setAutoDiscoverMsg] = useState<string | null>(null);
 
     // Form
     const [formName, setFormName] = useState('');
@@ -1203,6 +1205,25 @@ function CanalesTab() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    const autoDiscover = async () => {
+        setAutoDiscovering(true);
+        setAutoDiscoverMsg(null);
+        try {
+            const r = await apiFetch('/api/channels/auto-discover', { method: 'POST' });
+            const data = await r.json();
+            if (!r.ok) {
+                setAutoDiscoverMsg(`Error: ${data.error}`);
+            } else {
+                setAutoDiscoverMsg(data.message);
+                await load();
+            }
+        } catch (e: any) {
+            setAutoDiscoverMsg(`Error: ${e.message}`);
+        } finally {
+            setAutoDiscovering(false);
+        }
+    };
 
     const openNew = (provider: 'whatsapp' | 'facebook' | 'instagram' | 'tiktok') => {
         setEditChannel(null);
@@ -1366,21 +1387,19 @@ function CanalesTab() {
                 <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-slate-700 text-sm">Conectar canal</h4>
                     <button
-                        onClick={async () => {
-                            try {
-                                const r = await apiFetch('/api/channels/auto-discover', { method: 'POST' });
-                                const d = await r.json();
-                                if (d.ok) {
-                                    alert(`Auto-descubrimiento completado:\n${d.pages_found} páginas encontradas\n${d.channels_created} canales creados\n\n${d.details?.join('\n') || 'Todos ya estaban conectados'}`);
-                                    window.location.reload();
-                                } else { alert('Error: ' + (d.error || 'Desconocido')); }
-                            } catch (e: any) { alert('Error: ' + e.message); }
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 font-medium"
-                    >
-                        <Zap className="w-3.5 h-3.5" /> Auto-descubrir canales
+                        onClick={autoDiscover}
+                        disabled={autoDiscovering}
+                        className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors">
+                        {autoDiscovering
+                            ? <><Loader2 className="w-3 h-3 animate-spin" /> Descubriendo...</>
+                            : <><Search className="w-3 h-3" /> Auto-descubrir canales</>}
                     </button>
                 </div>
+                {autoDiscoverMsg && (
+                    <div className={`text-xs rounded-lg px-4 py-3 ${autoDiscoverMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+                        {autoDiscoverMsg}
+                    </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                     {(Object.keys(PROVIDER_META) as Array<keyof typeof PROVIDER_META>).map(provider => {
                         const meta = PROVIDER_META[provider];

@@ -229,4 +229,104 @@ router.patch('/config', async (req: Request, res: Response) => {
     }
 });
 
+// POST /api/channels/auto-discover — discover FB pages + IG accounts and create channels
+router.post('/auto-discover', async (_req: Request, res: Response) => {
+    try {
+        // Read token from business_settings, fallback to env
+        const settingsRes = await db.query(
+            `SELECT key, value FROM business_settings WHERE key IN ('meta_access_token', 'meta_app_secret')`
+        );
+        const settingsMap: Record<string, string> = {};
+        for (const row of settingsRes.rows) settingsMap[row.key] = row.value;
+
+        const accessToken = settingsMap['meta_access_token'] || process.env.META_ACCESS_TOKEN || '';
+        if (!accessToken) {
+            res.status(400).json({ error: 'No meta_access_token configurado. Configúralo en Settings > Canales & Webhooks.' });
+            return;
+        }
+
+        // Fetch pages from Graph API
+        const graphUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=name,id,access_token,instagram_business_account&limit=50&access_token=${encodeURIComponent(accessToken)}`;
+        const graphRes = await fetch(graphUrl);
+        const graphData: any = await graphRes.json();
+
+        if (graphData.error) {
+            res.status(400).json({ error: `Graph API error: ${graphData.error.message}` });
+            return;
+        }
+
+        const pages: any[] = graphData.data || [];
+        const created: string[] = [];
+        const skipped: string[] = [];
+
+        for (const page of pages) {
+            const pageId = page.id;
+            const pageName = page.name;
+            const pageToken = page.access_token || accessToken;
+
+            // Check existing channels with this page_id
+            const existingRes = await db.query(
+                `SELECT id, subtype FROM channels WHERE provider_config->>'page_id' = $1`,
+                [pageId]
+            );
+            const existingSubtypes = existingRes.rows.map((r: any) => r.subtype);
+
+            // Create Facebook Messenger channel if not exists
+            if (!existingSubtypes.includes('messenger')) {
+                await db.query(
+                    `INSERT INTO channels (name, provider, subtype, provider_config, sync_comments)
+                     VALUES ($1, 'facebook', 'messenger', $2, false)`,
+                    [`${pageName} – Messenger`, JSON.stringify({ page_id: pageId, access_token: pageToken })]
+                );
+                created.push(`${pageName} (Facebook Messenger)`);
+            } else {
+                skipped.push(`${pageName} (Facebook Messenger)`);
+            }
+
+            // Create Facebook Feed channel if not exists
+            if (!existingSubtypes.includes('feed')) {
+                await db.query(
+                    `INSERT INTO channels (name, provider, subtype, provider_config, sync_comments)
+                     VALUES ($1, 'facebook', 'feed', $2, true)`,
+                    [`${pageName} – Feed`, JSON.stringify({ page_id: pageId, access_token: pageToken })]
+                );
+                created.push(`${pageName} (Facebook Feed)`);
+            } else {
+                skipped.push(`${pageName} (Facebook Feed)`);
+            }
+
+            // Create Instagram channel if page has linked IG account
+            if (page.instagram_business_account) {
+                const igId = page.instagram_business_account.id;
+                const existingIg = await db.query(
+                    `SELECT id FROM channels WHERE provider = 'instagram' AND provider_config->>'ig_account_id' = $1`,
+                    [igId]
+                );
+                if (existingIg.rows.length === 0) {
+                    await db.query(
+                        `INSERT INTO channels (name, provider, subtype, provider_config, sync_comments)
+                         VALUES ($1, 'instagram', null, $2, false)`,
+                        [`${pageName} – Instagram`, JSON.stringify({ ig_account_id: igId, page_id: pageId, access_token: pageToken })]
+                    );
+                    created.push(`${pageName} (Instagram)`);
+                } else {
+                    skipped.push(`${pageName} (Instagram)`);
+                }
+            }
+        }
+
+        res.json({
+            ok: true,
+            pages_found: pages.length,
+            created,
+            skipped,
+            message: created.length > 0
+                ? `Se crearon ${created.length} canal(es): ${created.join(', ')}`
+                : `No se crearon canales nuevos. ${skipped.length} ya existían.`,
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
