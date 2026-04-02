@@ -12,6 +12,7 @@ router.get('/', async (_req: Request, res: Response) => {
                provider_config->>'ig_account_id'     AS ig_account_id,
                provider_config->>'tiktok_open_id'    AS tiktok_open_id,
                provider_config->>'brand_name'        AS brand_name,
+               provider_config->>'custom_prompt'     AS custom_prompt,
                CASE WHEN provider_config->>'access_token' IS NOT NULL THEN TRUE ELSE FALSE END AS has_token,
                CASE WHEN webhook_secret IS NOT NULL THEN TRUE ELSE FALSE END AS has_webhook_secret
         FROM channels

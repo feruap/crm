@@ -425,8 +425,9 @@ export async function handleBotResponse(
         const { provider: aiProvider, api_key_encrypted, system_prompt: rawPrompt, model_name } = settings.rows[0];
 
         // Inject channel brand name into system prompt
-        const chBrand = await db.query(`SELECT brand_name, name FROM channels WHERE id = $1`, [channelId]);
+        const chBrand = await db.query(`SELECT brand_name, name, provider_config->>'custom_prompt' as custom_prompt FROM channels WHERE id = $1`, [channelId]);
         const brandName = chBrand.rows[0]?.brand_name || chBrand.rows[0]?.name || 'Amunet';
+        const customPrompt = chBrand.rows[0]?.custom_prompt || '';
         const system_prompt = rawPrompt ? rawPrompt.replace(/Amunet/gi, brandName) : rawPrompt;
 
         const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
@@ -449,6 +450,9 @@ export async function handleBotResponse(
             let finalSystemPrompt = system_prompt || '';
             if (brandName && brandName !== 'Amunet') {
                 finalSystemPrompt = `Eres el asistente de ${brandName}. ` + finalSystemPrompt;
+            }
+            if (customPrompt) {
+                finalSystemPrompt += '\n\nInstrucciones adicionales para este canal:\n' + customPrompt;
             }
             botReply = await getAIResponse(
                 aiProvider as any,

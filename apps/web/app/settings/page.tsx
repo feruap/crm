@@ -1241,6 +1241,7 @@ function CanalesTab() {
             ig_account_id: ch.ig_account_id ?? '',
             tiktok_open_id: ch.tiktok_open_id ?? '',
             brand_name: ch.brand_name ?? '',
+            custom_prompt: ch.custom_prompt ?? '',
         });
         setShowModal(ch.provider);
     };
@@ -1451,6 +1452,14 @@ function CanalesTab() {
                                     placeholder="ej: Pruebas de Antidoping, Laboratorio Portable"
                                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
                                 <p className="text-xs text-slate-500 mt-1">El bot usará este nombre en vez de &quot;Amunet&quot; cuando responda por este canal.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Instrucciones adicionales del bot <span className="text-slate-400 font-normal">(opcional)</span></label>
+                                <textarea value={formFields.custom_prompt || ''} onChange={e => setFormFields(prev => ({...prev, custom_prompt: e.target.value}))}
+                                    rows={3}
+                                    placeholder="ej: Solo ofrece pruebas de antidoping. No menciones otros productos. Siempre menciona envío gratis a todo México."
+                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
+                                <p className="text-xs text-slate-500 mt-1">Instrucciones específicas para este canal que se agregan al system prompt del bot.</p>
                             </div>
                             {/* Subtype selector para Facebook e Instagram */}
                             {PROVIDER_META[showModal].subtypes && (
