@@ -3,6 +3,32 @@ import { db } from '../db';
 
 const router = Router();
 
+// ── Helper: subscribe a Facebook/Instagram page to webhook events ──────────────
+async function subscribePageToWebhook(
+    pageId: string,
+    pageAccessToken: string,
+    provider: 'facebook' | 'instagram' = 'facebook'
+): Promise<{ ok: boolean; error?: string }> {
+    // Facebook: subscribe to messages + feed (DMs + post comments)
+    // Instagram: subscribe to messages + comments + mentions
+    const fields = provider === 'instagram'
+        ? 'messages,comments,mentions'
+        : 'messages,feed';
+
+    try {
+        const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/subscribed_apps`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ access_token: pageAccessToken, subscribed_fields: fields }).toString(),
+        });
+        const data: any = await res.json();
+        if (data.error) return { ok: false, error: data.error.message };
+        return { ok: !!data.success };
+    } catch (err: any) {
+        return { ok: false, error: err.message };
+    }
+}
+
 // GET /api/channels  — list all configured channels
 router.get('/', async (_req: Request, res: Response) => {
     const result = await db.query(`
@@ -42,7 +68,25 @@ router.post('/', async (req: Request, res: Response) => {
          RETURNING id, name, provider, subtype, is_active, sync_comments, created_at`,
         [name, provider, subtype ?? null, JSON.stringify(provider_config ?? {}), webhook_secret ?? null, sync_comments ?? true]
     );
-    res.status(201).json(result.rows[0]);
+
+    const channel = result.rows[0];
+
+    // Auto-subscribe to Meta webhook when creating a Facebook or Instagram channel
+    if ((provider === 'facebook' || provider === 'instagram') && provider_config?.access_token) {
+        const pageId = provider_config.page_id || provider_config.ig_account_id;
+        if (pageId) {
+            const subResult = await subscribePageToWebhook(pageId, provider_config.access_token, provider);
+            if (!subResult.ok) {
+                console.warn(`[channels] Auto-subscribe webhook failed for ${pageId}: ${subResult.error}`);
+            } else {
+                console.log(`[channels] Auto-subscribed webhook for ${provider} page ${pageId} (messages+feed)`);
+            }
+            channel.webhook_subscribed = subResult.ok;
+            channel.webhook_subscribe_error = subResult.error ?? null;
+        }
+    }
+
+    res.status(201).json(channel);
 });
 
 // PATCH /api/channels/:id  — update config / credentials
@@ -67,10 +111,32 @@ router.patch('/:id', async (req: Request, res: Response) => {
     params.push(req.params.id);
     const result = await db.query(
         `UPDATE channels SET ${sets.join(', ')} WHERE id = $${params.length}
-         RETURNING id, name, provider, subtype, is_active, sync_comments, created_at`,
+         RETURNING id, name, provider, subtype, is_active, sync_comments, created_at,
+                   provider_config->>'page_id'       AS page_id,
+                   provider_config->>'ig_account_id' AS ig_account_id,
+                   provider_config->>'access_token'  AS access_token`,
         params
     );
-    res.json(result.rows[0]);
+
+    const channel = result.rows[0];
+
+    // Re-subscribe to webhook if provider_config (credentials) changed
+    if (provider_config !== undefined && channel && (channel.provider === 'facebook' || channel.provider === 'instagram')) {
+        const pageId = channel.page_id || channel.ig_account_id;
+        const token = provider_config.access_token || channel.access_token;
+        if (pageId && token) {
+            const subResult = await subscribePageToWebhook(pageId, token, channel.provider as 'facebook' | 'instagram');
+            if (!subResult.ok) {
+                console.warn(`[channels] Re-subscribe webhook failed for ${pageId}: ${subResult.error}`);
+            } else {
+                console.log(`[channels] Re-subscribed webhook for ${channel.provider} page ${pageId}`);
+            }
+        }
+    }
+
+    // Remove internal fields before responding
+    const { page_id, ig_account_id, access_token, ...clean } = channel || {};
+    res.json(clean);
 });
 
 // DELETE /api/channels/:id  — disconnect channel
@@ -280,6 +346,10 @@ router.post('/auto-discover', async (_req: Request, res: Response) => {
                     [`${pageName} – Messenger`, JSON.stringify({ page_id: pageId, access_token: pageToken })]
                 );
                 created.push(`${pageName} (Facebook Messenger)`);
+                // Auto-subscribe this page to webhook
+                const subFb = await subscribePageToWebhook(pageId, pageToken, 'facebook');
+                if (!subFb.ok) console.warn(`[auto-discover] Webhook subscribe failed for ${pageName} (${pageId}): ${subFb.error}`);
+                else console.log(`[auto-discover] Webhook subscribed for ${pageName} (${pageId})`);
             } else {
                 skipped.push(`${pageName} (Facebook Messenger)`);
             }
@@ -292,6 +362,7 @@ router.post('/auto-discover', async (_req: Request, res: Response) => {
                     [`${pageName} – Feed`, JSON.stringify({ page_id: pageId, access_token: pageToken })]
                 );
                 created.push(`${pageName} (Facebook Feed)`);
+                // No need to subscribe again — already done above for the same page
             } else {
                 skipped.push(`${pageName} (Facebook Feed)`);
             }
@@ -310,6 +381,10 @@ router.post('/auto-discover', async (_req: Request, res: Response) => {
                         [`${pageName} – Instagram`, JSON.stringify({ ig_account_id: igId, page_id: pageId, access_token: pageToken })]
                     );
                     created.push(`${pageName} (Instagram)`);
+                    // Auto-subscribe Instagram page to webhook
+                    const subIg = await subscribePageToWebhook(pageId, pageToken, 'instagram');
+                    if (!subIg.ok) console.warn(`[auto-discover] IG webhook subscribe failed for ${pageName}: ${subIg.error}`);
+                    else console.log(`[auto-discover] IG webhook subscribed for ${pageName} (${igId})`);
                 } else {
                     skipped.push(`${pageName} (Instagram)`);
                 }
