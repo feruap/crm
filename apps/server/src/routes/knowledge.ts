@@ -8,12 +8,14 @@ const router = Router();
 // GET /api/knowledge
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const { search } = req.query;
-        let query = `SELECT id, question, answer, confidence_score, use_count, metadata, created_at FROM knowledge_base`;
-        const params: any[] = [];
+        const { search, status } = req.query;
+        // Default to only approved entries (hide pending/rejected from the main list)
+        const statusFilter = (status as string) || 'approved';
+        const params: any[] = [statusFilter];
+        let query = `SELECT id, question, answer, confidence_score, use_count, metadata, status, created_at FROM knowledge_base WHERE status = $1`;
 
         if (search) {
-            query += ` WHERE question ILIKE $1 OR answer ILIKE $1`;
+            query += ` AND (question ILIKE $2 OR answer ILIKE $2)`;
             params.push(`%${search}%`);
         }
 
@@ -65,15 +67,17 @@ router.get('/stats', async (_req: Request, res: Response) => {
             chunksCount,
             gapsCount,
             topUsed,
-            recentSync
+            recentSync,
+            pendingCount
         ] = await Promise.all([
-            db.query(`SELECT COUNT(*)::int as total FROM knowledge_base`),
-            db.query(`SELECT COALESCE(metadata->>'source', 'manual') as source, COUNT(*)::int as count FROM knowledge_base GROUP BY source ORDER BY count DESC`),
-            db.query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN embedding IS NOT NULL AND embedding != '[${new Array(1536).fill(0).join(',')}]'::vector THEN 1 END)::int as with_embedding FROM knowledge_base`),
+            db.query(`SELECT COUNT(*)::int as total FROM knowledge_base WHERE status = 'approved'`),
+            db.query(`SELECT COALESCE(metadata->>'source', 'manual') as source, COUNT(*)::int as count FROM knowledge_base WHERE status = 'approved' GROUP BY source ORDER BY count DESC`),
+            db.query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN embedding IS NOT NULL AND embedding != '[${new Array(1536).fill(0).join(',')}]'::vector THEN 1 END)::int as with_embedding FROM knowledge_base WHERE status = 'approved'`),
             db.query(`SELECT COUNT(*)::int as total FROM medical_knowledge_chunks`).catch(() => ({ rows: [{ total: 0 }] })),
             db.query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN status = 'pending' THEN 1 END)::int as pending FROM knowledge_gaps`).catch(() => ({ rows: [{ total: 0, pending: 0 }] })),
-            db.query(`SELECT question, use_count, confidence_score FROM knowledge_base WHERE use_count > 0 ORDER BY use_count DESC LIMIT 10`),
-            db.query(`SELECT MAX(created_at) as last_sync FROM knowledge_base WHERE metadata->>'source' IN ('medical', 'labs')`)
+            db.query(`SELECT question, use_count, confidence_score FROM knowledge_base WHERE use_count > 0 AND status = 'approved' ORDER BY use_count DESC LIMIT 10`),
+            db.query(`SELECT MAX(created_at) as last_sync FROM knowledge_base WHERE metadata->>'source' IN ('medical', 'labs') AND status = 'approved'`),
+            db.query(`SELECT COUNT(*)::int as total FROM knowledge_base WHERE status = 'pending_review'`)
         ]);
 
         // Check if Gemini API key is configured
@@ -97,6 +101,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
             top_used: topUsed.rows,
             last_md_sync: recentSync.rows[0]?.last_sync || null,
             gemini_configured: geminiConfigured,
+            pending_review: pendingCount.rows[0]?.total || 0,
         });
     } catch (err) {
         console.error('KB stats error:', err);
@@ -155,6 +160,92 @@ router.post('/gaps/:id/resolve', async (req: Request, res: Response) => {
     } catch (err) {
         console.error('KB gap resolve error:', err);
         res.status(500).json({ error: 'Failed to resolve gap' });
+    }
+});
+
+// GET /api/knowledge/pending — list entries awaiting supervisor review
+router.get('/pending', async (req: Request, res: Response) => {
+    try {
+        const result = await db.query(
+            `SELECT kb.id, kb.question, kb.answer, kb.created_at, kb.source_conversation_id,
+                    c.name as customer_name, c.phone as customer_phone,
+                    conv.channel_type
+             FROM knowledge_base kb
+             LEFT JOIN conversations conv ON conv.id = kb.source_conversation_id
+             LEFT JOIN customers c ON c.id = conv.customer_id
+             WHERE kb.status = 'pending_review'
+             ORDER BY kb.created_at DESC
+             LIMIT 100`
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('KB pending error:', err);
+        res.status(500).json({ error: 'Failed to fetch pending entries' });
+    }
+});
+
+// PUT /api/knowledge/:id/approve
+router.put('/:id/approve', async (req: Request, res: Response) => {
+    try {
+        const result = await db.query(
+            `UPDATE knowledge_base SET status = 'approved', updated_at = NOW() WHERE id = $1 RETURNING id`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) { res.status(404).json({ error: 'Entry not found' }); return; }
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('KB approve error:', err);
+        res.status(500).json({ error: 'Failed to approve entry' });
+    }
+});
+
+// PUT /api/knowledge/:id/reject
+router.put('/:id/reject', async (req: Request, res: Response) => {
+    try {
+        const result = await db.query(
+            `UPDATE knowledge_base SET status = 'rejected', updated_at = NOW() WHERE id = $1 RETURNING id`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) { res.status(404).json({ error: 'Entry not found' }); return; }
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('KB reject error:', err);
+        res.status(500).json({ error: 'Failed to reject entry' });
+    }
+});
+
+// PUT /api/knowledge/:id/edit — edit content and approve in one step
+router.put('/:id/edit', async (req: Request, res: Response) => {
+    const { question, answer } = req.body;
+    if (!question || !answer) { res.status(400).json({ error: 'question and answer required' }); return; }
+    try {
+        // Re-generate embedding for the updated question
+        let newEmbedding: string | null = null;
+        try {
+            const settings = await db.query(`SELECT provider, api_key_encrypted FROM ai_settings WHERE is_default = TRUE LIMIT 1`);
+            if (settings.rows.length > 0) {
+                const emb = await generateEmbedding(question, settings.rows[0].provider, settings.rows[0].api_key_encrypted);
+                newEmbedding = `[${emb.join(',')}]`;
+            }
+        } catch { /* keep old embedding on error */ }
+
+        let result;
+        if (newEmbedding) {
+            result = await db.query(
+                `UPDATE knowledge_base SET question = $1, answer = $2, embedding = $3::vector, status = 'approved', updated_at = NOW() WHERE id = $4 RETURNING id`,
+                [question, answer, newEmbedding, req.params.id]
+            );
+        } else {
+            result = await db.query(
+                `UPDATE knowledge_base SET question = $1, answer = $2, status = 'approved', updated_at = NOW() WHERE id = $3 RETURNING id`,
+                [question, answer, req.params.id]
+            );
+        }
+        if (result.rows.length === 0) { res.status(404).json({ error: 'Entry not found' }); return; }
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('KB edit error:', err);
+        res.status(500).json({ error: 'Failed to edit entry' });
     }
 });
 
