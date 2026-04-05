@@ -624,6 +624,8 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES teams(id)`);
     await safeAlter(`ALTER TABLE medical_products ADD COLUMN IF NOT EXISTS wc_variation_ids INTEGER[]`);
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS active_conversation_count INTEGER NOT NULL DEFAULT 0`);
+    await safeAlter(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER UNIQUE`);
+    await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER`);
 
     // Performance indexes
     const safeIdx = async (sql: string) => { try { await db.query(sql); } catch (_) {} };

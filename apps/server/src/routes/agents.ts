@@ -55,7 +55,30 @@ router.post('/', requireRole('admin', 'superadmin'), async (req: Request, res: R
          RETURNING id, name, email, role, is_active, salesking_agent_code, created_at`,
         [name, email, hash, role, salesking_agent_code ?? null]
     );
-    res.status(201).json(result.rows[0]);
+    const newAgent = result.rows[0];
+
+    // Auto-create WordPress/SalesKing user in background
+    try {
+        const username = email.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '');
+        const wpResult = await createWPUser({
+            username,
+            email,
+            display_name: name,
+            crm_role: role === 'supervisor' ? 'shop_manager' : role === 'admin' ? 'administrator' : 'agent',
+        });
+        if (wpResult?.wp_user_id) {
+            await db.query(
+                `UPDATE agents SET wc_agent_id = $1, salesking_agent_code = COALESCE(salesking_agent_code, $2) WHERE id = $3`,
+                [String(wpResult.wp_user_id), wpResult.salesking_agentid || null, newAgent.id]
+            );
+            newAgent.wc_agent_id = String(wpResult.wp_user_id);
+        }
+    } catch (wpErr: any) {
+        console.warn('[agents] Auto-create WP user failed (non-blocking):', wpErr.message);
+        // Non-blocking: agent is created in CRM even if WP creation fails
+    }
+
+    res.status(201).json(newAgent);
 });
 
 // POST /api/agents/sync-salesking — import agents from SalesKing into CRM

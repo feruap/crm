@@ -795,6 +795,23 @@ function EquiposTab() {
     const [formColor, setFormColor] = useState('#6366f1');
     const [formMembers, setFormMembers] = useState<string[]>([]);
     const [saving, setSaving] = useState(false);
+    const [syncingTeams, setSyncingTeams] = useState(false);
+    const [teamSyncResult, setTeamSyncResult] = useState<{ total_groups: number; created: number; updated: number } | null>(null);
+
+    const syncSalesKingTeams = async () => {
+        setSyncingTeams(true);
+        setTeamSyncResult(null);
+        try {
+            const r = await apiFetch('/api/teams/sync-salesking', { method: 'POST' });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || 'Sync failed');
+            setTeamSyncResult(data);
+            await load();
+        } catch (e: any) {
+            setTeamSyncResult({ total_groups: 0, created: 0, updated: 0 });
+            console.error(e);
+        } finally { setSyncingTeams(false); }
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -870,11 +887,24 @@ function EquiposTab() {
                     <h3 className="text-2xl font-bold text-slate-800">Equipos de Agentes</h3>
                     <p className="text-slate-500 text-sm mt-1">Agrupa agentes para asignación y enrutamiento de conversaciones.</p>
                 </div>
-                <button onClick={openCreate}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                    <Plus className="w-4 h-4" /> Crear equipo
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={syncSalesKingTeams} disabled={syncingTeams}
+                        className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-50">
+                        <RefreshCw className={`w-4 h-4 ${syncingTeams ? 'animate-spin' : ''}`} /> {syncingTeams ? 'Sincronizando...' : 'Sync SalesKing'}
+                    </button>
+                    <button onClick={openCreate}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                        <Plus className="w-4 h-4" /> Crear equipo
+                    </button>
+                </div>
             </div>
+
+            {teamSyncResult && (
+                <div className={`p-3 rounded-lg text-sm ${teamSyncResult.total_groups > 0 ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                    {teamSyncResult.total_groups} grupos en SalesKing — <span className="font-medium text-green-700">{teamSyncResult.created} creados</span> · <span className="font-medium">{teamSyncResult.updated} actualizados</span>
+                    <button onClick={() => setTeamSyncResult(null)} className="ml-2 text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+            )}
 
             {teams.length === 0 ? (
                 <div className="bg-white rounded-xl border p-12 text-center text-slate-400">
