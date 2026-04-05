@@ -8,6 +8,8 @@
  */
 
 import { db } from '../db';
+import { getWCCreds } from '../utils/wc-creds';
+import { getB2BKingPricing, getSalesKingAgent, bridgeFetch } from './crm-bridge';
 
 // ─────────────────────────────────────────────
 // Types
@@ -93,6 +95,27 @@ interface CreateWCOrderResult extends SyncResult {
 // Config
 // ─────────────────────────────────────────────
 
+/**
+ * Get WC config - reads from settings DB (UI-managed) with env var fallback.
+ * This is async because it reads from the database.
+ */
+async function getWCConfigAsync(): Promise<WCConfig> {
+  const creds = await getWCCreds();
+
+  if (!creds.url || !creds.key || !creds.secret) {
+    throw new Error('WooCommerce credentials not configured (set in Settings > Integraciones or env vars WC_URL, WC_KEY, WC_SECRET)');
+  }
+
+  return {
+    url: creds.url.replace(/\/$/, ''),
+    auth: Buffer.from(`${creds.key}:${creds.secret}`).toString('base64'),
+  };
+}
+
+/**
+ * Sync fallback: reads env vars directly (for places that can't await).
+ * Prefer getWCConfigAsync() wherever possible.
+ */
 function getWCConfig(): WCConfig {
   const url = process.env.WC_URL;
   const key = process.env.WC_KEY;
@@ -103,7 +126,7 @@ function getWCConfig(): WCConfig {
   }
 
   return {
-    url: url.replace(/\/$/, ''), // Strip trailing slash
+    url: url.replace(/\/$/, ''),
     auth: Buffer.from(`${key}:${secret}`).toString('base64'),
   };
 }
@@ -113,12 +136,19 @@ export async function wcFetch<T = any>(
   method: string = 'GET',
   body?: any
 ): Promise<T> {
-  const { url, auth } = getWCConfig();
-  const response = await fetch(`${url}/wp-json/wc/v3${endpoint}`, {
+  // Try DB-backed creds first, fall back to env vars
+  let config: WCConfig;
+  try {
+    config = await getWCConfigAsync();
+  } catch {
+    config = getWCConfig();
+  }
+
+  const response = await fetch(`${config.url}/wp-json/wc/v3${endpoint}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Basic ${auth}`,
+      Authorization: `Basic ${config.auth}`,
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -414,42 +444,73 @@ export async function createDiscountRequest(request: DiscountRequest): Promise<S
 
 /**
  * Get B2B pricing for a customer via B2BKing integration.
- * Queries the WC product with customer context to get role-based pricing.
+ * Uses the CRM Bridge plugin for structured B2BKing pricing data,
+ * falling back to WC product meta if bridge is unavailable.
  */
 export async function getB2BPrice(
   productId: number | string,
   customerEmail: string
 ): Promise<B2BPrice> {
   try {
-    const product = await wcFetch(`/products/${productId}`);
-
-    // Look for B2BKing meta prices
-    const b2bMeta = product.meta_data?.find((m: any) => m.key === 'b2bking_regular_product_price');
-
-    return {
-      regular_price: product.regular_price,
-      sale_price: product.sale_price || product.regular_price,
-      b2b_price: b2bMeta?.value || undefined,
+    // Try CRM Bridge first for structured B2BKing pricing
+    const bridgeData = await getB2BKingPricing(Number(productId));
+    const result: B2BPrice = {
+      regular_price: bridgeData.regular_price || bridgeData.price || '0',
+      sale_price: bridgeData.sale_price || bridgeData.regular_price || bridgeData.price || '0',
     };
-  } catch {
-    return { regular_price: '0', sale_price: '0' };
+
+    // If customer group pricing is available, use it as b2b_price
+    if (bridgeData.customer_group_pricing?.regular_price) {
+      result.b2b_price = bridgeData.customer_group_pricing.regular_price;
+    }
+
+    return result;
+  } catch (bridgeErr) {
+    // Fallback: query WC REST API directly
+    console.warn(`[B2B Price] Bridge unavailable, falling back to WC API:`, bridgeErr);
+    try {
+      const product = await wcFetch(`/products/${productId}`);
+      const b2bMeta = product.meta_data?.find((m: any) => m.key === 'b2bking_regular_product_price');
+
+      return {
+        regular_price: product.regular_price,
+        sale_price: product.sale_price || product.regular_price,
+        b2b_price: b2bMeta?.value || undefined,
+      };
+    } catch {
+      return { regular_price: '0', sale_price: '0' };
+    }
   }
 }
 
 /**
  * Get commission data for an agent from SalesKing.
- * SalesKing stores earnings in WP user meta and custom tables.
- * We query via the WC REST API + custom SalesKing endpoint if available.
+ * Primary: CRM Bridge /salesking-agent/{id} which returns structured earnings.
+ * Fallback: SalesKing REST API or WC customer meta.
  */
 export async function getAgentCommissions(wcUserId: number | string): Promise<AgentCommissions> {
   try {
-    // SalesKing exposes agent data via WP REST API
-    // Endpoint: /wp-json/salesking/v1/agents/{id}/earnings
-    const { url, auth } = getWCConfig();
+    // Primary: CRM Bridge (returns earnings directly)
+    const agent = await getSalesKingAgent(Number(wcUserId));
+    if (agent.earnings) {
+      return {
+        earnings_total: agent.earnings.total || 0,
+        earnings_pending: agent.earnings.outstanding || 0,
+        earnings_paid: agent.earnings.paid || 0,
+        orders_count: 0, // Bridge doesn't expose orders_count yet
+      };
+    }
+  } catch (bridgeErr) {
+    console.warn(`[Agent Commissions] Bridge unavailable, trying fallbacks:`, bridgeErr);
+  }
+
+  try {
+    // Fallback 1: SalesKing REST API directly
+    const config = await getWCConfigAsync();
     const response = await fetch(
-      `${url}/wp-json/salesking/v1/agents/${wcUserId}/earnings`,
+      `${config.url}/wp-json/salesking/v1/agents/${wcUserId}/earnings`,
       {
-        headers: { Authorization: `Basic ${auth}` },
+        headers: { Authorization: `Basic ${config.auth}` },
       }
     );
 
@@ -458,7 +519,7 @@ export async function getAgentCommissions(wcUserId: number | string): Promise<Ag
       return data;
     }
 
-    // Fallback: query directly from WC customers endpoint (user meta)
+    // Fallback 2: WC customers endpoint (user meta)
     const user = await wcFetch(`/customers/${wcUserId}`);
     const getMeta = (key: string): number => {
       const m = user.meta_data?.find((m: any) => m.key === key);

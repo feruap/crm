@@ -61,6 +61,7 @@ interface Channel {
     ig_account_id: string | null;
     tiktok_open_id: string | null;
     brand_name: string | null;
+    custom_prompt: string | null;
     created_at: string;
 }
 
@@ -3501,12 +3502,387 @@ function WooCommerceWebhookSection() {
     );
 }
 
-// ── Knowledge Base Tab (stub) ─────────────────────────────────────────────────
+// ── Knowledge Base Tab ────────────────────────────────────────────────────────
 function KnowledgeBaseTab() {
+    const [stats, setStats] = useState<any>(null);
+    const [entries, setEntries] = useState<any[]>([]);
+    const [gaps, setGaps] = useState<any[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState('');
+    const [syncResult, setSyncResult] = useState<any>(null);
+    const [activeSection, setActiveSection] = useState<'overview' | 'entries' | 'gaps'>('overview');
+    const [resolveGapId, setResolveGapId] = useState<string | null>(null);
+    const [resolveAnswer, setResolveAnswer] = useState('');
+
+    const loadStats = useCallback(async () => {
+        try {
+            const r = await apiFetch('/api/knowledge/stats');
+            const data = await r.json();
+            setStats(data);
+        } catch (e) { console.error('Failed to load KB stats:', e); }
+    }, []);
+
+    const loadEntries = useCallback(async (search?: string) => {
+        try {
+            const q = search ? `?search=${encodeURIComponent(search)}` : '';
+            const r = await apiFetch(`/api/knowledge${q}`);
+            const data = await r.json();
+            setEntries(data);
+        } catch (e) { console.error('Failed to load KB entries:', e); }
+    }, []);
+
+    const loadGaps = useCallback(async () => {
+        try {
+            const r = await apiFetch('/api/knowledge/gaps');
+            const data = await r.json();
+            setGaps(data);
+        } catch (e) { console.error('Failed to load KB gaps:', e); }
+    }, []);
+
+    useEffect(() => {
+        Promise.all([loadStats(), loadEntries(), loadGaps()]).finally(() => setLoading(false));
+    }, [loadStats, loadEntries, loadGaps]);
+
+    const handleSyncMD = async () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = '.md';
+        input.onchange = async (e: any) => {
+            const files = Array.from(e.target.files || []) as File[];
+            if (files.length === 0) return;
+            setSyncing('md');
+            setSyncResult(null);
+            try {
+                let medical_md = '';
+                let labs_md = '';
+                for (const f of files) {
+                    const text = await f.text();
+                    if (f.name.toLowerCase().includes('lab')) labs_md = text;
+                    else medical_md = text;
+                }
+                const r = await apiFetch('/api/knowledge/sync-md', {
+                    method: 'POST',
+                    body: JSON.stringify({ medical_md, labs_md }),
+                });
+                const data = await r.json();
+                setSyncResult({ type: 'md', ...data });
+                await loadStats();
+                await loadEntries();
+            } catch (err) {
+                setSyncResult({ type: 'md', error: String(err) });
+            } finally { setSyncing(''); }
+        };
+        input.click();
+    };
+
+    const handleSyncWC = async () => {
+        setSyncing('wc');
+        setSyncResult(null);
+        try {
+            const r = await apiFetch('/api/knowledge/sync-wc', { method: 'POST' });
+            const data = await r.json();
+            setSyncResult({ type: 'wc', ...data });
+            await loadStats();
+            await loadEntries();
+        } catch (err) {
+            setSyncResult({ type: 'wc', error: String(err) });
+        } finally { setSyncing(''); }
+    };
+
+    const handleDeleteEntry = async (id: string) => {
+        if (!confirm('Eliminar esta entrada de la base de conocimiento?')) return;
+        try {
+            await apiFetch(`/api/knowledge/${id}`, { method: 'DELETE' });
+            setEntries(prev => prev.filter(e => e.id !== id));
+            await loadStats();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleResolveGap = async (gapId: string) => {
+        if (!resolveAnswer.trim()) return;
+        try {
+            await apiFetch(`/api/knowledge/gaps/${gapId}/resolve`, {
+                method: 'POST',
+                body: JSON.stringify({ answer: resolveAnswer }),
+            });
+            setResolveGapId(null);
+            setResolveAnswer('');
+            await loadGaps();
+            await loadStats();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleSearch = () => {
+        loadEntries(searchQuery);
+    };
+
+    if (loading) return <div className="p-10 flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>;
+
     return (
-        <div className="p-10 max-w-3xl">
-            <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
-            <p className="text-slate-500 text-sm mt-1">Próximamente disponible.</p>
+        <div className="p-8 max-w-5xl space-y-6">
+            <div>
+                <h3 className="text-2xl font-bold text-slate-800">Base de Conocimiento</h3>
+                <p className="text-slate-500 text-sm mt-1">Gestiona el conocimiento que el bot usa para responder consultas de clientes.</p>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex gap-1 border-b border-slate-200">
+                {[
+                    { key: 'overview' as const, label: 'Resumen', icon: BarChart2 },
+                    { key: 'entries' as const, label: 'Entradas', icon: Brain },
+                    { key: 'gaps' as const, label: 'Preguntas sin Respuesta', icon: AlertCircle },
+                ].map(tab => (
+                    <button key={tab.key} onClick={() => setActiveSection(tab.key)}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                            activeSection === tab.key
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                        }`}>
+                        <tab.icon className="w-4 h-4" />
+                        {tab.label}
+                        {tab.key === 'gaps' && stats?.knowledge_gaps?.pending > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">{stats.knowledge_gaps.pending}</span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* ── OVERVIEW SECTION ── */}
+            {activeSection === 'overview' && stats && (
+                <div className="space-y-6">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">Total Entradas</p>
+                            <p className="text-2xl font-bold text-slate-800 mt-1">{stats.total_entries}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">Chunks Medicos</p>
+                            <p className="text-2xl font-bold text-slate-800 mt-1">{stats.medical_chunks}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">Con Embedding</p>
+                            <p className={`text-2xl font-bold mt-1 ${stats.embeddings.with_real_embedding > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {stats.embeddings.with_real_embedding}
+                                <span className="text-sm font-normal text-slate-400">/{stats.embeddings.total}</span>
+                            </p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <p className="text-xs text-slate-500 uppercase tracking-wide">Preguntas Pendientes</p>
+                            <p className={`text-2xl font-bold mt-1 ${stats.knowledge_gaps.pending > 0 ? 'text-amber-500' : 'text-slate-800'}`}>
+                                {stats.knowledge_gaps.pending}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Embedding Health Warning */}
+                    {!stats.gemini_configured && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-amber-800">Embeddings no configurados</p>
+                                <p className="text-xs text-amber-600 mt-1">
+                                    No se encontro API Key de Gemini. Sin embeddings, la busqueda semantica del bot no funciona.
+                                    Configura la key en <strong>Configuracion IA &gt; API Key Embeddings (Gemini)</strong>.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {stats.embeddings.zero_vectors > 0 && stats.gemini_configured && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+                            <Info className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium text-blue-800">{stats.embeddings.zero_vectors} entradas sin embedding real</p>
+                                <p className="text-xs text-blue-600 mt-1">
+                                    Estas entradas fueron creadas sin Gemini API Key. Re-sincroniza la KB para generar embeddings reales.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sources Breakdown */}
+                    <div className="bg-white border border-slate-200 rounded-lg p-4">
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3">Fuentes</h4>
+                        <div className="space-y-2">
+                            {stats.sources.map((s: any) => (
+                                <div key={s.source} className="flex items-center justify-between">
+                                    <span className="text-sm text-slate-600 capitalize">{s.source === 'medical' ? 'Productos Medicos' : s.source === 'labs' ? 'Laboratorio' : s.source === 'product' ? 'WooCommerce' : s.source}</span>
+                                    <span className="text-sm font-medium text-slate-800">{s.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                        {stats.last_md_sync && (
+                            <p className="text-xs text-slate-400 mt-3">Ultimo sync MD: {new Date(stats.last_md_sync).toLocaleString('es-MX')}</p>
+                        )}
+                    </div>
+
+                    {/* Sync Actions */}
+                    <div className="bg-white border border-slate-200 rounded-lg p-4">
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3">Sincronizar</h4>
+                        <div className="flex flex-wrap gap-3">
+                            <button onClick={handleSyncMD} disabled={!!syncing}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                                {syncing === 'md' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                Sync Archivos MD
+                            </button>
+                            <button onClick={handleSyncWC} disabled={!!syncing}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors border border-slate-200">
+                                {syncing === 'wc' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />}
+                                Sync WooCommerce
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">
+                            Sync MD: sube los archivos .md con la base de conocimiento (medical y labs). Sync WC: importa productos desde WooCommerce.
+                        </p>
+                    </div>
+
+                    {/* Sync Result */}
+                    {syncResult && (
+                        <div className={`border rounded-lg p-4 ${syncResult.error ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                            {syncResult.error ? (
+                                <p className="text-sm text-red-700">Error: {syncResult.error}</p>
+                            ) : syncResult.type === 'md' ? (
+                                <div className="text-sm text-green-800 space-y-1">
+                                    <p className="font-medium">Sync MD completado</p>
+                                    <p>Productos parseados: {syncResult.products_parsed} | Entradas KB: {syncResult.kb_entries_inserted} | Chunks: {syncResult.chunks_inserted} | Productos actualizados: {syncResult.products_updated}</p>
+                                    {syncResult.errors > 0 && <p className="text-amber-700">Errores: {syncResult.errors}</p>}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-green-800">Sync WooCommerce: {syncResult.synced} productos importados</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Top Used Entries */}
+                    {stats.top_used.length > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3">Entradas Mas Usadas</h4>
+                            <div className="space-y-2">
+                                {stats.top_used.map((e: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between text-sm">
+                                        <span className="text-slate-600 truncate max-w-md">{e.question}</span>
+                                        <span className="text-slate-400 shrink-0 ml-2">{e.use_count}x (conf: {(e.confidence_score * 100).toFixed(0)}%)</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── ENTRIES SECTION ── */}
+            {activeSection === 'entries' && (
+                <div className="space-y-4">
+                    {/* Search */}
+                    <div className="flex gap-2">
+                        <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                            placeholder="Buscar en preguntas y respuestas..."
+                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                        <button onClick={handleSearch}
+                            className="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 border border-slate-200">
+                            <Search className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Entry Count */}
+                    <p className="text-xs text-slate-400">{entries.length} entradas {searchQuery && `para "${searchQuery}"`}</p>
+
+                    {/* Entries List */}
+                    <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                        {entries.map(entry => (
+                            <div key={entry.id} className="bg-white border border-slate-200 rounded-lg p-4 group">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium text-slate-800">{entry.question}</p>
+                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{entry.answer}</p>
+                                        <div className="flex items-center gap-3 mt-2">
+                                            {entry.metadata?.source && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">{entry.metadata.source}</span>
+                                            )}
+                                            <span className="text-xs text-slate-400">Conf: {(entry.confidence_score * 100).toFixed(0)}%</span>
+                                            <span className="text-xs text-slate-400">Usos: {entry.use_count}</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => handleDeleteEntry(entry.id)}
+                                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 p-1 transition-opacity">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                        {entries.length === 0 && (
+                            <p className="text-center text-slate-400 text-sm py-8">No hay entradas en la base de conocimiento.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── GAPS SECTION ── */}
+            {activeSection === 'gaps' && (
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-500">
+                        Preguntas que el bot no pudo responder con la KB actual. Resuelve para mejorar las respuestas futuras.
+                    </p>
+
+                    <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                        {gaps.map(gap => (
+                            <div key={gap.id} className="bg-white border border-slate-200 rounded-lg p-4">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium text-slate-800">{gap.question}</p>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <span className={`text-xs px-1.5 py-0.5 rounded ${gap.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                                                {gap.status === 'pending' ? 'Pendiente' : 'Resuelto'}
+                                            </span>
+                                            <span className="text-xs text-slate-400">Preguntado {gap.frequency}x</span>
+                                            {gap.customer_name && <span className="text-xs text-slate-400">por {gap.customer_name}</span>}
+                                        </div>
+                                        {gap.resolved_answer && (
+                                            <p className="text-xs text-green-600 mt-2">Respuesta: {gap.resolved_answer}</p>
+                                        )}
+                                    </div>
+                                    {gap.status === 'pending' && (
+                                        <button onClick={() => { setResolveGapId(gap.id); setResolveAnswer(''); }}
+                                            className="text-blue-500 hover:text-blue-700 text-xs font-medium shrink-0">
+                                            Resolver
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Resolve Form */}
+                                {resolveGapId === gap.id && (
+                                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                                        <textarea value={resolveAnswer} onChange={e => setResolveAnswer(e.target.value)}
+                                            placeholder="Escribe la respuesta correcta..."
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y"
+                                            rows={3} />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleResolveGap(gap.id)}
+                                                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700">
+                                                Guardar y Crear Entrada KB
+                                            </button>
+                                            <button onClick={() => setResolveGapId(null)}
+                                                className="px-3 py-1.5 text-slate-500 text-xs hover:text-slate-700">
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {gaps.length === 0 && (
+                            <div className="text-center py-8">
+                                <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                                <p className="text-slate-400 text-sm">No hay preguntas pendientes. El bot tiene respuesta para todo.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

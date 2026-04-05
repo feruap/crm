@@ -13,6 +13,16 @@
  */
 
 import { db } from '../db';
+import {
+  getAgentMaxDiscount,
+  getSalesKingAgent,
+  getB2BKingPricing,
+  getB2BKingCustomer,
+  getOrderTracking,
+  getVisitorByPhone,
+  linkVisitorPhone,
+  type B2BKingPricingResponse,
+} from './crm-bridge';
 
 // ─────────────────────────────────────────────
 // Type Definitions
@@ -414,10 +424,14 @@ export async function requestSKDiscount(
   try {
     const { agentId, customerId, discountPercent, reason } = params;
 
-    // In production: check agent's max discount from SalesKing group meta
-    // sk_group_max_discount (stored on agent user or group post)
-    // For now: simulate with default max 15%
-    const maxDiscount = 15; // Would come from SalesKing meta
+    // Get agent's real max discount from SalesKing via CRM Bridge
+    let maxDiscount = 0;
+    try {
+      maxDiscount = await getAgentMaxDiscount(agentId);
+      console.log(`[SalesKing] Agent ${agentId} max discount: ${maxDiscount}%`);
+    } catch (err) {
+      console.warn(`[SalesKing] Could not fetch agent max discount, using 0:`, err);
+    }
 
     if (discountPercent > maxDiscount) {
       // Needs approver - route to parent agent
@@ -441,7 +455,7 @@ export async function requestSKDiscount(
         success: true,
         requestId,
         status: 'pending_approval',
-        message: `Solicitud de descuento del ${discountPercent}% está pendiente de aprobación por tu gerente. Te notificaremos cuando se apruebe.`,
+        message: `Solicitud de descuento del ${discountPercent}% está pendiente de aprobación por tu gerente (tu límite es ${maxDiscount}%). Te notificaremos cuando se apruebe.`,
       };
     }
 
@@ -450,7 +464,7 @@ export async function requestSKDiscount(
       success: true,
       requestId: `sk_discount_${customerId}_${Date.now()}`,
       status: 'approved',
-      message: `Descuento del ${discountPercent}% aplicado.`,
+      message: `Descuento del ${discountPercent}% aplicado (dentro de tu límite de ${maxDiscount}%).`,
     };
   } catch (err) {
     console.error('[Discount Request Error]', err);
@@ -593,31 +607,62 @@ export async function getAgentCommissionForOrder(
 // ─────────────────────────────────────────────
 
 /**
- * Get B2BKing pricing for a product and customer group.
- * Product meta: b2bking_product_pricetiers_group_[GROUP_ID]
- * Format: "qty:price" pairs like "10:95.50;50:90.00"
+ * Get B2BKing pricing for a product and optional customer.
+ * Calls the CRM Bridge plugin endpoint /b2bking-pricing/{product_id}
+ * Returns tiered discounts and customer-group-specific pricing.
  */
 export async function getB2BPricing(
   productId: number,
   customerGroupId?: number
 ): Promise<B2BPricingTier[]> {
   try {
-    if (!customerGroupId) {
-      // Return default public pricing
-      return [
-        { min_quantity: 1, price_mxn: 100, discount_percent: 0 },
-        { min_quantity: 10, price_mxn: 90, discount_percent: 10 },
-        { min_quantity: 50, price_mxn: 80, discount_percent: 20 },
-      ];
+    const pricing: B2BKingPricingResponse = await getB2BKingPricing(productId);
+    const regularPrice = parseFloat(pricing.price || pricing.regular_price) || 0;
+
+    if (regularPrice === 0) {
+      return [];
     }
 
-    // In production: query WC product meta for B2BKing tier data
-    // For now: return default
-    return [
-      { min_quantity: 1, price_mxn: 95.5, discount_percent: 4.5 },
-      { min_quantity: 10, price_mxn: 85.5, discount_percent: 14.5 },
-      { min_quantity: 50, price_mxn: 75.5, discount_percent: 24.5 },
-    ];
+    const results: B2BPricingTier[] = [];
+
+    // Add base price tier
+    results.push({ min_quantity: 1, price_mxn: regularPrice, discount_percent: 0 });
+
+    // Add tiered pricing rules (quantity-based discounts)
+    if (pricing.tiered_pricing && pricing.tiered_pricing.length > 0) {
+      for (const tier of pricing.tiered_pricing) {
+        let tierPrice = regularPrice;
+        if (tier.discount_type === 'percentage') {
+          tierPrice = regularPrice * (1 - tier.discount_value / 100);
+        } else if (tier.discount_type === 'fixed') {
+          tierPrice = regularPrice - tier.discount_value;
+        }
+        tierPrice = Math.max(0, tierPrice);
+
+        results.push({
+          min_quantity: tier.min_quantity,
+          price_mxn: Math.round(tierPrice * 100) / 100,
+          discount_percent: Math.round((1 - tierPrice / regularPrice) * 100 * 10) / 10,
+        });
+      }
+    }
+
+    // If customer group pricing is available, adjust the base price
+    if (pricing.customer_group_pricing) {
+      const groupPrice = parseFloat(pricing.customer_group_pricing.regular_price || '') || 0;
+      if (groupPrice > 0 && groupPrice !== regularPrice) {
+        results[0] = {
+          min_quantity: 1,
+          price_mxn: groupPrice,
+          discount_percent: Math.round((1 - groupPrice / regularPrice) * 100 * 10) / 10,
+        };
+      }
+    }
+
+    // Sort by min_quantity
+    results.sort((a, b) => a.min_quantity - b.min_quantity);
+
+    return results;
   } catch (err) {
     console.error('[B2B Pricing Error]', err);
     return [];

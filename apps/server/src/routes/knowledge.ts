@@ -55,6 +55,109 @@ router.post('/', async (req: Request, res: Response) => {    const { question, a
     }
 });
 
+// GET /api/knowledge/stats
+router.get('/stats', async (_req: Request, res: Response) => {
+    try {
+        const [
+            totalEntries,
+            sourceBreakdown,
+            embeddingStats,
+            chunksCount,
+            gapsCount,
+            topUsed,
+            recentSync
+        ] = await Promise.all([
+            db.query(`SELECT COUNT(*)::int as total FROM knowledge_base`),
+            db.query(`SELECT COALESCE(metadata->>'source', 'manual') as source, COUNT(*)::int as count FROM knowledge_base GROUP BY source ORDER BY count DESC`),
+            db.query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN embedding IS NOT NULL AND embedding != '[${new Array(1536).fill(0).join(',')}]'::vector THEN 1 END)::int as with_embedding FROM knowledge_base`),
+            db.query(`SELECT COUNT(*)::int as total FROM medical_knowledge_chunks`).catch(() => ({ rows: [{ total: 0 }] })),
+            db.query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN status = 'pending' THEN 1 END)::int as pending FROM knowledge_gaps`).catch(() => ({ rows: [{ total: 0, pending: 0 }] })),
+            db.query(`SELECT question, use_count, confidence_score FROM knowledge_base WHERE use_count > 0 ORDER BY use_count DESC LIMIT 10`),
+            db.query(`SELECT MAX(created_at) as last_sync FROM knowledge_base WHERE metadata->>'source' IN ('medical', 'labs')`)
+        ]);
+
+        // Check if Gemini API key is configured
+        const geminiEnv = !!process.env.GEMINI_API_KEY;
+        const geminiDb = await db.query(`SELECT value FROM settings WHERE key = 'gemini_api_key' LIMIT 1`);
+        const geminiConfigured = geminiEnv || !!geminiDb.rows[0]?.value;
+
+        res.json({
+            total_entries: totalEntries.rows[0]?.total || 0,
+            sources: sourceBreakdown.rows,
+            embeddings: {
+                total: embeddingStats.rows[0]?.total || 0,
+                with_real_embedding: embeddingStats.rows[0]?.with_embedding || 0,
+                zero_vectors: (embeddingStats.rows[0]?.total || 0) - (embeddingStats.rows[0]?.with_embedding || 0),
+            },
+            medical_chunks: chunksCount.rows[0]?.total || 0,
+            knowledge_gaps: {
+                total: gapsCount.rows[0]?.total || 0,
+                pending: gapsCount.rows[0]?.pending || 0,
+            },
+            top_used: topUsed.rows,
+            last_md_sync: recentSync.rows[0]?.last_sync || null,
+            gemini_configured: geminiConfigured,
+        });
+    } catch (err) {
+        console.error('KB stats error:', err);
+        res.status(500).json({ error: 'Failed to fetch KB stats' });
+    }
+});
+
+// GET /api/knowledge/gaps
+router.get('/gaps', async (req: Request, res: Response) => {
+    try {
+        const { status } = req.query;
+        let query = `SELECT kg.*, c.name as customer_name
+                     FROM knowledge_gaps kg
+                     LEFT JOIN customers c ON c.id = kg.customer_id`;
+        const params: any[] = [];
+        if (status) {
+            query += ` WHERE kg.status = $1`;
+            params.push(status);
+        }
+        query += ` ORDER BY kg.frequency DESC, kg.created_at DESC LIMIT 50`;
+        const result = await db.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('KB gaps error:', err);
+        res.status(500).json({ error: 'Failed to fetch knowledge gaps' });
+    }
+});
+
+// POST /api/knowledge/gaps/:id/resolve
+router.post('/gaps/:id/resolve', async (req: Request, res: Response) => {
+    try {
+        const { answer, admin_notes } = req.body;
+        const gap = await db.query(`SELECT * FROM knowledge_gaps WHERE id = $1`, [req.params.id]);
+        if (gap.rows.length === 0) { res.status(404).json({ error: 'Gap not found' }); return; }
+
+        // Mark gap as resolved
+        await db.query(
+            `UPDATE knowledge_gaps SET status = 'resolved', resolved_answer = $1, admin_notes = $2, updated_at = NOW() WHERE id = $3`,
+            [answer, admin_notes || '', req.params.id]
+        );
+
+        // Auto-create KB entry from the resolved gap
+        if (answer) {
+            const settings = await db.query(`SELECT provider, api_key_encrypted FROM ai_settings WHERE is_default = TRUE LIMIT 1`);
+            const { provider, api_key_encrypted } = settings.rows[0] || {};
+            const embedding = provider ? await generateEmbedding(gap.rows[0].question + ' ' + answer, provider, api_key_encrypted) : new Array(1536).fill(0);
+            const vectorLiteral = `[${embedding.join(',')}]`;
+            await db.query(
+                `INSERT INTO knowledge_base (question, answer, embedding, metadata, confidence_score)
+                 VALUES ($1, $2, $3::vector, $4, 1.0)`,
+                [gap.rows[0].question, answer, vectorLiteral, JSON.stringify({ source: 'gap_resolution', gap_id: req.params.id })]
+            );
+        }
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('KB gap resolve error:', err);
+        res.status(500).json({ error: 'Failed to resolve gap' });
+    }
+});
+
 // DELETE /api/knowledge/:id
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
@@ -341,8 +444,13 @@ router.post('/sync-md', async (req: Request, res: Response) => {
         if (settings.rows.length === 0) throw new Error('AI not configured');
         const { provider, api_key_encrypted } = settings.rows[0];
 
-        // Use Gemini key from env if available (DeepSeek can't do embeddings)
-        const geminiKey = process.env.GEMINI_API_KEY || '';
+        // Use Gemini key for embeddings (DeepSeek/Claude can't do embeddings)
+        // Check: 1) env var, 2) settings table, 3) fallback to default provider
+        let geminiKey = process.env.GEMINI_API_KEY || '';
+        if (!geminiKey) {
+            const gRow = await db.query(`SELECT value FROM settings WHERE key = 'gemini_api_key' LIMIT 1`);
+            geminiKey = gRow.rows[0]?.value || '';
+        }
         const embProvider = geminiKey ? 'gemini' : provider;
         const embKey = geminiKey || api_key_encrypted;
 
@@ -367,9 +475,21 @@ router.post('/sync-md', async (req: Request, res: Response) => {
             }
         }
 
-        // Clear existing MD-sourced entries to avoid duplicates
-        await db.query(`DELETE FROM knowledge_base WHERE metadata->>'source' IN ('medical', 'labs')`);
-        await db.query(`DELETE FROM medical_knowledge_chunks WHERE source_filename IN ('amunet_knowledge_base_medicalv3.md', 'amunet_knowledge_base_labs.md')`);
+        // Clear only the sources being synced (not both) to allow incremental sync
+        const sourcesToDelete: string[] = [];
+        const filesToDelete: string[] = [];
+        if (medical_md) {
+            sourcesToDelete.push('medical');
+            filesToDelete.push('amunet_knowledge_base_medicalv3.md');
+        }
+        if (labs_md) {
+            sourcesToDelete.push('labs');
+            filesToDelete.push('amunet_knowledge_base_labs.md');
+        }
+        if (sourcesToDelete.length > 0) {
+            await db.query(`DELETE FROM knowledge_base WHERE metadata->>'source' = ANY($1)`, [sourcesToDelete]);
+            await db.query(`DELETE FROM medical_knowledge_chunks WHERE source_filename = ANY($1)`, [filesToDelete]);
+        }
 
         let kbInserted = 0;
         let chunkInserted = 0;
