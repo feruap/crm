@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Lucide from 'lucide-react';
 import { apiFetch } from '../hooks/useAuth';
+import { getSocket } from '../hooks/useSocket';
 
 const {
     ShoppingBag, Search, X, ExternalLink, Image: ImageIcon, Plus, Minus, Send,
     ChevronRight, ChevronLeft, Loader2, ShoppingCart, Tag, TrendingUp, Layers, AlertCircle, Check,
-    MapPin
+    MapPin, ShieldAlert, ShieldCheck, Clock, CheckCircle2, XCircle, ArrowUpCircle,
 } = Lucide as any;
 
 interface CustomerProfile {
@@ -45,6 +46,32 @@ interface CartItem {
     quantity: number;
     variation?: WcVariation;
     customPrice?: string;
+}
+
+interface SalesKingRules {
+    available: boolean;
+    reason?: string;
+    agent_id?: string;
+    display_name?: string;
+    pricing?: {
+        effective_max_discount: number; // percentage, e.g. 15 = 15%
+        agent_max_discount: number | null;
+        can_increase_price: boolean;
+        can_decrease_price: boolean;
+        discount_from_commission: boolean;
+    };
+    settings?: {
+        can_edit_prices_increase: number;
+        can_edit_prices_discount: number;
+    };
+}
+
+interface DiscountRequestState {
+    requestId: string;
+    status: 'pending' | 'approved' | 'rejected';
+    approvedPrice?: number;
+    supervisorName?: string;
+    note?: string;
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -87,13 +114,9 @@ function VariationModal({ product, onSelect, onCancel }: {
                             className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-all
                                 ${outOfStock ? 'opacity-40 cursor-not-allowed border-slate-200' : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'}`}
                         >
-                            {false && v.image ? (
-                                <img src={v.image!} className="w-10 h-10 rounded-lg object-cover border shrink-0" />
-                            ) : (
-                                <div className="w-10 h-10 rounded-lg border bg-slate-50 flex items-center justify-center shrink-0">
-                                    <ImageIcon className="w-4 h-4 text-slate-300" />
-                                </div>
-                            )}
+                            <div className="w-10 h-10 rounded-lg border bg-slate-50 flex items-center justify-center shrink-0">
+                                <ImageIcon className="w-4 h-4 text-slate-300" />
+                            </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-700 truncate">{label || `#${v.id}`}</p>
                                 <p className="text-xs text-slate-400">{v.sku || ''}{outOfStock ? ' · Agotado' : ''}</p>
@@ -103,7 +126,7 @@ function VariationModal({ product, onSelect, onCancel }: {
                                     <><span className="text-xs line-through text-slate-400">${v.regular_price}</span>
                                     <span className="text-sm font-bold text-red-600 ml-1">${v.sale_price}</span></>
                                 ) : (
-                                       <span className="text-sm font-bold text-slate-800">${v.price}</span>
+                                    <span className="text-sm font-bold text-slate-800">${v.price}</span>
                                 )}
                             </div>
                         </button>
@@ -123,7 +146,7 @@ export default function CatalogPanel({
     onSendCartLink: (text: string) => void;
     onClose: () => void;
 }) {
-    // State
+    // Catalog state
     const [products, setProducts] = useState<WcProduct[]>([]);
     const [categories, setCategories] = useState<WcCategory[]>([]);
     const [loading, setLoading] = useState(true);
@@ -136,11 +159,91 @@ export default function CatalogPanel({
     const [pendingVariableProduct, setPendingVariableProduct] = useState<WcProduct | null>(null);
     const [mode, setMode] = useState<'popular' | 'search' | 'category'>('popular');
 
-    // Customer profile — read-only, just for validation
+    // Customer profile
     const [customer, setCustomer] = useState<CustomerProfile | null>(null);
     const [customerLoading, setCustomerLoading] = useState(true);
 
-    // Fetch customer profile (re-fetch when switching to cart view to pick up changes from CustomerPanel)
+    // SalesKing rules (cached in component state for session)
+    const [skRules, setSkRules] = useState<SalesKingRules | null>(null);
+    const skRulesFetched = useRef(false);
+
+    // Discount escalation state: cartKey → request state
+    const [discountRequests, setDiscountRequests] = useState<Record<string, DiscountRequestState>>({});
+    const [escalating, setEscalating] = useState<string | null>(null); // cartKey currently being escalated
+
+    // ── Fetch SalesKing rules once ──────────────────────────────────────────
+    useEffect(() => {
+        if (skRulesFetched.current) return;
+        skRulesFetched.current = true;
+        apiFetch('/api/salesking/agent-rules')
+            .then(r => r.json())
+            .then((data: SalesKingRules) => setSkRules(data))
+            .catch(() => setSkRules({ available: false, reason: 'Error al cargar reglas' }));
+    }, []);
+
+    // ── Socket listeners for discount approvals/rejections ──────────────────
+    useEffect(() => {
+        const socket = getSocket();
+
+        const handleApproved = (data: {
+            request_id: string; product_id: number; product_name: string;
+            approved_price: number; original_price: number;
+            supervisor_name: string; note: string | null;
+        }) => {
+            setDiscountRequests(prev => {
+                const updated = { ...prev };
+                for (const key of Object.keys(prev)) {
+                    if (prev[key].requestId === data.request_id) {
+                        updated[key] = {
+                            ...prev[key],
+                            status: 'approved',
+                            approvedPrice: data.approved_price,
+                            supervisorName: data.supervisor_name,
+                            note: data.note ?? undefined,
+                        };
+                        // Auto-apply approved price to cart
+                        setCart(c => c.map(i =>
+                            (i.variation ? `v-${i.variation.id}` : `p-${i.product.id}`) === key
+                                ? { ...i, customPrice: String(data.approved_price) }
+                                : i
+                        ));
+                    }
+                }
+                return updated;
+            });
+        };
+
+        const handleRejected = (data: {
+            request_id: string; product_id: number; product_name: string;
+            original_price: number; requested_price: number;
+            supervisor_name: string; note: string | null;
+        }) => {
+            setDiscountRequests(prev => {
+                const updated = { ...prev };
+                for (const key of Object.keys(prev)) {
+                    if (prev[key].requestId === data.request_id) {
+                        updated[key] = {
+                            ...prev[key],
+                            status: 'rejected',
+                            supervisorName: data.supervisor_name,
+                            note: data.note ?? undefined,
+                        };
+                    }
+                }
+                return updated;
+            });
+        };
+
+        socket.on('discount_approved', handleApproved);
+        socket.on('discount_rejected', handleRejected);
+
+        return () => {
+            socket.off('discount_approved', handleApproved);
+            socket.off('discount_rejected', handleRejected);
+        };
+    }, []);
+
+    // ── Customer profile ────────────────────────────────────────────────────
     const fetchCustomer = useCallback(() => {
         setCustomerLoading(true);
         apiFetch(`/api/conversations/${conversationId}/customer`)
@@ -151,11 +254,9 @@ export default function CatalogPanel({
     }, [conversationId]);
 
     useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
-
-    // Re-fetch customer when switching to cart (agent may have updated profile in CustomerPanel)
     useEffect(() => { if (view === 'cart') fetchCustomer(); }, [view]);
 
-    // Shipping validation from customer profile (WooCommerce fields)
+    // Shipping validation
     const s = customer?.shipping;
     const hasName = !!(s?.first_name?.trim());
     const hasAddress = !!(s?.address_1?.trim());
@@ -172,7 +273,7 @@ export default function CatalogPanel({
     if (!hasPostcode) missingFields.push('C.P.');
     if (!hasContact) missingFields.push('Teléfono o Email');
 
-    // Load categories once
+    // ── Products ────────────────────────────────────────────────────────────
     useEffect(() => {
         apiFetch('/api/products/categories?parent=0')
             .then(r => r.json())
@@ -180,7 +281,6 @@ export default function CatalogPanel({
             .catch(() => {});
     }, []);
 
-    // Load products: popular on mount, search on type, category on click
     const loadProducts = useCallback(async (opts: { search?: string; category?: number; orderby?: string; per_page?: number }) => {
         setLoading(true);
         setError(null);
@@ -199,12 +299,8 @@ export default function CatalogPanel({
         finally { setLoading(false); }
     }, []);
 
-    // Initial load: top sold
-    useEffect(() => {
-        loadProducts({ orderby: 'popularity', per_page: 10 });
-    }, []);
+    useEffect(() => { loadProducts({ orderby: 'popularity', per_page: 10 }); }, []);
 
-    // Search debounce
     useEffect(() => {
         if (!search.trim()) return;
         setMode('search');
@@ -223,7 +319,7 @@ export default function CatalogPanel({
         loadProducts({ category: catId, per_page: 20 });
     };
 
-    // Cart operations
+    // ── Cart operations ──────────────────────────────────────────────────────
     const addToCart = (product: WcProduct, variation?: WcVariation) => {
         if (product.type === 'variable' && !variation) {
             setPendingVariableProduct(product);
@@ -246,29 +342,107 @@ export default function CatalogPanel({
 
     const updatePrice = (key: string, price: string) => {
         setCart(prev => prev.map(i => cartKey(i) === key ? { ...i, customPrice: price } : i));
+        // Clear a rejected request so the agent can re-escalate with new price
+        setDiscountRequests(prev => {
+            if (prev[key]?.status === 'rejected') {
+                const updated = { ...prev };
+                delete updated[key];
+                return updated;
+            }
+            return prev;
+        });
     };
 
-    const removeItem = (key: string) => setCart(prev => prev.filter(i => cartKey(i) !== key));
+    const removeItem = (key: string) => {
+        setCart(prev => prev.filter(i => cartKey(i) !== key));
+        setDiscountRequests(prev => {
+            const updated = { ...prev };
+            delete updated[key];
+            return updated;
+        });
+    };
 
-    // Change variation for a cart item
     const changeVariation = (key: string) => {
         const item = cart.find(i => cartKey(i) === key);
         if (item) setPendingVariableProduct(item.product);
     };
 
-    const cartTotal = cart.reduce((s, i) => {
+    // ── SalesKing discount helpers ───────────────────────────────────────────
+    const maxDiscountPct: number | null =
+        skRules?.available && skRules.pricing != null
+            ? skRules.pricing.effective_max_discount
+            : null;
+
+    const getMinAllowedPrice = (origPrice: string): number | null => {
+        if (maxDiscountPct === null) return null;
+        return parseFloat(origPrice) * (1 - maxDiscountPct / 100);
+    };
+
+    const isPriceExceedingLimit = (item: CartItem): boolean => {
+        if (!skRules?.available || maxDiscountPct === null) return false;
+        const origPrice = item.variation?.price || item.product.price || '0';
+        const effectivePrice = item.customPrice || origPrice;
+        if (effectivePrice === origPrice) return false; // no change
+        const min = getMinAllowedPrice(origPrice);
+        if (min === null) return false;
+        return parseFloat(effectivePrice) < min;
+    };
+
+    // ── Escalation ───────────────────────────────────────────────────────────
+    const handleEscalate = async (item: CartItem) => {
+        const key = cartKey(item);
+        const origPrice = item.variation?.price || item.product.price || '0';
+        const requestedPrice = item.customPrice!;
+
+        setEscalating(key);
+        setError(null);
+        try {
+            const res = await apiFetch('/api/salesking/discount-request', {
+                method: 'POST',
+                body: JSON.stringify({
+                    conversation_id: conversationId,
+                    product_id: item.variation?.id || item.product.id,
+                    product_name: item.product.name,
+                    original_price: parseFloat(origPrice),
+                    requested_price: parseFloat(requestedPrice),
+                }),
+            });
+            const data = await res.json();
+            setDiscountRequests(prev => ({
+                ...prev,
+                [key]: { requestId: data.id, status: 'pending' },
+            }));
+        } catch (err: any) {
+            setError(err.message || 'Error al enviar solicitud');
+        } finally {
+            setEscalating(null);
+        }
+    };
+
+    const cartTotal = cart.reduce((sum, i) => {
         const p = i.customPrice || i.variation?.price || i.product.price || '0';
-        return s + parseFloat(p) * i.quantity;
+        return sum + parseFloat(p) * i.quantity;
     }, 0);
 
     const generateCheckoutLink = async () => {
         if (cart.length === 0 || !shippingValid || !customer) return;
+
+        // Block if any cart item has an unresolved discount violation
+        const hasBlockedItem = cart.some(item => {
+            const key = cartKey(item);
+            const req = discountRequests[key];
+            return isPriceExceedingLimit(item) && (!req || req.status === 'rejected');
+        });
+        if (hasBlockedItem) {
+            setError('Uno o más precios exceden tu límite de descuento. Escala la aprobación o ajusta los precios.');
+            return;
+        }
+
         setCreatingOrder(true);
         setError(null);
         try {
-            // Split customer name for billing
-            const nameParts = customer.shipping?.first_name 
-                ? [customer.shipping.first_name, customer.shipping.last_name || ''] 
+            const nameParts = customer.shipping?.first_name
+                ? [customer.shipping.first_name, customer.shipping.last_name || '']
                 : (customer.name || '').trim().split(/\s+/);
             const firstName = nameParts[0] || '';
             const lastName = nameParts.slice(1).join(' ') || '';
@@ -308,6 +482,7 @@ export default function CatalogPanel({
             if (data.payment_url) {
                 onSendCartLink(`¡Hola! He preparado tu pedido. Puedes revisar los detalles y completar tu pago aquí:\n\n${data.payment_url}`);
                 setCart([]);
+                setDiscountRequests({});
             }
         } catch (err: any) {
             setError(err.message || 'Error al generar link');
@@ -318,6 +493,7 @@ export default function CatalogPanel({
 
     const selectedCategoryName = categories.find(c => c.id === selectedCategory)?.name;
 
+    // ── Render ───────────────────────────────────────────────────────────────
     return (
         <div className="fixed bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 flex flex-col"
             style={{ width: 'min(560px, calc(100vw - 900px))', height: '70vh', maxHeight: '720px', minHeight: '480px', bottom: '80px', left: 'calc(528px + (100vw - 528px - 320px) / 2)', transform: 'translateX(-50%)' }}>
@@ -334,7 +510,7 @@ export default function CatalogPanel({
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b bg-slate-50/80 shrink-0">
                 <div className="flex gap-1 bg-slate-200/60 p-0.5 rounded-lg">
-                    <button onClick={() => { setView('catalog'); }}
+                    <button onClick={() => setView('catalog')}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${view === 'catalog' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-600 hover:text-slate-900'}`}>
                         <ShoppingBag className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />Catálogo
                     </button>
@@ -346,6 +522,15 @@ export default function CatalogPanel({
                         )}
                     </button>
                 </div>
+
+                {/* SalesKing discount limit badge */}
+                {skRules?.available && maxDiscountPct !== null && (
+                    <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 border border-indigo-200 rounded-lg">
+                        <ShieldCheck className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span className="text-[10px] text-indigo-700 font-semibold">Límite: {maxDiscountPct}% dto.</span>
+                    </div>
+                )}
+
                 <button onClick={onClose} className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-400 transition-colors">
                     <X className="w-4 h-4" />
                 </button>
@@ -375,7 +560,7 @@ export default function CatalogPanel({
                         </div>
                     </div>
 
-                    {/* Category chips / mode indicator */}
+                    {/* Category chips */}
                     <div className="px-3 pb-2 shrink-0">
                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                             <button onClick={showPopular}
@@ -421,7 +606,6 @@ export default function CatalogPanel({
                                     return (
                                         <div key={p.id} className={`group relative flex flex-col bg-white border rounded-xl overflow-hidden transition-all hover:shadow-md
                                             ${inCart ? 'border-indigo-300 ring-1 ring-indigo-100' : 'border-slate-200'}`}>
-                                            {/* Badges row - no image */}
                                             <div className="flex items-center gap-1 px-2.5 pt-2">
                                                 {isVariable && (
                                                     <span className="bg-purple-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
@@ -439,7 +623,6 @@ export default function CatalogPanel({
                                                     </span>
                                                 )}
                                             </div>
-                                            {/* Info */}
                                             <div className="p-2.5 flex-1 flex flex-col">
                                                 <h4 className="text-xs font-semibold text-slate-800 leading-tight line-clamp-2 flex-1">{p.name}</h4>
                                                 <div className="flex items-center justify-between mt-1.5">
@@ -513,15 +696,21 @@ export default function CatalogPanel({
                             const effectivePrice = item.customPrice || origPrice;
                             const varLabel = item.variation ? item.variation.attributes.map(a => a.option).join(' / ') : null;
                             const isVariable = item.product.type === 'variable';
+                            const exceedsLimit = isPriceExceedingLimit(item);
+                            const minAllowed = getMinAllowedPrice(origPrice);
+                            const discReq = discountRequests[key];
 
                             return (
-                                <div key={key} className="relative flex gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl group">
+                                <div key={key} className={`relative flex gap-3 p-3 border rounded-xl group transition-all
+                                    ${exceedsLimit && !discReq ? 'bg-red-50 border-red-200' :
+                                      discReq?.status === 'pending' ? 'bg-amber-50 border-amber-200' :
+                                      discReq?.status === 'approved' ? 'bg-green-50 border-green-200' :
+                                      discReq?.status === 'rejected' ? 'bg-red-50 border-red-200' :
+                                      'bg-slate-50 border-slate-200'}`}>
                                     <button onClick={() => removeItem(key)}
                                         className="absolute -top-1.5 -right-1.5 bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm z-10">
                                         <X className="w-3 h-3" />
                                     </button>
-
-                                    {/* Compact - no image */}
 
                                     <div className="flex-1 min-w-0">
                                         <h4 className="text-xs font-semibold text-slate-800 truncate">{item.product.name}</h4>
@@ -559,9 +748,19 @@ export default function CatalogPanel({
                                             {/* Price input */}
                                             <div className="flex items-center gap-1 flex-1">
                                                 <span className="text-[10px] text-slate-400">$</span>
-                                                <input type="number" step="0.01" value={effectivePrice}
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={effectivePrice}
                                                     onChange={e => updatePrice(key, e.target.value)}
-                                                    className="w-full text-right bg-white border border-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 rounded-lg py-1 pl-2 pr-2 text-sm font-bold text-indigo-700 outline-none" />
+                                                    disabled={discReq?.status === 'pending'}
+                                                    className={`w-full text-right border focus:ring-1 rounded-lg py-1 pl-2 pr-2 text-sm font-bold outline-none transition-all
+                                                        ${discReq?.status === 'pending'
+                                                            ? 'bg-amber-50 border-amber-300 text-amber-700 cursor-not-allowed'
+                                                            : exceedsLimit
+                                                            ? 'bg-white border-red-400 focus:border-red-500 focus:ring-red-200 text-red-600'
+                                                            : 'bg-white border-indigo-200 focus:border-indigo-500 focus:ring-indigo-200 text-indigo-700'}`}
+                                                />
                                             </div>
 
                                             {/* Subtotal */}
@@ -569,10 +768,66 @@ export default function CatalogPanel({
                                                 ${(parseFloat(effectivePrice) * item.quantity).toFixed(2)}
                                             </span>
                                         </div>
-                                        {item.customPrice && item.customPrice !== origPrice && (
-                                            <p className="text-[10px] text-green-600 mt-0.5">
-                                                Dto: ${origPrice} → ${item.customPrice} ({((1 - parseFloat(item.customPrice) / parseFloat(origPrice)) * 100).toFixed(1)}% off)
+
+                                        {/* Discount info line */}
+                                        {item.customPrice && item.customPrice !== origPrice && !exceedsLimit && !discReq && (
+                                            <p className="text-[10px] text-green-600 mt-0.5 flex items-center gap-1">
+                                                <ShieldCheck className="w-3 h-3" />
+                                                ${origPrice} → ${item.customPrice} ({((1 - parseFloat(item.customPrice) / parseFloat(origPrice)) * 100).toFixed(1)}% dto.) — dentro de tu límite
                                             </p>
+                                        )}
+
+                                        {/* Exceeds limit — escalation needed */}
+                                        {exceedsLimit && !discReq && (
+                                            <div className="mt-1.5 space-y-1">
+                                                <p className="text-[10px] text-red-600 flex items-center gap-1">
+                                                    <ShieldAlert className="w-3 h-3" />
+                                                    Excede tu límite ({maxDiscountPct}% dto. máx — mín ${minAllowed?.toFixed(2)})
+                                                </p>
+                                                <button
+                                                    onClick={() => handleEscalate(item)}
+                                                    disabled={escalating === key}
+                                                    className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold rounded-lg transition-colors disabled:opacity-60">
+                                                    {escalating === key
+                                                        ? <><Loader2 className="w-3 h-3 animate-spin" /> Enviando...</>
+                                                        : <><ArrowUpCircle className="w-3 h-3" /> Escalar a supervisor</>}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Pending escalation */}
+                                        {discReq?.status === 'pending' && (
+                                            <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                Esperando aprobación del supervisor...
+                                            </p>
+                                        )}
+
+                                        {/* Approved */}
+                                        {discReq?.status === 'approved' && (
+                                            <div className="mt-1 space-y-0.5">
+                                                <p className="text-[10px] text-green-700 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    Aprobado por {discReq.supervisorName} — ${discReq.approvedPrice?.toFixed(2)}
+                                                </p>
+                                                {discReq.note && (
+                                                    <p className="text-[10px] text-green-600 italic">"{discReq.note}"</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Rejected */}
+                                        {discReq?.status === 'rejected' && (
+                                            <div className="mt-1 space-y-0.5">
+                                                <p className="text-[10px] text-red-700 flex items-center gap-1">
+                                                    <XCircle className="w-3 h-3" />
+                                                    Rechazado por {discReq.supervisorName}
+                                                </p>
+                                                {discReq.note && (
+                                                    <p className="text-[10px] text-red-600 italic">"{discReq.note}"</p>
+                                                )}
+                                                <p className="text-[10px] text-slate-500">Ajusta el precio para re-escalar.</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -583,7 +838,7 @@ export default function CatalogPanel({
                     {/* Cart footer */}
                     {cart.length > 0 && (
                         <div className="border-t bg-slate-50 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                            {/* Shipping validation status */}
+                            {/* Shipping validation */}
                             {!shippingValid && (
                                 <div className="mx-3 mt-3 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
                                     <div className="flex items-start gap-2">
@@ -611,15 +866,31 @@ export default function CatalogPanel({
                                 </div>
                             )}
 
+                            {/* Pending escalations warning */}
+                            {cart.some(item => {
+                                const req = discountRequests[cartKey(item)];
+                                return isPriceExceedingLimit(item) && req?.status === 'pending';
+                            }) && (
+                                <div className="mx-3 mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
+                                    <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <p className="text-xs text-amber-700">Hay precios pendientes de aprobación. El link se generará cuando se aprueben.</p>
+                                </div>
+                            )}
+
                             {/* Total + Generate button */}
                             <div className="px-4 pb-4 pt-3">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-sm text-slate-600 font-medium">Total del pedido</span>
                                     <span className="text-xl font-bold text-slate-900">${cartTotal.toFixed(2)}</span>
                                 </div>
-                                <button onClick={generateCheckoutLink} disabled={creatingOrder || !shippingValid}
+                                <button
+                                    onClick={generateCheckoutLink}
+                                    disabled={creatingOrder || !shippingValid || cart.some(item => {
+                                        const req = discountRequests[cartKey(item)];
+                                        return isPriceExceedingLimit(item) && req?.status === 'pending';
+                                    })}
                                     className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors shadow-sm
-                                        ${shippingValid && !creatingOrder
+                                        ${shippingValid && !creatingOrder && !cart.some(item => discountRequests[cartKey(item)]?.status === 'pending' && isPriceExceedingLimit(item))
                                             ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                             : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
                                     {creatingOrder ? (

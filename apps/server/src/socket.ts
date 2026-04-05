@@ -28,6 +28,12 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string): SocketSe
     io.on('connection', (socket) => {
         console.log(`Socket connected: ${socket.id}`);
 
+        // Auto-join agent's personal notification room (used for discount approvals, etc.)
+        const connectedAgentId = (socket as any).agentId;
+        if (connectedAgentId) {
+            socket.join(`agent:${connectedAgentId}`);
+        }
+
         // Agent joins their personal room and their conversations
         socket.on('join_conversation', async (conversationId: string) => {
             const agentId = (socket as any).agentId;
