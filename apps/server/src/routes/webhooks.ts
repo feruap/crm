@@ -528,7 +528,7 @@ export async function handleBotResponse(
                 botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
                 console.log(`[Escalation] Conv ${conversationId}: ${esc.reason}`);
             }
-            await db.query(`UPDATE conversations SET status = 'waiting', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`, [conversationId]);
+            await db.query(`UPDATE conversations SET status = 'pending', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`, [conversationId]);
         }
 
         const result = await db.query(

@@ -78,7 +78,7 @@ const worker = new Worker<AIJobData>('ai-response', async (job: Job<AIJobData>) 
                 escalated = true;
                 botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
                 await db.query(
-                    `UPDATE conversations SET status = 'waiting', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`,
+                    `UPDATE conversations SET status = 'pending', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`,
                     [conversationId]
                 );
             }
