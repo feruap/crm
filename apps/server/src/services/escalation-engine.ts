@@ -19,6 +19,7 @@
 import { db } from '../db';
 import { getAIResponse } from '../ai.service';
 import { getCustomerProfile } from './recommendation-engine';
+import { emitEscalationAlert } from '../socket';
 
 interface ConditionConfig {
   keywords?: string[];
@@ -40,10 +41,39 @@ interface EscalationRule {
   priority?: number;
 }
 
+export type EscalationPriority = 'critical' | 'high' | 'medium' | 'low';
+
+const SLA_MINUTES: Record<EscalationPriority, number> = {
+  critical: 1,
+  high: 2,
+  medium: 5,
+  low: 15,
+};
+
+function getPriorityForCondition(conditionType: string): EscalationPriority {
+  switch (conditionType) {
+    case 'complaint':
+    case 'sentiment_negative':
+      return 'critical';
+    case 'purchase_intent':
+    case 'discount_request':
+    case 'vip_customer':
+    case 'order_issue':
+      return 'high';
+    case 'explicit_request':
+    case 'technical_question':
+    case 'keyword_match':
+      return 'medium';
+    default:
+      return 'low';
+  }
+}
+
 interface EscalationResult {
   shouldEscalate: boolean;
   reason: string;
   rule?: EscalationRule;
+  priority?: EscalationPriority;
 }
 
 interface HandoffResult {
@@ -208,6 +238,7 @@ export async function evaluateEscalation(
     return {
       shouldEscalate: true,
       reason: 'Cliente solicitó hablar con un humano',
+      priority: 'medium' as EscalationPriority,
       rule: {
         id: 0,
         name: 'Solicitud explícita de humano',
@@ -230,6 +261,7 @@ export async function evaluateEscalation(
     if (matched) {
       return {
         shouldEscalate: true,
+        priority: getPriorityForCondition(rule.condition_type),
         rule: {
           id: rule.id,
           name: rule.name,
@@ -368,15 +400,22 @@ export async function executeHandoff(
     if (agent.rows.length > 0) agentId = agent.rows[0].id;
   }
 
+  const priority: EscalationPriority = escalation.priority ?? 'low';
+  const slaMinutes = SLA_MINUTES[priority];
+  const escalatedAt = new Date();
+  const slaDeadline = new Date(escalatedAt.getTime() + slaMinutes * 60 * 1000);
+
   // Atomic handoff: transaction wraps both UPDATE + INSERT
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     await client.query(
       `UPDATE conversations
-       SET assigned_agent_id = $1, handoff_summary = $2, escalation_reason = $3, updated_at = NOW()
-       WHERE id = $4`,
-      [agentId, summary, escalation.reason, conversationId]
+       SET assigned_agent_id = $1, handoff_summary = $2, escalation_reason = $3,
+           escalation_priority = $4, escalated_at = $5, sla_deadline = $6, sla_breached = FALSE,
+           updated_at = NOW()
+       WHERE id = $7`,
+      [agentId, summary, escalation.reason, priority, escalatedAt, slaDeadline, conversationId]
     );
     if (agentId) {
       await client.query(
@@ -397,6 +436,17 @@ export async function executeHandoff(
     throw err;
   } finally {
     client.release();
+  }
+
+  // Notify all agents for critical/high priority escalations
+  if (priority === 'critical' || priority === 'high') {
+    try {
+      const custRow = await db.query<{ display_name: string }>(
+        `SELECT display_name FROM customers WHERE id = $1`, [customerId]
+      );
+      const customerName = custRow.rows[0]?.display_name ?? 'Cliente';
+      emitEscalationAlert(String(conversationId), priority, customerName, escalation.reason, slaDeadline);
+    } catch (_) { /* non-fatal */ }
   }
 
   return { agent_id: agentId, summary };

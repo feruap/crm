@@ -50,6 +50,10 @@ export function useSocket() {
         return () => { socketRef.current.off('conversation_list_updated', handler); };
     }, []);
 
+    const onEscalationAlert = useCallback((handler: (data: any) => void) => {
+        socketRef.current.on('escalation_alert', handler);
+        return () => { socketRef.current.off('escalation_alert', handler); };
+    }, []);
 
-    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated, onConversationListUpdated };
+    return { joinConversation, leaveConversation, onNewMessage, onAlert, onConversationUpdated, onConversationListUpdated, onEscalationAlert };
 }

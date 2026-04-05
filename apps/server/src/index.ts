@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 
 import { db } from './db';
-import { initSocket } from './socket';
+import { initSocket, emitAlert } from './socket';
 import { runAlertsCron } from './routes/alerts';
 import { requireAuth } from './middleware/auth';
 
@@ -482,6 +482,47 @@ cron.schedule('0 * * * *', async () => {
     }
 });
 
+// ─── Cron: SLA breach detection every 30 seconds ─────────────────────────────
+cron.schedule('*/30 * * * * *', async () => {
+    try {
+        const breached = await db.query(`
+            SELECT c.id, c.escalation_priority, cu.display_name AS customer_name
+            FROM conversations c
+            LEFT JOIN customers cu ON cu.id = c.customer_id
+            WHERE c.sla_deadline < NOW()
+              AND c.sla_breached = FALSE
+              AND c.escalation_priority IS NOT NULL
+              AND c.status NOT IN ('resolved', 'archived')
+        `);
+        for (const conv of breached.rows) {
+            await db.query(`UPDATE conversations SET sla_breached = TRUE WHERE id = $1`, [conv.id]);
+            // Auto-assign to least-busy available agent if still unassigned
+            const agent = await db.query(
+                `SELECT a.id FROM agents a
+                 LEFT JOIN conversations c2 ON c2.assigned_agent_id = a.id AND c2.id = $1
+                 WHERE a.is_active = TRUE AND c2.id IS NULL
+                 ORDER BY COALESCE(a.active_conversation_count, 0) ASC LIMIT 1`,
+                [conv.id]
+            );
+            if (agent.rows.length > 0) {
+                await db.query(
+                    `UPDATE conversations SET assigned_agent_id = $1 WHERE id = $2 AND assigned_agent_id IS NULL`,
+                    [agent.rows[0].id, conv.id]
+                );
+            }
+            emitAlert({
+                type: 'sla_breach',
+                conversationId: conv.id,
+                priority: conv.escalation_priority,
+                customerName: conv.customer_name,
+                message: `SLA incumplido: ${conv.customer_name} (${conv.escalation_priority})`,
+            });
+        }
+    } catch (err) {
+        console.error('❌ Error in SLA breach cron:', err);
+    }
+});
+
 // ─── Auto-Migration (Fase 7) ─────────────────────────────────────────────────
 async function runMigrations() {
     try {
@@ -626,6 +667,11 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS active_conversation_count INTEGER NOT NULL DEFAULT 0`);
     await safeAlter(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER UNIQUE`);
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER`);
+    // SLA / priority escalation columns
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS escalation_priority TEXT`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS sla_deadline TIMESTAMPTZ`);
+    await safeAlter(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS sla_breached BOOLEAN DEFAULT FALSE`);
 
     // Performance indexes
     const safeIdx = async (sql: string) => { try { await db.query(sql); } catch (_) {} };

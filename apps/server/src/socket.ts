@@ -81,3 +81,13 @@ export function emitConversationUpdated(conversationId: string, data: object): v
 export function emitAlert(alert: object): void {
     getIO().emit('new_alert', alert);
 }
+
+export function emitEscalationAlert(
+    conversationId: string,
+    priority: string,
+    customerName: string,
+    reason: string,
+    slaDeadline: Date
+): void {
+    getIO().emit('escalation_alert', { conversationId, priority, customerName, reason, slaDeadline });
+}
