@@ -34,7 +34,8 @@ router.get('/categories', async (req: Request, res: Response) => {
 
 // GET /api/products?search=...&per_page=20&orderby=popularity&category=123
 router.get('/', async (req: Request, res: Response) => {
-    if (!wcConfigured()) {
+    const wc = await getWC();
+    if (!wc.configured) {
         res.json({ products: [], warning: 'WooCommerce credentials not configured' });
         return;
     }
@@ -47,8 +48,8 @@ router.get('/', async (req: Request, res: Response) => {
 
     try {
         const response = await fetch(
-            `${process.env.WC_URL}/wp-json/wc/v3/products?per_page=${perPage}&status=publish&orderby=${orderby}${search}${category}`,
-            { headers: { Authorization: `Basic ${wcAuth()}` } }
+            `${wc.url}/wp-json/wc/v3/products?per_page=${perPage}&status=publish&orderby=${orderby}${search}${category}`,
+            { headers: { Authorization: `Basic ${wc.auth}` } }
         );
 
         if (!response.ok) {
@@ -93,15 +94,16 @@ router.get('/', async (req: Request, res: Response) => {
 
 // GET /api/products/:id/variations — fetch variations for a variable product
 router.get('/:id/variations', async (req: Request, res: Response) => {
-    if (!wcConfigured()) {
+    const wc = await getWC();
+    if (!wc.configured) {
         res.status(503).json({ error: 'WooCommerce not configured' });
         return;
     }
 
     try {
         const response = await fetch(
-            `${process.env.WC_URL}/wp-json/wc/v3/products/${req.params.id}/variations?per_page=100`,
-            { headers: { Authorization: `Basic ${wcAuth()}` } }
+            `${wc.url}/wp-json/wc/v3/products/${req.params.id}/variations?per_page=100`,
+            { headers: { Authorization: `Basic ${wc.auth}` } }
         );
 
         if (!response.ok) {
@@ -138,7 +140,8 @@ router.get('/:id/variations', async (req: Request, res: Response) => {
 router.post('/order', async (req: Request, res: Response) => {
     const { customer_id, wc_customer_id, line_items, billing, shipping, notes } = req.body;
 
-    if (!wcConfigured()) {
+    const wc = await getWC();
+    if (!wc.configured) {
         res.status(503).json({ error: 'WooCommerce not configured' });
         return;
     }
@@ -171,9 +174,9 @@ router.post('/order', async (req: Request, res: Response) => {
             );
         }
 
-        const response = await fetch(`${process.env.WC_URL}/wp-json/wc/v3/orders`, {
+        const response = await fetch(`${wc.url}/wp-json/wc/v3/orders`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Basic ${wcAuth()}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Basic ${wc.auth}` },
             body: JSON.stringify({
                 customer_id: wc_customer_id ?? 0,
                 line_items,
@@ -207,7 +210,8 @@ router.post('/order', async (req: Request, res: Response) => {
 // GET /api/products/wp-agents
 // Search WordPress users with role "agent" (for linking CRM agents to WP/SalesKing)
 router.get('/wp-agents', async (_req: Request, res: Response) => {
-    if (!wcConfigured()) {
+    const wc = await getWC();
+    if (!wc.configured) {
         res.status(503).json({ error: 'WooCommerce not configured' });
         return;
     }
@@ -215,8 +219,8 @@ router.get('/wp-agents', async (_req: Request, res: Response) => {
     try {
         // WP REST API: list users with role=agent
         const response = await fetch(
-            `${process.env.WC_URL}/wp-json/wp/v2/users?roles=agent&per_page=100&context=edit`,
-            { headers: { Authorization: `Basic ${wcAuth()}` } }
+            `${wc.url}/wp-json/wp/v2/users?roles=agent&per_page=100&context=edit`,
+            { headers: { Authorization: `Basic ${wc.auth}` } }
         );
 
         if (!response.ok) {
@@ -243,7 +247,8 @@ router.get('/wp-agents', async (_req: Request, res: Response) => {
 // Fetches the current agent's SalesKing pricing rules from the bridge plugin in real-time.
 // This ensures any changes made in SalesKing are immediately reflected in the CRM.
 router.get('/salesking-pricing', async (req: Request, res: Response) => {
-    if (!wcConfigured()) {
+    const wc = await getWC();
+    if (!wc.configured) {
         res.json({ available: false, reason: 'WooCommerce not configured' });
         return;
     }
@@ -261,12 +266,12 @@ router.get('/salesking-pricing', async (req: Request, res: Response) => {
         // Fetch agent-specific rules from the bridge plugin
         const [agentRes, settingsRes] = await Promise.all([
             fetch(
-                `${process.env.WC_URL}/wp-json/myalice-crm/v1/salesking-agent/${wcAgentId}`,
-                { headers: { Authorization: `Basic ${wcAuth()}` } }
+                `${wc.url}/wp-json/myalice-crm/v1/salesking-agent/${wcAgentId}`,
+                { headers: { Authorization: `Basic ${wc.auth}` } }
             ),
             fetch(
-                `${process.env.WC_URL}/wp-json/myalice-crm/v1/salesking-settings`,
-                { headers: { Authorization: `Basic ${wcAuth()}` } }
+                `${wc.url}/wp-json/myalice-crm/v1/salesking-settings`,
+                { headers: { Authorization: `Basic ${wc.auth}` } }
             ),
         ]);
 
