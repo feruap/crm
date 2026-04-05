@@ -196,7 +196,7 @@ router.post('/push-to-wp', requireRole('admin'), async (req: Request, res: Respo
                 );
             }
 
-            res.json({ action: 'updated', wp_user_id: wpResult.wp_user_id, ...wpResult });
+            res.json({ action: 'updated', ...wpResult });
         } else {
             // Create new WP user
             const username = agent.email.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
@@ -215,7 +215,7 @@ router.post('/push-to-wp', requireRole('admin'), async (req: Request, res: Respo
                 [String(wpResult.wp_user_id), wpResult.salesking_agentid, agent_id]
             );
 
-            res.json({ action: 'created', wp_user_id: wpResult.wp_user_id, ...wpResult });
+            res.json({ action: 'created', ...wpResult });
         }
     } catch (err: any) {
         console.error('[Push to WP]', err);
