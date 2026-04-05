@@ -751,8 +751,32 @@ router.get('/meta', (req: Request, res: Response) => {
 
 async function resolveChannelBySubtype(
     provider: string,
-    subtype: string | null
+    subtype: string | null,
+    pageId?: string
 ): Promise<{ id: string; webhook_secret: string | null } | null> {
+    // 0. If pageId is provided, match by page_id in provider_config first (most accurate)
+    if (pageId) {
+        const byPageId = await db.query(
+            `SELECT id, webhook_secret FROM channels
+             WHERE provider = $1 AND is_active = TRUE
+               AND provider_config->>'page_id' = $2
+               ${subtype ? `AND subtype = '${subtype}'` : ''}
+             LIMIT 1`,
+            [provider, pageId]
+        );
+        if (byPageId.rows.length > 0) return byPageId.rows[0];
+
+        // Try without subtype filter in case page_id matches but subtype differs
+        const byPageIdAny = await db.query(
+            `SELECT id, webhook_secret FROM channels
+             WHERE provider = $1 AND is_active = TRUE
+               AND provider_config->>'page_id' = $2
+             LIMIT 1`,
+            [provider, pageId]
+        );
+        if (byPageIdAny.rows.length > 0) return byPageIdAny.rows[0];
+    }
+
     // 1. Intenta encontrar canal con subtype exacto
     if (subtype) {
         const withSubtype = await db.query(
@@ -797,7 +821,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                 if (!event.message?.text) continue;
 
                 const subtype = isInstagram ? 'chat' : 'messenger';
-                const ch = await resolveChannelBySubtype(provider, subtype);
+                const ch = await resolveChannelBySubtype(provider, subtype, entry.id);
                 if (!ch) continue;
 
                 if (ch.webhook_secret && !validateMetaSignature(req, ch.webhook_secret)) {
@@ -849,7 +873,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                 if (!value?.message || value.item !== 'comment') continue;
 
                 const subtype = 'feed';
-                const ch = await resolveChannelBySubtype('facebook', subtype);
+                const ch = await resolveChannelBySubtype('facebook', subtype, entry.id);
                 if (!ch) continue;
 
                 const senderId: string = value.from?.id ?? value.sender_id;
@@ -888,7 +912,7 @@ router.post('/meta', async (req: Request, res: Response) => {
                 if (!value?.text) continue;
 
                 const subtype = 'comments';
-                const ch = await resolveChannelBySubtype('instagram', subtype);
+                const ch = await resolveChannelBySubtype('instagram', subtype, entry.id);
                 if (!ch) continue;
 
                 const senderId: string = value.from?.id ?? '';
