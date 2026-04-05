@@ -3753,9 +3753,12 @@ function KnowledgeBaseTab() {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState('');
     const [syncResult, setSyncResult] = useState<any>(null);
-    const [activeSection, setActiveSection] = useState<'overview' | 'entries' | 'gaps'>('overview');
+    const [activeSection, setActiveSection] = useState<'overview' | 'entries' | 'gaps' | 'pending'>('overview');
     const [resolveGapId, setResolveGapId] = useState<string | null>(null);
     const [resolveAnswer, setResolveAnswer] = useState('');
+    const [pendingEntries, setPendingEntries] = useState<any[]>([]);
+    const [editingEntry, setEditingEntry] = useState<{ id: string; question: string; answer: string } | null>(null);
+    const [profile, setProfile] = useState<{ role: string } | null>(null);
 
     const loadStats = useCallback(async () => {
         try {
@@ -3763,6 +3766,14 @@ function KnowledgeBaseTab() {
             const data = await r.json();
             setStats(data);
         } catch (e) { console.error('Failed to load KB stats:', e); }
+    }, []);
+
+    const loadPending = useCallback(async () => {
+        try {
+            const r = await apiFetch('/api/knowledge/pending');
+            const data = await r.json();
+            setPendingEntries(Array.isArray(data) ? data : []);
+        } catch (e) { console.error('Failed to load pending KB entries:', e); }
     }, []);
 
     const loadEntries = useCallback(async (search?: string) => {
@@ -3783,8 +3794,9 @@ function KnowledgeBaseTab() {
     }, []);
 
     useEffect(() => {
-        Promise.all([loadStats(), loadEntries(), loadGaps()]).finally(() => setLoading(false));
-    }, [loadStats, loadEntries, loadGaps]);
+        apiFetch('/api/auth/me').then(r => r.json()).then(d => setProfile(d)).catch(() => {});
+        Promise.all([loadStats(), loadEntries(), loadGaps(), loadPending()]).finally(() => setLoading(false));
+    }, [loadStats, loadEntries, loadGaps, loadPending]);
 
     const handleSyncMD = async () => {
         const input = document.createElement('input');
@@ -3856,6 +3868,35 @@ function KnowledgeBaseTab() {
         } catch (e) { console.error(e); }
     };
 
+    const handleApprove = async (id: string) => {
+        try {
+            await apiFetch(`/api/knowledge/${id}/approve`, { method: 'PUT' });
+            setPendingEntries(prev => prev.filter(e => e.id !== id));
+            await loadStats();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleReject = async (id: string) => {
+        try {
+            await apiFetch(`/api/knowledge/${id}/reject`, { method: 'PUT' });
+            setPendingEntries(prev => prev.filter(e => e.id !== id));
+            await loadStats();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleEditApprove = async () => {
+        if (!editingEntry) return;
+        try {
+            await apiFetch(`/api/knowledge/${editingEntry.id}/edit`, {
+                method: 'PUT',
+                body: JSON.stringify({ question: editingEntry.question, answer: editingEntry.answer }),
+            });
+            setEditingEntry(null);
+            setPendingEntries(prev => prev.filter(e => e.id !== editingEntry.id));
+            await loadStats();
+        } catch (e) { console.error(e); }
+    };
+
     const handleSearch = () => {
         loadEntries(searchQuery);
     };
@@ -3875,6 +3916,7 @@ function KnowledgeBaseTab() {
                     { key: 'overview' as const, label: 'Resumen', icon: BarChart2 },
                     { key: 'entries' as const, label: 'Entradas', icon: Brain },
                     { key: 'gaps' as const, label: 'Preguntas sin Respuesta', icon: AlertCircle },
+                    ...(profile?.role === 'admin' || profile?.role === 'supervisor' ? [{ key: 'pending' as const, label: 'Revisión Pendiente', icon: Shield }] : []),
                 ].map(tab => (
                     <button key={tab.key} onClick={() => setActiveSection(tab.key)}
                         className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -3886,6 +3928,9 @@ function KnowledgeBaseTab() {
                         {tab.label}
                         {tab.key === 'gaps' && stats?.knowledge_gaps?.pending > 0 && (
                             <span className="ml-1 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">{stats.knowledge_gaps.pending}</span>
+                        )}
+                        {tab.key === 'pending' && pendingEntries.length > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">{pendingEntries.length}</span>
                         )}
                     </button>
                 ))}
@@ -4058,6 +4103,92 @@ function KnowledgeBaseTab() {
                         ))}
                         {entries.length === 0 && (
                             <p className="text-center text-slate-400 text-sm py-8">No hay entradas en la base de conocimiento.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ── PENDING REVIEW SECTION ── */}
+            {activeSection === 'pending' && (
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-500">
+                        Entradas auto-aprendidas de conversaciones resueltas. Revisa y aprueba antes de que el bot las use.
+                    </p>
+
+                    {/* Edit modal */}
+                    {editingEntry && (
+                        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg space-y-4">
+                                <h4 className="text-base font-semibold text-slate-800">Editar y Aprobar</h4>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pregunta</label>
+                                    <textarea value={editingEntry.question}
+                                        onChange={e => setEditingEntry(prev => prev ? { ...prev, question: e.target.value } : null)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y" rows={2} />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">Respuesta</label>
+                                    <textarea value={editingEntry.answer}
+                                        onChange={e => setEditingEntry(prev => prev ? { ...prev, answer: e.target.value } : null)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-y" rows={4} />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                    <button onClick={() => setEditingEntry(null)}
+                                        className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                                    <button onClick={handleEditApprove}
+                                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                                        Guardar y Aprobar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                        {pendingEntries.map(entry => (
+                            <div key={entry.id} className="bg-white border border-orange-200 rounded-lg p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                        <div>
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Pregunta del cliente</p>
+                                            <p className="text-sm text-slate-800">{entry.question}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Respuesta del agente</p>
+                                            <p className="text-sm text-slate-600 line-clamp-3">{entry.answer}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3 flex-wrap">
+                                            {entry.customer_name && (
+                                                <span className="text-xs text-slate-400">Cliente: {entry.customer_name}</span>
+                                            )}
+                                            {entry.channel_type && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded capitalize">{entry.channel_type}</span>
+                                            )}
+                                            <span className="text-xs text-slate-400">{new Date(entry.created_at).toLocaleString('es-MX')}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 pt-1 border-t border-slate-100">
+                                    <button onClick={() => handleApprove(entry.id)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700">
+                                        <CheckCircle className="w-3.5 h-3.5" /> Aprobar
+                                    </button>
+                                    <button onClick={() => setEditingEntry({ id: entry.id, question: entry.question, answer: entry.answer })}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700">
+                                        <Edit2 className="w-3.5 h-3.5" /> Editar y Aprobar
+                                    </button>
+                                    <button onClick={() => handleReject(entry.id)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-500 text-xs font-medium rounded-lg border border-red-200 hover:bg-red-50">
+                                        <X className="w-3.5 h-3.5" /> Rechazar
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                        {pendingEntries.length === 0 && (
+                            <div className="text-center py-8">
+                                <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                                <p className="text-slate-400 text-sm">No hay entradas pendientes de revisión.</p>
+                            </div>
                         )}
                     </div>
                 </div>

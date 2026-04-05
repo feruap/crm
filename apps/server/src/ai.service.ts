@@ -59,20 +59,20 @@ export async function findTopKnowledgeHits(
     const isZeroVector = embedding.every(v => v === 0);
     const vectorLiteral = `[${embedding.join(',')}]`;
 
-    // 1. Semantic search (only if not zero vector)
+    // 1. Semantic search (only if not zero vector) — approved entries only
     let semanticResults: any[] = [];
     if (!isZeroVector) {
         const res = await db.query(
             `SELECT id, question, answer, metadata, 1 - (embedding <=> $1::vector) as confidence
              FROM knowledge_base
-             WHERE 1 - (embedding <=> $1::vector) > 0.35
+             WHERE status = 'approved' AND 1 - (embedding <=> $1::vector) > 0.35
              ORDER BY confidence DESC LIMIT $2`,
             [vectorLiteral, limit]
         );
         semanticResults = res.rows;
     }
 
-    // 2. Textual search (fallback/complement) — only if we need more results
+    // 2. Textual search (fallback/complement) — approved entries only
     const needed = limit - semanticResults.length;
     let textResults: any[] = [];
     if (needed > 0) {
@@ -80,7 +80,7 @@ export async function findTopKnowledgeHits(
         const textRes = await db.query(
             `SELECT id, question, answer, metadata, 0.65 as confidence
              FROM knowledge_base
-             WHERE (question ILIKE $1 OR answer ILIKE $1)
+             WHERE status = 'approved' AND (question ILIKE $1 OR answer ILIKE $1)
              ${existingIds.length > 0 ? `AND id != ALL($3)` : ''}
              LIMIT $2`,
             existingIds.length > 0 ? [`%${text}%`, needed, existingIds] : [`%${text}%`, needed]
@@ -506,6 +506,8 @@ export async function learnFromConversation(
     if (messages.rows.length < 2) return;
 
     const rows = messages.rows;
+    let newPendingCount = 0;
+
     for (let i = 0; i < rows.length - 1; i++) {
         if (rows[i].direction === 'inbound' && rows[i + 1].direction === 'outbound') {
             const question = rows[i].content as string;
@@ -519,13 +521,27 @@ export async function learnFromConversation(
                 embeddingLiteral = `[${embedding.join(',')}]`;
             } catch { /* skip embedding if AI not available */ }
 
-            await db.query(
-                `INSERT INTO knowledge_base (question, answer, source_conversation_id, embedding)
-                 VALUES ($1, $2, $3, $4::vector)
-                 ON CONFLICT DO NOTHING`,
+            const result = await db.query(
+                `INSERT INTO knowledge_base (question, answer, source_conversation_id, embedding, status)
+                 VALUES ($1, $2, $3, $4::vector, 'pending_review')
+                 ON CONFLICT DO NOTHING
+                 RETURNING id`,
                 [question, answer, conversationId, embeddingLiteral]
             );
+            if (result.rows.length > 0) newPendingCount++;
         }
+    }
+
+    // Notify supervisors/admins via Socket.IO if new entries need review
+    if (newPendingCount > 0) {
+        try {
+            const { getIO } = await import('./socket');
+            getIO().emit('kb_pending_review', {
+                conversationId,
+                count: newPendingCount,
+                message: `${newPendingCount} nueva(s) entrada(s) de KB pendiente(s) de revisión`,
+            });
+        } catch { /* socket may not be initialized yet */ }
     }
 }
 

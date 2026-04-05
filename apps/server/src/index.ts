@@ -626,6 +626,11 @@ async function runMigrations() {
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS active_conversation_count INTEGER NOT NULL DEFAULT 0`);
     await safeAlter(`ALTER TABLE teams ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER UNIQUE`);
     await safeAlter(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS salesking_group_id INTEGER`);
+    await safeAlter(`ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'approved'`);
+    // Backfill: existing entries without status should be approved
+    try { await db.query(`UPDATE knowledge_base SET status = 'approved' WHERE status IS NULL`); } catch (_) {}
+    // Index for fast filtering by status
+    try { await db.query(`CREATE INDEX IF NOT EXISTS idx_kb_status ON knowledge_base (status)`); } catch (_) {}
 
     // Performance indexes
     const safeIdx = async (sql: string) => { try { await db.query(sql); } catch (_) {} };
