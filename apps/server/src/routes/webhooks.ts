@@ -534,7 +534,7 @@ export async function handleBotResponse(
         const result = await db.query(
             `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
              VALUES ($1, $2, $3, 'outbound', $4, $5, $6) RETURNING *`,
-            [conversationId, channelId, customerId, botReply, (esc.escalate || botSelfEscalated || purchaseIntent) ? 'escalation' : 'bot', confidence]
+            [conversationId, channelId, customerId, botReply, 'bot', confidence]
         );
 
         const insertedMessage = result.rows[0];
