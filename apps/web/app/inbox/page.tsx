@@ -87,8 +87,8 @@ function buildQuery(tab: TabFilter, channel: ChannelFilter, handler: HandlerFilt
     } else {
         if (tab === 'starred') params.set('starred', 'true');
         if (tab === 'mine') params.set('agent_id', 'me'); // The backend should handle 'me' or we get it from auth
-        // Include both open and pending conversations in inbox views
-        params.set('status', 'open,pending');
+        // Don't filter by status — show all non-archived conversations (open + pending + new)
+        // The is_archived=FALSE filter on backend already handles this
     }
 
     if (channel !== 'all') params.set('channel_provider', channel);

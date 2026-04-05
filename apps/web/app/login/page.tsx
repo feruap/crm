@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Lucide from 'lucide-react';
 const { MessageSquare, Eye, EyeOff, AlertCircle } = Lucide as any;
@@ -18,6 +18,14 @@ export default function LoginPage() {
     const [forgotEmail, setForgotEmail] = useState('');
     const [forgotMsg, setForgotMsg] = useState('');
     const [forgotLoading, setForgotLoading] = useState(false);
+
+    // Redirect to inbox if already authenticated
+    useEffect(() => {
+        const token = localStorage.getItem('myalice_token');
+        if (token) {
+            router.replace('/inbox');
+        }
+    }, [router]);
 
     const handleForgot = async (e: React.FormEvent) => {
         e.preventDefault();

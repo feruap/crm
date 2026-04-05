@@ -55,8 +55,12 @@ router.get('/', async (req: Request, res: Response) => {
             params.push(statuses[0]);
             query += ` AND c.status = $${params.length}`;
         } else if (statuses.length > 1) {
-            const placeholders = statuses.map((s, i) => { params.push(s); return `$${params.length}`; });
-            query += ` AND c.status IN (${placeholders.join(',')})`;
+            const holders: string[] = [];
+            for (const s of statuses) {
+                params.push(s);
+                holders.push(`$${params.length}`);
+            }
+            query += ` AND c.status IN (${holders.join(', ')})`;
         }
     }
     if (channel_id) {
@@ -88,8 +92,13 @@ router.get('/', async (req: Request, res: Response) => {
 
     query += ` ORDER BY last_message_at DESC NULLS LAST`;
 
-    const result = await db.query(query, params);
-    res.json(result.rows);
+    try {
+        const result = await db.query(query, params);
+        res.json(result.rows);
+    } catch (err: any) {
+        console.error('[conversations] SQL error:', err.message, { query: query.substring(0, 300), paramCount: params.length });
+        res.status(500).json({ error: 'Failed to load conversations', detail: err.message });
+    }
 });
 
 // GET /api/conversations/:id/customer
