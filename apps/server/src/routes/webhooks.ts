@@ -1172,7 +1172,8 @@ router.post('/webchat', async (req: Request, res: Response) => {
 
 // ──────────────────────────────────────────────────────────────────────────
 // WooCommerce Webhook — Order Status Changes
-// Receives status updates from WC and syncs to CRM
+// Validates signature, enqueues payload in Redis/BullMQ, returns 200 fast.
+// Actual processing is handled by wcWebhookWorker with 3 retries + dead-letter.
 // ──────────────────────────────────────────────────────────────────────────
 router.post('/woocommerce-status', async (req: Request, res: Response) => {
     const wcWebhookSecret = process.env.WC_WEBHOOK_SECRET;
@@ -1191,68 +1192,80 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
         }
     }
 
+    const order = req.body;
+    if (!order.id || !order.status) {
+        res.sendStatus(200);
+        return;
+    }
+
     try {
-        const order = req.body;
-        if (!order.id || !order.status) {
-            res.sendStatus(200);
-            return;
-        }
+        // Enqueue immediately so WooCommerce gets a fast 200 ACK.
+        // wcWebhookWorker will process with up to 3 retries + exponential backoff.
+        const { wcWebhookQueue } = require('../queues/wcWebhookQueue');
+        await wcWebhookQueue.add('wc-order', {
+            event: 'woocommerce-status',
+            payload: order,
+            receivedAt: new Date().toISOString(),
+        });
+        console.log(`[WC Webhook] Order #${order.id} enqueued for processing`);
+    } catch (queueErr: any) {
+        // Redis unavailable — fall back to inline processing so no webhook is lost
+        console.warn('[WC Webhook] Queue unavailable, processing inline:', queueErr.message);
+        try {
+            const externalOrderId = String(order.id);
+            const newStatus = order.status;
 
-        const externalOrderId = String(order.id);
-        const newStatus = order.status;
-
-        const result = await receiveStatusFromWC(externalOrderId, newStatus);
-        if (result.ok) {
-            console.log(`[WC→CRM Sync] Order #${externalOrderId} → ${newStatus}`);
-        } else {
-            console.error(`[WC→CRM Sync] Error for order #${externalOrderId}:`, (result as any).error);
-        }
-
-        // Also sync order data if it doesn't exist in CRM
-        const existingOrder = await db.query(
-            `SELECT id FROM orders WHERE external_order_id = $1`,
-            [externalOrderId]
-        );
-
-        if (existingOrder.rows.length === 0 && order.total) {
-            const customerEmail = order.billing?.email;
-            let customerId: string | null = null;
-
-            if (customerEmail) {
-                const customer = await db.query(
-                    `SELECT c.id FROM customers c
-                     JOIN customer_attributes ca ON ca.customer_id = c.id
-                     WHERE ca.key = 'email' AND ca.value = $1
-                     LIMIT 1`,
-                    [customerEmail]
-                );
-                if (customer.rows.length > 0) {
-                    customerId = customer.rows[0].id;
-                }
+            const result = await receiveStatusFromWC(externalOrderId, newStatus);
+            if (result.ok) {
+                console.log(`[WC→CRM Sync] Order #${externalOrderId} → ${newStatus}`);
+            } else {
+                console.error(`[WC→CRM Sync] Error for order #${externalOrderId}:`, (result as any).error);
             }
 
-            await db.query(
-                `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (external_order_id) DO UPDATE
-                     SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
-                [
-                    externalOrderId,
-                    customerId,
-                    order.total,
-                    order.currency?.toUpperCase() || 'MXN',
-                    newStatus,
-                    JSON.stringify(order.line_items || []),
-                    order.date_created || new Date().toISOString(),
-                ]
+            const existingOrder = await db.query(
+                `SELECT id FROM orders WHERE external_order_id = $1`,
+                [externalOrderId]
             );
-        }
 
-        res.sendStatus(200);
-    } catch (err) {
-        console.error('WooCommerce webhook error:', err);
-        res.sendStatus(500);
+            if (existingOrder.rows.length === 0 && order.total) {
+                const customerEmail = order.billing?.email;
+                let customerId: string | null = null;
+
+                if (customerEmail) {
+                    const customer = await db.query(
+                        `SELECT c.id FROM customers c
+                         JOIN customer_attributes ca ON ca.customer_id = c.id
+                         WHERE ca.key = 'email' AND ca.value = $1
+                         LIMIT 1`,
+                        [customerEmail]
+                    );
+                    if (customer.rows.length > 0) {
+                        customerId = customer.rows[0].id;
+                    }
+                }
+
+                await db.query(
+                    `INSERT INTO orders (external_order_id, customer_id, total_amount, currency, status, items, order_date)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     ON CONFLICT (external_order_id) DO UPDATE
+                         SET status = EXCLUDED.status, total_amount = EXCLUDED.total_amount`,
+                    [
+                        externalOrderId,
+                        customerId,
+                        order.total,
+                        order.currency?.toUpperCase() || 'MXN',
+                        newStatus,
+                        JSON.stringify(order.line_items || []),
+                        order.date_created || new Date().toISOString(),
+                    ]
+                );
+            }
+        } catch (fallbackErr) {
+            console.error('[WC Webhook] Inline fallback error:', fallbackErr);
+        }
     }
+
+    res.sendStatus(200);
 });
 
 // ──────────────────────────────────────────────────────────────────────────

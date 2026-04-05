@@ -18,8 +18,11 @@ define('AMUNET_CRM_BRIDGE_VERSION', '2.1.0');
 
 register_activation_hook(__FILE__, function () {
     global $wpdb;
-    $table = $wpdb->prefix . 'amunet_visitors';
     $charset = $wpdb->get_charset_collate();
+    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+    // Visitor tracking table
+    $table = $wpdb->prefix . 'amunet_visitors';
     $sql = "CREATE TABLE IF NOT EXISTS $table (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         cookie_id VARCHAR(50) NOT NULL,
@@ -39,8 +42,30 @@ register_activation_hook(__FILE__, function () {
         KEY phone (phone),
         KEY utm_campaign (utm_campaign)
     ) $charset;";
-    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    // Webhook queue table — stores incoming webhooks for async processing with retries
+    $queue_table = $wpdb->prefix . 'amunet_webhook_queue';
+    $sql_queue = "CREATE TABLE IF NOT EXISTS $queue_table (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        event_type VARCHAR(100) NOT NULL DEFAULT 'incoming',
+        payload LONGTEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+        max_attempts TINYINT UNSIGNED NOT NULL DEFAULT 3,
+        next_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_error TEXT DEFAULT NULL,
+        source_ip VARCHAR(50) DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_status_next (status, next_attempt_at)
+    ) $charset;";
+    dbDelta($sql_queue);
+
+    // Schedule recurring cron job for queue processing
+    if (!wp_next_scheduled('amunet_process_webhook_queue')) {
+        wp_schedule_event(time(), 'every_minute', 'amunet_process_webhook_queue');
+    }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1029,4 +1054,277 @@ function amunet_tracker_link_phone($request) {
     if (!$cookie_id || !$phone) return new WP_Error('missing', 'cookie_id and phone required', ['status' => 400]);
     $wpdb->update($table, ['phone' => $phone], ['cookie_id' => $cookie_id]);
     return ['ok' => true];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WEBHOOK QUEUE — Async processing with retries + dead-letter
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Clear cron job on plugin deactivation
+register_deactivation_hook(__FILE__, function () {
+    wp_clear_scheduled_hook('amunet_process_webhook_queue');
+});
+
+// Register custom "every minute" cron interval
+add_filter('cron_schedules', function ($schedules) {
+    if (!isset($schedules['every_minute'])) {
+        $schedules['every_minute'] = [
+            'interval' => 60,
+            'display'  => __('Every Minute', 'amunet-crm-bridge'),
+        ];
+    }
+    return $schedules;
+});
+
+// REST endpoint: /amunet-crm/v1/incoming-webhook
+// Stores the incoming request immediately and returns 200 fast.
+// Auth uses the same WC API key auth as other protected endpoints.
+add_action('rest_api_init', function () {
+    $ns = 'amunet-crm/v1';
+
+    register_rest_route($ns, '/incoming-webhook', [
+        'methods'             => 'POST',
+        'callback'            => 'amunet_queue_incoming_webhook',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    // List failed webhooks for manual review
+    register_rest_route($ns, '/webhook-queue/failed', [
+        'methods'             => 'GET',
+        'callback'            => 'amunet_get_failed_webhooks',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    // Retry a specific failed webhook by ID
+    register_rest_route($ns, '/webhook-queue/(?P<id>\d+)/retry', [
+        'methods'             => 'POST',
+        'callback'            => 'amunet_retry_failed_webhook',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+        'args'                => ['id' => ['required' => true, 'validate_callback' => function ($v) { return is_numeric($v); }]],
+    ]);
+});
+
+/**
+ * Store incoming webhook in queue table and return 200 immediately.
+ */
+function amunet_queue_incoming_webhook(WP_REST_Request $request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'amunet_webhook_queue';
+
+    $payload    = $request->get_body();
+    $event_type = sanitize_text_field($request->get_header('X-Amunet-Event') ?: 'incoming');
+    $source_ip  = sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? '');
+
+    $inserted = $wpdb->insert($table, [
+        'event_type'      => $event_type,
+        'payload'         => $payload,
+        'status'          => 'pending',
+        'attempts'        => 0,
+        'next_attempt_at' => current_time('mysql'),
+        'source_ip'       => $source_ip,
+    ]);
+
+    if ($inserted === false) {
+        return new WP_Error('db_error', 'Failed to queue webhook', ['status' => 500]);
+    }
+
+    return rest_ensure_response(['queued' => true, 'id' => $wpdb->insert_id]);
+}
+
+/**
+ * Return all failed webhooks for manual review.
+ */
+function amunet_get_failed_webhooks(WP_REST_Request $request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'amunet_webhook_queue';
+    $page  = max(1, intval($request->get_param('page') ?: 1));
+    $limit = 50;
+    $offset = ($page - 1) * $limit;
+
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT id, event_type, status, attempts, max_attempts, last_error, source_ip, created_at, updated_at
+             FROM $table WHERE status = 'failed' ORDER BY created_at DESC LIMIT %d OFFSET %d",
+            $limit,
+            $offset
+        ),
+        ARRAY_A
+    );
+
+    return rest_ensure_response(['failed' => $rows, 'page' => $page]);
+}
+
+/**
+ * Reset a failed webhook back to pending so it gets retried.
+ */
+function amunet_retry_failed_webhook(WP_REST_Request $request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'amunet_webhook_queue';
+    $id    = intval($request['id']);
+
+    $updated = $wpdb->update(
+        $table,
+        [
+            'status'          => 'pending',
+            'attempts'        => 0,
+            'next_attempt_at' => current_time('mysql'),
+            'last_error'      => null,
+            'updated_at'      => current_time('mysql'),
+        ],
+        ['id' => $id, 'status' => 'failed']
+    );
+
+    if (!$updated) {
+        return new WP_Error('not_found', 'Webhook not found or not in failed state', ['status' => 404]);
+    }
+
+    return rest_ensure_response(['ok' => true, 'id' => $id]);
+}
+
+// Hook the cron callback
+add_action('amunet_process_webhook_queue', 'amunet_process_webhook_queue_batch');
+
+/**
+ * Process up to 10 pending/retrying webhooks per cron tick.
+ * Retries use exponential backoff: 30s, 60s, 120s before final failure.
+ */
+function amunet_process_webhook_queue_batch() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'amunet_webhook_queue';
+
+    $rows = $wpdb->get_results(
+        "SELECT * FROM $table
+         WHERE status IN ('pending', 'retrying')
+           AND next_attempt_at <= NOW()
+           AND attempts < max_attempts
+         ORDER BY created_at ASC
+         LIMIT 10",
+        ARRAY_A
+    );
+
+    if (empty($rows)) return;
+
+    foreach ($rows as $row) {
+        // Mark as processing to prevent double-processing across concurrent cron runs
+        $claimed = $wpdb->update(
+            $table,
+            ['status' => 'processing', 'updated_at' => current_time('mysql')],
+            ['id' => $row['id'], 'status' => $row['status']]
+        );
+        // Another process already claimed this row
+        if (!$claimed) continue;
+
+        try {
+            $payload    = json_decode($row['payload'], true);
+            $event_type = $row['event_type'];
+
+            amunet_dispatch_webhook($event_type, $payload);
+
+            $wpdb->update(
+                $table,
+                ['status' => 'done', 'updated_at' => current_time('mysql')],
+                ['id' => $row['id']]
+            );
+        } catch (Exception $e) {
+            $attempts     = intval($row['attempts']) + 1;
+            $max_attempts = intval($row['max_attempts']);
+
+            if ($attempts >= $max_attempts) {
+                // Dead-letter: keep in same table with status=failed for manual review
+                $wpdb->update(
+                    $table,
+                    [
+                        'status'     => 'failed',
+                        'attempts'   => $attempts,
+                        'last_error' => substr($e->getMessage(), 0, 500),
+                        'updated_at' => current_time('mysql'),
+                    ],
+                    ['id' => $row['id']]
+                );
+                error_log(
+                    sprintf(
+                        '[Amunet CRM Bridge] Webhook #%d (%s) moved to failed queue after %d attempts: %s',
+                        $row['id'],
+                        $row['event_type'],
+                        $attempts,
+                        $e->getMessage()
+                    )
+                );
+            } else {
+                // Exponential backoff: 30s → 60s → 120s
+                $delay_seconds = (int) (30 * pow(2, $attempts - 1));
+                $next_attempt  = date('Y-m-d H:i:s', time() + $delay_seconds);
+
+                $wpdb->update(
+                    $table,
+                    [
+                        'status'          => 'retrying',
+                        'attempts'        => $attempts,
+                        'last_error'      => substr($e->getMessage(), 0, 500),
+                        'next_attempt_at' => $next_attempt,
+                        'updated_at'      => current_time('mysql'),
+                    ],
+                    ['id' => $row['id']]
+                );
+                error_log(
+                    sprintf(
+                        '[Amunet CRM Bridge] Webhook #%d (%s) failed (attempt %d/%d), retry at %s: %s',
+                        $row['id'],
+                        $row['event_type'],
+                        $attempts,
+                        $max_attempts,
+                        $next_attempt,
+                        $e->getMessage()
+                    )
+                );
+            }
+        }
+    }
+}
+
+/**
+ * Dispatch a queued webhook payload to the appropriate WooCommerce handler.
+ *
+ * @param string     $event_type  Event name from X-Amunet-Event header.
+ * @param array|null $payload     Decoded JSON payload.
+ * @throws Exception              If processing fails (triggers retry logic).
+ */
+function amunet_dispatch_webhook(string $event_type, ?array $payload): void {
+    if (!function_exists('wc_get_order')) {
+        throw new Exception('WooCommerce not available');
+    }
+
+    switch ($event_type) {
+        case 'order.status_changed':
+        case 'order.updated':
+            if (empty($payload['order_id']) || empty($payload['status'])) {
+                return; // Nothing to do — not an error
+            }
+            $order = wc_get_order(intval($payload['order_id']));
+            if (!$order) {
+                throw new Exception("Order #{$payload['order_id']} not found in WooCommerce");
+            }
+            $order->update_status(
+                sanitize_text_field($payload['status']),
+                __('Status updated via Amunet CRM', 'amunet-crm-bridge')
+            );
+            break;
+
+        case 'order.note':
+        case 'customer.note':
+            if (empty($payload['order_id']) || empty($payload['note'])) {
+                return;
+            }
+            $order = wc_get_order(intval($payload['order_id']));
+            if (!$order) {
+                throw new Exception("Order #{$payload['order_id']} not found in WooCommerce");
+            }
+            $order->add_order_note(sanitize_text_field($payload['note']));
+            break;
+
+        default:
+            // Unhandled event types are acknowledged (no retry needed) — log for debugging
+            error_log("[Amunet CRM Bridge] Unhandled webhook event type: {$event_type}");
+            break;
+    }
 }
