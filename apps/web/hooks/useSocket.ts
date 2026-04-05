@@ -6,9 +6,13 @@ const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001'
 
 let globalSocket: Socket | null = null;
 
-function getSocket(): Socket {
+export function getSocket(): Socket {
     if (!globalSocket) {
-        globalSocket = io(SERVER_URL, { autoConnect: false });
+        const token = typeof window !== 'undefined' ? localStorage.getItem('myalice_token') : null;
+        globalSocket = io(SERVER_URL, {
+            autoConnect: false,
+            ...(token ? { auth: { token } } : {}),
+        });
     }
     return globalSocket;
 }

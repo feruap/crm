@@ -16,6 +16,7 @@ import QuickRepliesPanel from '../../components/QuickRepliesPanel';
 import EventModal from '../../components/EventModal';
 import ScheduleMessageModal from '../../components/ScheduleMessageModal';
 import CatalogPanel from '../../components/CatalogPanel';
+import DiscountApprovalPanel from '../../components/DiscountApprovalPanel';
 import { apiFetch } from '../../hooks/useAuth';
 import { useSocket } from '../../hooks/useSocket';
 import { io as ioClient, Socket } from 'socket.io-client';
@@ -1120,6 +1121,9 @@ export default function InboxPage() {
                     </button>
                 </div>
             )}
+
+            {/* Floating supervisor discount approval panel — only visible to supervisors/admins */}
+            <DiscountApprovalPanel />
         </div>
     );
 }
