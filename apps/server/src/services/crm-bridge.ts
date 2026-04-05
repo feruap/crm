@@ -187,6 +187,64 @@ export interface LinkPhoneParams {
   phone: string;
 }
 
+export interface WPAgentListItem {
+  wp_user_id: number;
+  username: string;
+  display_name: string;
+  email: string;
+  roles: string[];
+  salesking_agentid: string | null;
+  group: { id: number | null; name: string };
+  account_type: string;
+  parent_agent: number | null;
+  parent_name: string;
+  earnings: { total: number; outstanding: number; paid: number };
+  registered: string;
+}
+
+export interface WPAgentListResponse {
+  agents: WPAgentListItem[];
+  total: number;
+}
+
+export interface CreateWPUserParams {
+  username: string;
+  email: string;
+  display_name: string;
+  password?: string;
+  crm_role: string;
+  salesking_group_id?: number;
+  parent_agent_id?: number;
+}
+
+export interface CreateWPUserResponse {
+  wp_user_id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  role: string;
+  salesking_agentid: string | null;
+}
+
+export interface UpdateWPUserParams {
+  display_name?: string;
+  email?: string;
+  crm_role?: string;
+  salesking_group_id?: number;
+  parent_agent_id?: number;
+  is_active?: boolean;
+}
+
+export interface UpdateWPUserResponse {
+  wp_user_id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  roles: string[];
+  salesking_agentid: string | null;
+  updated: boolean;
+}
+
 // ─────────────────────────────────────────────
 // Core fetch with WC auth
 // ─────────────────────────────────────────────
@@ -386,4 +444,21 @@ export async function getB2BCustomerPricing(
   customerId: number
 ): Promise<B2BKingPricingResponse> {
   return bridgeFetch(`/b2bking-pricing/${productId}?customer_id=${customerId}`);
+}
+
+// ── SalesKing Agent Sync ──
+
+/** List all SalesKing agents from WordPress */
+export async function listSalesKingAgents(): Promise<WPAgentListResponse> {
+  return bridgeFetch('/salesking-agents');
+}
+
+/** Create a WordPress user with SalesKing agent role */
+export async function createWPUser(params: CreateWPUserParams): Promise<CreateWPUserResponse> {
+  return bridgeFetch('/users', 'POST', params);
+}
+
+/** Update a WordPress user's details and SalesKing metadata */
+export async function updateWPUser(userId: number, params: UpdateWPUserParams): Promise<UpdateWPUserResponse> {
+  return bridgeFetch(`/users/${userId}`, 'PUT', params);
 }

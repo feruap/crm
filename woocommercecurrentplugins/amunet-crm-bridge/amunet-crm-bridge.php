@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Amunet CRM Bridge
  * Description: Unified bridge between Amunet CRM and WooCommerce. Exposes SalesKing agent rules, B2BKing pricing, visitor tracking, and order data via REST API.
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: Amunet
  * Requires Plugins: woocommerce
  * Text Domain: amunet-crm-bridge
@@ -10,7 +10,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('AMUNET_CRM_BRIDGE_VERSION', '2.0.0');
+define('AMUNET_CRM_BRIDGE_VERSION', '2.1.0');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTIVATION: Create visitor tracking table
@@ -112,6 +112,27 @@ add_action('rest_api_init', function () {
         'methods'             => 'GET',
         'callback'            => 'amunet_get_salesking_commission_rules',
         'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    // ── SalesKing Agent Sync Endpoints (WC Auth required) ──────────────────
+
+    register_rest_route($ns, '/salesking-agents', [
+        'methods'             => 'GET',
+        'callback'            => 'amunet_list_salesking_agents',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    register_rest_route($ns, '/users', [
+        'methods'             => 'POST',
+        'callback'            => 'amunet_create_wp_user',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    register_rest_route($ns, '/users/(?P<user_id>\d+)', [
+        'methods'             => 'PUT',
+        'callback'            => 'amunet_update_wp_user',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+        'args' => ['user_id' => ['required' => true, 'validate_callback' => function($v) { return is_numeric($v); }]],
     ]);
 
     // ── B2BKing Endpoints (WC Auth required) ────────────────────────────
@@ -398,6 +419,241 @@ function amunet_get_salesking_commission_rules(WP_REST_Request $request) {
         $result[] = $rule_data;
     }
     return rest_ensure_response(['rules' => $result]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALESKING AGENT SYNC ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /salesking-agents
+ * Lists ALL WordPress users that have SalesKing agent roles.
+ * Used by CRM to import/sync agents.
+ */
+function amunet_list_salesking_agents(WP_REST_Request $request) {
+    // SalesKing agents can have role "agent" (Agente Local) or "shop_manager" (Manager)
+    // Also check "administrator" since some admins are agents too
+    $agent_roles = ['agent', 'shop_manager', 'administrator'];
+
+    $all_agents = [];
+    foreach ($agent_roles as $role) {
+        $users = get_users(['role' => $role, 'number' => 0]);
+        foreach ($users as $user) {
+            // Skip if already added (user might have multiple roles)
+            if (isset($all_agents[$user->ID])) continue;
+
+            // Check if user has SalesKing agent data
+            $agentid = get_user_meta($user->ID, 'salesking_agentid', true);
+            $group_id = get_user_meta($user->ID, 'salesking_group', true);
+            $parent_agent = get_user_meta($user->ID, 'salesking_parent_agent', true);
+            $user_choice = get_user_meta($user->ID, 'salesking_user_choice', true);
+
+            $group_name = '';
+            if ($group_id) {
+                $group_post = get_post($group_id);
+                if ($group_post) $group_name = $group_post->post_title;
+            }
+
+            // Determine account type from SalesKing
+            $account_type = 'agent'; // default
+            if (in_array('shop_manager', $user->roles) || in_array('administrator', $user->roles)) {
+                $account_type = 'manager';
+            }
+
+            // Parent agent name
+            $parent_name = '';
+            if ($parent_agent) {
+                $parent_user = get_user_by('ID', $parent_agent);
+                if ($parent_user) $parent_name = $parent_user->display_name;
+            }
+
+            // Earnings
+            $earnings = [
+                'total'       => floatval(get_user_meta($user->ID, 'salesking_earnings', true) ?: 0),
+                'outstanding' => floatval(get_user_meta($user->ID, 'salesking_outstanding_earnings', true) ?: 0),
+                'paid'        => floatval(get_user_meta($user->ID, 'salesking_paid_earnings', true) ?: 0),
+            ];
+
+            $all_agents[$user->ID] = [
+                'wp_user_id'    => $user->ID,
+                'username'      => $user->user_login,
+                'display_name'  => $user->display_name,
+                'email'         => $user->user_email,
+                'roles'         => array_values($user->roles),
+                'salesking_agentid' => $agentid ?: null,
+                'group' => [
+                    'id'   => $group_id ? intval($group_id) : null,
+                    'name' => $group_name,
+                ],
+                'account_type'  => $account_type,
+                'parent_agent'  => $parent_agent ? intval($parent_agent) : null,
+                'parent_name'   => $parent_name,
+                'earnings'      => $earnings,
+                'registered'    => $user->user_registered,
+            ];
+        }
+    }
+
+    return rest_ensure_response([
+        'agents' => array_values($all_agents),
+        'total'  => count($all_agents),
+    ]);
+}
+
+/**
+ * POST /users
+ * Creates a WordPress user and sets SalesKing metadata.
+ * CRM role mapping: agent -> WP role "agent", supervisor -> "shop_manager", admin -> "administrator"
+ */
+function amunet_create_wp_user(WP_REST_Request $request) {
+    $params = $request->get_json_params();
+
+    $username     = sanitize_user($params['username'] ?? '');
+    $email        = sanitize_email($params['email'] ?? '');
+    $display_name = sanitize_text_field($params['display_name'] ?? '');
+    $password     = $params['password'] ?? wp_generate_password(16);
+    $crm_role     = sanitize_text_field($params['crm_role'] ?? 'agent');
+    $group_id     = intval($params['salesking_group_id'] ?? 0);
+    $parent_agent = intval($params['parent_agent_id'] ?? 0);
+
+    if (empty($username) || empty($email)) {
+        return new WP_Error('missing_fields', 'username and email are required', ['status' => 400]);
+    }
+
+    // Map CRM role to WP role
+    $role_map = [
+        'agent'      => 'agent',
+        'supervisor' => 'shop_manager',
+        'admin'      => 'administrator',
+    ];
+    $wp_role = $role_map[$crm_role] ?? 'agent';
+
+    // Check if user already exists
+    if (username_exists($username)) {
+        return new WP_Error('user_exists', 'Username already exists', ['status' => 409]);
+    }
+    if (email_exists($email)) {
+        return new WP_Error('email_exists', 'Email already exists', ['status' => 409]);
+    }
+
+    // Create the user
+    $user_id = wp_insert_user([
+        'user_login'   => $username,
+        'user_email'   => $email,
+        'user_pass'    => $password,
+        'display_name' => $display_name ?: $username,
+        'role'         => $wp_role,
+    ]);
+
+    if (is_wp_error($user_id)) {
+        return new WP_Error('create_failed', $user_id->get_error_message(), ['status' => 500]);
+    }
+
+    // Set SalesKing metadata
+    // SalesKing expects salesking_user_choice to be set for agents
+    if ($wp_role === 'agent' || $wp_role === 'shop_manager') {
+        update_user_meta($user_id, 'salesking_user_choice', 'agent');
+    }
+
+    if ($group_id > 0) {
+        update_user_meta($user_id, 'salesking_group', $group_id);
+    }
+
+    if ($parent_agent > 0) {
+        update_user_meta($user_id, 'salesking_parent_agent', $parent_agent);
+    }
+
+    // Initialize earnings
+    update_user_meta($user_id, 'salesking_earnings', '0');
+    update_user_meta($user_id, 'salesking_outstanding_earnings', '0');
+    update_user_meta($user_id, 'salesking_paid_earnings', '0');
+
+    // Get the generated SalesKing agent ID (if SalesKing auto-generates it)
+    $agentid = get_user_meta($user_id, 'salesking_agentid', true);
+
+    return rest_ensure_response([
+        'wp_user_id'        => $user_id,
+        'username'          => $username,
+        'email'             => $email,
+        'display_name'      => $display_name ?: $username,
+        'role'              => $wp_role,
+        'salesking_agentid' => $agentid ?: null,
+    ]);
+}
+
+/**
+ * PUT /users/{user_id}
+ * Updates WordPress user fields and SalesKing metadata.
+ */
+function amunet_update_wp_user(WP_REST_Request $request) {
+    $user_id = intval($request['user_id']);
+    $user = get_user_by('ID', $user_id);
+    if (!$user) return new WP_Error('not_found', 'User not found', ['status' => 404]);
+
+    $params = $request->get_json_params();
+
+    // Update basic user fields
+    $update_data = ['ID' => $user_id];
+    if (isset($params['display_name'])) $update_data['display_name'] = sanitize_text_field($params['display_name']);
+    if (isset($params['email'])) $update_data['user_email'] = sanitize_email($params['email']);
+
+    if (count($update_data) > 1) {
+        $result = wp_update_user($update_data);
+        if (is_wp_error($result)) {
+            return new WP_Error('update_failed', $result->get_error_message(), ['status' => 500]);
+        }
+    }
+
+    // Update role if specified
+    if (isset($params['crm_role'])) {
+        $role_map = [
+            'agent'      => 'agent',
+            'supervisor' => 'shop_manager',
+            'admin'      => 'administrator',
+        ];
+        $new_role = $role_map[$params['crm_role']] ?? null;
+        if ($new_role) {
+            $user->set_role($new_role);
+        }
+    }
+
+    // Update SalesKing metadata
+    if (isset($params['salesking_group_id'])) {
+        $gid = intval($params['salesking_group_id']);
+        if ($gid > 0) {
+            update_user_meta($user_id, 'salesking_group', $gid);
+        } else {
+            delete_user_meta($user_id, 'salesking_group');
+        }
+    }
+
+    if (isset($params['parent_agent_id'])) {
+        $pid = intval($params['parent_agent_id']);
+        if ($pid > 0) {
+            update_user_meta($user_id, 'salesking_parent_agent', $pid);
+        } else {
+            delete_user_meta($user_id, 'salesking_parent_agent');
+        }
+    }
+
+    if (isset($params['is_active'])) {
+        // We can't truly deactivate WP users, but we can update a meta flag
+        update_user_meta($user_id, 'amunet_crm_active', $params['is_active'] ? '1' : '0');
+    }
+
+    // Refresh user data
+    $user = get_user_by('ID', $user_id);
+    $agentid = get_user_meta($user_id, 'salesking_agentid', true);
+
+    return rest_ensure_response([
+        'wp_user_id'        => $user_id,
+        'username'          => $user->user_login,
+        'email'             => $user->user_email,
+        'display_name'      => $user->display_name,
+        'roles'             => array_values($user->roles),
+        'salesking_agentid' => $agentid ?: null,
+        'updated'           => true,
+    ]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

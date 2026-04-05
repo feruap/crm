@@ -31,6 +31,7 @@ interface Agent {
     role: string;
     is_active: boolean;
     salesking_agent_code: string | null;
+    wc_agent_id: string | null;
     avatar_url: string | null;
     last_login_at: string | null;
     created_at: string;
@@ -1927,6 +1928,11 @@ function UsuariosTab() {
     const [editAgent, setEditAgent] = useState<Agent | null>(null);
     const [showReset, setShowReset] = useState<Agent | null>(null);
 
+    // Sync SalesKing state
+    const [syncing, setSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState<{ created: number; updated: number; skipped: number; errors: string[]; total_wp_agents: number } | null>(null);
+    const [pushing, setPushing] = useState<string | null>(null); // agent id being pushed
+
     // Invite form
     const [iName, setIName] = useState('');
     const [iEmail, setIEmail] = useState('');
@@ -1958,6 +1964,31 @@ function UsuariosTab() {
     }, []);
 
     useEffect(() => { load(); }, [load]);
+
+    const syncSalesKing = async () => {
+        setSyncing(true); setSyncResult(null);
+        try {
+            const res = await apiFetch('/api/agents/sync-salesking', { method: 'POST' });
+            const data = await res.json();
+            setSyncResult(data);
+            await load();
+        } catch (e: any) { setSyncResult({ created: 0, updated: 0, skipped: 0, errors: [e.message], total_wp_agents: 0 }); }
+        finally { setSyncing(false); }
+    };
+
+    const pushToWP = async (agentId: string) => {
+        setPushing(agentId);
+        try {
+            const res = await apiFetch('/api/agents/push-to-wp', {
+                method: 'POST',
+                body: JSON.stringify({ agent_id: agentId }),
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else await load();
+        } catch (e: any) { alert('Error: ' + e.message); }
+        finally { setPushing(null); }
+    };
 
     const invite = async () => {
         if (!iName || !iEmail || !iPassword) { setIError('Nombre, email y contraseña son requeridos'); return; }
@@ -2021,11 +2052,39 @@ function UsuariosTab() {
                     <h3 className="text-2xl font-bold text-slate-800">Usuarios & Agentes</h3>
                     <p className="text-slate-500 text-sm mt-1">Administra el equipo que tiene acceso al CRM.</p>
                 </div>
-                <button onClick={() => setShowInvite(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
-                    <UserPlus className="w-4 h-4" /> Invitar Usuario
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={syncSalesKing} disabled={syncing}
+                        className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-60"
+                        title="Importar agentes desde SalesKing/WordPress">
+                        {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        Sincronizar SalesKing
+                    </button>
+                    <button onClick={() => setShowInvite(true)}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                        <UserPlus className="w-4 h-4" /> Invitar Usuario
+                    </button>
+                </div>
             </div>
+
+            {/* Sync Result Banner */}
+            {syncResult && (
+                <div className={`rounded-xl border p-4 text-sm ${syncResult.errors.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <span className="font-medium">{syncResult.total_wp_agents} agentes en SalesKing</span>
+                            {syncResult.created > 0 && <span className="text-green-700">{syncResult.created} creados</span>}
+                            {syncResult.updated > 0 && <span className="text-blue-700">{syncResult.updated} actualizados</span>}
+                            {syncResult.skipped > 0 && <span className="text-slate-500">{syncResult.skipped} sin cambios</span>}
+                        </div>
+                        <button onClick={() => setSyncResult(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                    </div>
+                    {syncResult.errors.length > 0 && (
+                        <div className="mt-2 text-amber-700">
+                            {syncResult.errors.map((e, i) => <p key={i}>{e}</p>)}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Table */}
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -2035,10 +2094,11 @@ function UsuariosTab() {
                             <th className="text-left px-4 py-3 font-medium text-slate-600">Usuario</th>
                             <th className="text-left px-4 py-3 font-medium text-slate-600">Rol</th>
                             <th className="text-left px-4 py-3 font-medium text-slate-600">SalesKing</th>
+                            <th className="text-center px-4 py-3 font-medium text-slate-600">WP</th>
                             <th className="text-right px-4 py-3 font-medium text-slate-600">Activas</th>
                             <th className="text-right px-4 py-3 font-medium text-slate-600">Resueltas hoy</th>
                             <th className="text-center px-4 py-3 font-medium text-slate-600">Estado</th>
-                            <th className="w-24 px-4 py-3"></th>
+                            <th className="w-28 px-4 py-3"></th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -2069,6 +2129,19 @@ function UsuariosTab() {
                                     </td>
                                     <td className="px-4 py-3 text-xs font-mono text-slate-500">
                                         {a.salesking_agent_code ?? <span className="text-slate-300">—</span>}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {a.wc_agent_id ? (
+                                            <span className="text-xs font-mono bg-green-50 text-green-700 px-2 py-0.5 rounded-full" title={`WP User #${a.wc_agent_id}`}>
+                                                #{a.wc_agent_id}
+                                            </span>
+                                        ) : (
+                                            <button onClick={() => pushToWP(a.id)} disabled={pushing === a.id}
+                                                className="text-xs text-purple-600 hover:text-purple-800 hover:underline disabled:opacity-50"
+                                                title="Crear usuario en WordPress/SalesKing">
+                                                {pushing === a.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Vincular'}
+                                            </button>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 text-right font-medium">{a.active_conversations ?? 0}</td>
                                     <td className="px-4 py-3 text-right text-slate-500">{a.resolved_today ?? 0}</td>

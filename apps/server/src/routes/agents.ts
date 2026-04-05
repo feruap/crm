@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../db';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { listSalesKingAgents, createWPUser, updateWPUser, getSalesKingGroups } from '../services/crm-bridge';
 
 const router = Router();
 router.use(requireAuth);
@@ -11,7 +12,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const result = await db.query(`
         SELECT
             a.id, a.name, a.email, a.role, a.is_active,
-            a.salesking_agent_code, a.avatar_url, a.last_login_at, a.created_at,
+            a.salesking_agent_code, a.wc_agent_id, a.avatar_url, a.last_login_at, a.created_at,
             COUNT(DISTINCT c.id) FILTER (WHERE c.status IN ('open','pending')) AS active_conversations,
             COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'resolved'
                 AND c.updated_at > NOW() - INTERVAL '1 day')             AS resolved_today,
@@ -55,6 +56,182 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
         [name, email, hash, role, salesking_agent_code ?? null]
     );
     res.status(201).json(result.rows[0]);
+});
+
+// POST /api/agents/sync-salesking — import agents from SalesKing into CRM
+router.post('/sync-salesking', requireRole('admin'), async (req: Request, res: Response) => {
+    try {
+        // 1. Fetch all SalesKing agents from WordPress
+        const wpAgents = await listSalesKingAgents();
+
+        // 2. Fetch current CRM agents
+        const crmResult = await db.query('SELECT id, email, wc_agent_id, salesking_agent_code FROM agents');
+        const crmAgents = crmResult.rows;
+
+        // Build lookup maps
+        const crmByEmail = new Map(crmAgents.map((a: any) => [a.email?.toLowerCase(), a]));
+        const crmByWcId = new Map(crmAgents.map((a: any) => [String(a.wc_agent_id), a]));
+
+        const results = { created: 0, updated: 0, skipped: 0, errors: [] as string[] };
+
+        for (const wpAgent of wpAgents.agents) {
+            try {
+                // Check if already linked by wc_agent_id
+                const existingByWcId = crmByWcId.get(String(wpAgent.wp_user_id));
+                // Check if email matches an existing CRM agent
+                const existingByEmail = crmByEmail.get(wpAgent.email?.toLowerCase());
+
+                // Map WP roles to CRM roles
+                let crmRole = 'agent';
+                if (wpAgent.roles.includes('administrator')) crmRole = 'admin';
+                else if (wpAgent.roles.includes('shop_manager')) crmRole = 'supervisor';
+
+                if (existingByWcId) {
+                    // Already linked — update salesking_agent_code if needed
+                    const updates: string[] = [];
+                    const params: any[] = [];
+                    let paramIdx = 1;
+
+                    if (wpAgent.salesking_agentid && existingByWcId.salesking_agent_code !== wpAgent.salesking_agentid) {
+                        updates.push(`salesking_agent_code = $${paramIdx++}`);
+                        params.push(wpAgent.salesking_agentid);
+                    }
+
+                    if (updates.length > 0) {
+                        params.push(existingByWcId.id);
+                        await db.query(
+                            `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
+                            params
+                        );
+                        results.updated++;
+                    } else {
+                        results.skipped++;
+                    }
+                } else if (existingByEmail) {
+                    // Email match — link the WP user ID and update SK code
+                    await db.query(
+                        `UPDATE agents SET wc_agent_id = $1, salesking_agent_code = COALESCE($2, salesking_agent_code) WHERE id = $3`,
+                        [String(wpAgent.wp_user_id), wpAgent.salesking_agentid, existingByEmail.id]
+                    );
+                    results.updated++;
+                } else {
+                    // New agent — create in CRM
+                    const tempPassword = require('crypto').randomBytes(16).toString('hex');
+                    const hash = await bcrypt.hash(tempPassword, 12);
+
+                    await db.query(
+                        `INSERT INTO agents (name, email, password_hash, role, wc_agent_id, salesking_agent_code, is_active)
+                         VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+                         ON CONFLICT (email) DO UPDATE SET
+                            wc_agent_id = EXCLUDED.wc_agent_id,
+                            salesking_agent_code = COALESCE(EXCLUDED.salesking_agent_code, agents.salesking_agent_code)`,
+                        [
+                            wpAgent.display_name,
+                            wpAgent.email,
+                            hash,
+                            crmRole,
+                            String(wpAgent.wp_user_id),
+                            wpAgent.salesking_agentid || null,
+                        ]
+                    );
+                    results.created++;
+                }
+            } catch (err: any) {
+                results.errors.push(`${wpAgent.display_name}: ${err.message}`);
+            }
+        }
+
+        // Also fetch SalesKing groups for reference
+        let groups: any[] = [];
+        try {
+            const groupsRes = await getSalesKingGroups();
+            groups = groupsRes.groups || [];
+        } catch (e) {}
+
+        res.json({
+            ...results,
+            total_wp_agents: wpAgents.total,
+            total_crm_agents: crmAgents.length,
+            salesking_groups: groups,
+        });
+    } catch (err: any) {
+        console.error('[SalesKing Sync]', err);
+        res.status(500).json({ error: 'Failed to sync with SalesKing: ' + err.message });
+    }
+});
+
+// POST /api/agents/push-to-wp — push a CRM agent to WordPress/SalesKing
+router.post('/push-to-wp', requireRole('admin'), async (req: Request, res: Response) => {
+    const { agent_id, salesking_group_id, parent_agent_id } = req.body;
+    if (!agent_id) {
+        res.status(400).json({ error: 'agent_id is required' });
+        return;
+    }
+
+    try {
+        // Get CRM agent
+        const agentRes = await db.query('SELECT * FROM agents WHERE id = $1', [agent_id]);
+        if (agentRes.rows.length === 0) {
+            res.status(404).json({ error: 'Agent not found' });
+            return;
+        }
+        const agent = agentRes.rows[0];
+
+        // Check if already linked to WP
+        if (agent.wc_agent_id) {
+            // Update existing WP user
+            const wpResult = await updateWPUser(parseInt(agent.wc_agent_id), {
+                display_name: agent.name,
+                email: agent.email,
+                crm_role: agent.role,
+                salesking_group_id,
+                parent_agent_id,
+            });
+
+            // Update SK code if returned
+            if (wpResult.salesking_agentid) {
+                await db.query(
+                    'UPDATE agents SET salesking_agent_code = $1 WHERE id = $2',
+                    [wpResult.salesking_agentid, agent_id]
+                );
+            }
+
+            res.json({ action: 'updated', wp_user_id: wpResult.wp_user_id, ...wpResult });
+        } else {
+            // Create new WP user
+            const username = agent.email.split('@')[0].replace(/[^a-zA-Z0-9._-]/g, '').toLowerCase();
+            const wpResult = await createWPUser({
+                username,
+                email: agent.email,
+                display_name: agent.name,
+                crm_role: agent.role,
+                salesking_group_id,
+                parent_agent_id,
+            });
+
+            // Link the WP user ID back to CRM
+            await db.query(
+                'UPDATE agents SET wc_agent_id = $1, salesking_agent_code = COALESCE($2, salesking_agent_code) WHERE id = $3',
+                [String(wpResult.wp_user_id), wpResult.salesking_agentid, agent_id]
+            );
+
+            res.json({ action: 'created', wp_user_id: wpResult.wp_user_id, ...wpResult });
+        }
+    } catch (err: any) {
+        console.error('[Push to WP]', err);
+        res.status(500).json({ error: 'Failed to push to WordPress: ' + err.message });
+    }
+});
+
+// GET /api/agents/salesking-groups — get SalesKing groups for UI dropdowns
+router.get('/salesking-groups', requireRole('admin', 'supervisor'), async (_req: Request, res: Response) => {
+    try {
+        const groups = await getSalesKingGroups();
+        res.json(groups);
+    } catch (err: any) {
+        console.error('[SK Groups]', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // PUT /api/agents/:id  — admin actualiza agente completo
