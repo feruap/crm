@@ -338,14 +338,13 @@ router.post('/:id/cart-link', async (req: Request, res: Response) => {
         return;
     }
 
-    const wcUrl = process.env.WC_URL;
-    const wcKey = process.env.WC_KEY;
-    const wcSecret = process.env.WC_SECRET;
-    if (!wcUrl || !wcKey || !wcSecret) {
+    const wcCreds = await getWCCreds();
+    if (!wcCreds.url || !wcCreds.key || !wcCreds.secret) {
         res.status(503).json({ error: 'WooCommerce not configured' });
         return;
     }
-    const wcAuth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
+    const wcUrl = wcCreds.url;
+    const wcAuth = Buffer.from(`${wcCreds.key}:${wcCreds.secret}`).toString('base64');
 
     // ── Fetch agent info (WordPress User ID for SalesKing) ──────────────────
     const agentRow = await db.query(
