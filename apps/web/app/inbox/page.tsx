@@ -87,9 +87,8 @@ function buildQuery(tab: TabFilter, channel: ChannelFilter, handler: HandlerFilt
     } else {
         if (tab === 'starred') params.set('starred', 'true');
         if (tab === 'mine') params.set('agent_id', 'me'); // The backend should handle 'me' or we get it from auth
-        // For 'unread', the backend currently doesn't have a direct filter, 
-        // but we can add one or filter client-side. Let's assume backend can handle it or we use 'open' as default.
-        params.set('status', 'open');
+        // Include both open and pending conversations in inbox views
+        params.set('status', 'open,pending');
     }
 
     if (channel !== 'all') params.set('channel_provider', channel);

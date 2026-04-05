@@ -50,8 +50,14 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     if (status) {
-        params.push(status);
-        query += ` AND c.status = $${params.length}`;
+        const statuses = (status as string).split(',').map(s => s.trim()).filter(Boolean);
+        if (statuses.length === 1) {
+            params.push(statuses[0]);
+            query += ` AND c.status = $${params.length}`;
+        } else if (statuses.length > 1) {
+            const placeholders = statuses.map((s, i) => { params.push(s); return `$${params.length}`; });
+            query += ` AND c.status IN (${placeholders.join(',')})`;
+        }
     }
     if (channel_id) {
         params.push(channel_id);
