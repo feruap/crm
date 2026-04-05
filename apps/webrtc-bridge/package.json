@@ -9,7 +9,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@roamhq/wrtc": "^0.4.7",
+    "@roamhq/wrtc": "^0.5.2",
     "axios": "^1.6.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
