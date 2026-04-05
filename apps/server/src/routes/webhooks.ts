@@ -507,12 +507,22 @@ export async function handleBotResponse(
         const esc = await shouldEscalate(messageText, botReply, confidence, inboundCount);
 
         // Also detect if the bot itself decided to escalate (prompt rule #9 tells it to say "te conecto con un asesor")
-        const botSelfEscalated = /te conecto con (un asesor|un ejecutivo|nuestro equipo)/i.test(botReply);
+        // Wider regex to catch LLM variations: "te conecto", "te paso", "te atiendo", "un momento" + asesor/ejecutivo/equipo
+        const botSelfEscalated = /te (conecto|paso|comunico|transfiero) con (un asesor|un ejecutivo|nuestro equipo|un agente)/i.test(botReply)
+            || (/un momento.*te (atiendo|conecto|paso)/i.test(botReply));
 
-        if (esc.escalate || botSelfEscalated) {
-            if (botSelfEscalated && !esc.escalate) {
+        // Detect purchase intent directly from customer message as fallback
+        const customerLower = messageText.toLowerCase();
+        const purchaseIntent = /\b(quiero comprar|quiero pedir|quiero ordenar|hacer (un |el )?pedido|hacer (una |la )?orden|me los llevo|los quiero|c[oó]mo (hago el pedido|compro|pago|ordeno)|quiero cotizar|env[ií](a|e)me? (la )?cotizaci[oó]n)\b/i.test(customerLower);
+
+        if (esc.escalate || botSelfEscalated || purchaseIntent) {
+            if (botSelfEscalated && !esc.escalate && !purchaseIntent) {
                 // Bot decided to escalate on its own — keep its reply but update conversation status
                 console.log(`[Escalation] Conv ${conversationId}: Bot self-escalated (purchase intent detected)`);
+            } else if (purchaseIntent && !esc.escalate) {
+                // Customer expressed purchase intent — bot might not have escalated, force it
+                botReply = `Con gusto, te conecto con un asesor para procesar tu pedido. Un momento por favor. 🙂`;
+                console.log(`[Escalation] Conv ${conversationId}: Purchase intent detected in customer message`);
             } else {
                 // Rule-based escalation — override with standard message
                 botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
@@ -524,7 +534,7 @@ export async function handleBotResponse(
         const result = await db.query(
             `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
              VALUES ($1, $2, $3, 'outbound', $4, $5, $6) RETURNING *`,
-            [conversationId, channelId, customerId, botReply, (esc.escalate || botSelfEscalated) ? 'escalation' : 'bot', confidence]
+            [conversationId, channelId, customerId, botReply, (esc.escalate || botSelfEscalated || purchaseIntent) ? 'escalation' : 'bot', confidence]
         );
 
         const insertedMessage = result.rows[0];
