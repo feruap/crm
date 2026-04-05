@@ -1001,7 +1001,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
     res.sendStatus(200);
 
     try {
-        const appSecret = process.env.TIKTOK_APP_SECRET;
+        const appSecret = await getBusinessSetting('tiktok_app_secret', process.env.TIKTOK_APP_SECRET);
         if (appSecret) {
             const signature = req.headers['x-tiktok-signature'] as string;
             if (!signature) {

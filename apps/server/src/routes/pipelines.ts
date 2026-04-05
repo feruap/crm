@@ -3,6 +3,15 @@ import { db } from '../db';
 
 const router = Router();
 
+// ── Helper: read credential from business_settings first, then env var ──────
+async function getSettingOrEnv(settingsKey: string, envKey: string): Promise<string | null> {
+    try {
+        const r = await db.query(`SELECT value FROM business_settings WHERE key = $1 LIMIT 1`, [settingsKey]);
+        if (r.rows[0]?.value) return r.rows[0].value;
+    } catch { /* ignore */ }
+    return process.env[envKey] || null;
+}
+
 router.get('/', async (req, res) => {
     try {
         const pRes = await db.query('SELECT * FROM pipelines ORDER BY created_at ASC');
@@ -61,11 +70,11 @@ router.post('/:id/stages', async (req, res) => {
 // Sync Kanban columns and roles from WooCommerce
 router.post('/sync-woocommerce', async (req, res) => {
     try {
-        const wcUrl = process.env.WC_URL;
-        const bridgeSecret = process.env.WP_MYALICE_SECRET;
+        const wcUrl = await getSettingOrEnv('wc_url', 'WC_URL');
+        const bridgeSecret = await getSettingOrEnv('wp_myalice_secret', 'WP_MYALICE_SECRET');
 
         if (!wcUrl || !bridgeSecret) {
-            res.status(400).json({ error: 'Configuración WC_URL o WP_MYALICE_SECRET faltante en .env' });
+            res.status(400).json({ error: 'Configuración WC_URL o WP_MYALICE_SECRET faltante. Configura en Settings → Integraciones' });
             return;
         }
 

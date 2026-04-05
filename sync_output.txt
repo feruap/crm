@@ -1,0 +1,35 @@
+Reading MD files...
+Medical: 50 products
+Labs: 40 products
+
+Sending ALL products in single request (with long timeout)...
+Total payload: 352649 bytes
+
+Full sync failed: HTTP 524: error code: 524
+Trying medical-only first, then labs-only...
+
+Trying labs-only (smaller file)...
+Labs result: {
+  "success": true,
+  "products_parsed": 40,
+  "medical_products": 0,
+  "lab_products": 40,
+  "kb_entries_inserted": 196,
+  "chunks_inserted": 196,
+  "products_updated": 24,
+  "errors": 0,
+  "log": []
+}
+
+Trying medical-only with max timeout...
+Medical result: {
+  "success": true,
+  "products_parsed": 50,
+  "medical_products": 50,
+  "lab_products": 0,
+  "kb_entries_inserted": 362,
+  "chunks_inserted": 362,
+  "products_updated": 43,
+  "errors": 0,
+  "log": []
+}

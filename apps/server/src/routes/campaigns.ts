@@ -4,6 +4,15 @@ import axios from 'axios';
 
 const router = Router();
 
+// ── Helper: read credential from business_settings first, then env var ──────
+async function getSettingOrEnv(settingsKey: string, envKey: string): Promise<string | null> {
+    try {
+        const r = await db.query(`SELECT value FROM business_settings WHERE key = $1 LIMIT 1`, [settingsKey]);
+        if (r.rows[0]?.value) return r.rows[0].value;
+    } catch { /* ignore */ }
+    return process.env[envKey] || null;
+}
+
 // GET /api/campaigns — includes conversion funnel counts + linked bot flow
 router.get('/', async (_req: Request, res: Response) => {
     const result = await db.query(`
@@ -414,14 +423,12 @@ Aprovecha que los usuarios de redes buscan respuestas rápidas, ofréceles el ca
 // GET /api/campaigns/google-token — check Google Ads token status
 router.get('/google-token', async (_req: Request, res: Response) => {
     try {
-        const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-        const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+        const GOOGLE_CLIENT_ID = await getSettingOrEnv('google_client_id', 'GOOGLE_CLIENT_ID');
+        const GOOGLE_CLIENT_SECRET = await getSettingOrEnv('google_client_secret', 'GOOGLE_CLIENT_SECRET');
         const oauth_available = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 
         // Read developer token: DB > env
-        const dtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_developer_token' LIMIT 1`).catch(() => ({ rows: [] }));
-        const devTokenDb: string | null = dtRow.rows[0]?.value ?? null;
-        const devToken: string | null = devTokenDb || process.env.GOOGLE_DEVELOPER_TOKEN || null;
+        const devToken = await getSettingOrEnv('google_developer_token', 'GOOGLE_DEVELOPER_TOKEN');
 
         // Read MCC ID: DB > env
         const mccRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_ads_mcc_id' LIMIT 1`).catch(() => ({ rows: [] }));
@@ -436,6 +443,8 @@ router.get('/google-token', async (_req: Request, res: Response) => {
             developer_token_masked: devToken ? `${'*'.repeat(Math.max(0, devToken.length - 6))}${devToken.slice(-6)}` : null,
             mcc_id: mccId,
             mcc_id_set: !!mccId,
+            client_id_set: !!GOOGLE_CLIENT_ID,
+            client_secret_set: !!GOOGLE_CLIENT_SECRET,
         };
 
         if (!refreshToken) {
@@ -476,36 +485,31 @@ router.get('/google-token', async (_req: Request, res: Response) => {
     }
 });
 
-// POST /api/campaigns/google-config — save developer token and/or MCC ID to DB
+// POST /api/campaigns/google-config — save developer token, MCC ID, client_id, client_secret to DB
 router.post('/google-config', async (req: Request, res: Response) => {
-    const { developer_token, mcc_id } = req.body;
+    const { developer_token, mcc_id, client_id, client_secret } = req.body;
     const updates: string[] = [];
 
+    const upsertOrDelete = async (key: string, raw: string | undefined, field: string, transform?: (v: string) => string) => {
+        if (raw === undefined) return;
+        const val = transform ? transform((raw || '').trim()) : (raw || '').trim();
+        if (val) {
+            await db.query(
+                `INSERT INTO business_settings (key, value) VALUES ($1, $2)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, val]
+            );
+        } else {
+            await db.query(`DELETE FROM business_settings WHERE key = $1`, [key]);
+        }
+        updates.push(field);
+    };
+
     try {
-        if (developer_token !== undefined) {
-            const val = (developer_token || '').trim();
-            if (val) {
-                await db.query(
-                    `INSERT INTO business_settings (key, value) VALUES ('google_developer_token', $1)
-                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [val]
-                );
-            } else {
-                await db.query(`DELETE FROM business_settings WHERE key = 'google_developer_token'`);
-            }
-            updates.push('developer_token');
-        }
-        if (mcc_id !== undefined) {
-            const val = (mcc_id || '').replace(/-/g, '').trim();
-            if (val) {
-                await db.query(
-                    `INSERT INTO business_settings (key, value) VALUES ('google_ads_mcc_id', $1)
-                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [val]
-                );
-            } else {
-                await db.query(`DELETE FROM business_settings WHERE key = 'google_ads_mcc_id'`);
-            }
-            updates.push('mcc_id');
-        }
+        await upsertOrDelete('google_developer_token', developer_token, 'developer_token');
+        await upsertOrDelete('google_ads_mcc_id', mcc_id, 'mcc_id', v => v.replace(/-/g, ''));
+        await upsertOrDelete('google_client_id', client_id, 'client_id');
+        await upsertOrDelete('google_client_secret', client_secret, 'client_secret');
+
         res.json({ ok: true, updated: updates });
     } catch (e: any) {
         res.status(500).json({ error: e.message });
@@ -519,11 +523,11 @@ router.delete('/google-token', async (_req: Request, res: Response) => {
 });
 
 // GET /api/campaigns/google-oauth/start — generate Google OAuth URL
-router.get('/google-oauth/start', (_req: Request, res: Response) => {
-    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+router.get('/google-oauth/start', async (_req: Request, res: Response) => {
+    const GOOGLE_CLIENT_ID = await getSettingOrEnv('google_client_id', 'GOOGLE_CLIENT_ID');
     const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3001';
     if (!GOOGLE_CLIENT_ID) {
-        res.status(400).json({ error: 'GOOGLE_CLIENT_ID no configurado en .env' });
+        res.status(400).json({ error: 'GOOGLE_CLIENT_ID no configurado. Configura en Settings → Integraciones → Google Ads' });
         return;
     }
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -548,12 +552,18 @@ router.get('/google-oauth/callback', async (req: Request, res: Response) => {
     }
 
     try {
-        // Exchange code for tokens
+        // Exchange code for tokens — read credentials from DB first, then env
+        const GOOGLE_CLIENT_ID = await getSettingOrEnv('google_client_id', 'GOOGLE_CLIENT_ID');
+        const GOOGLE_CLIENT_SECRET = await getSettingOrEnv('google_client_secret', 'GOOGLE_CLIENT_SECRET');
+        if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+            res.redirect(`${FRONTEND_URL}/settings?google_error=${encodeURIComponent('GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no configurados')}`);
+            return;
+        }
         const tokenRes = await axios.post('https://oauth2.googleapis.com/token',
             new URLSearchParams({
                 code: code as string,
-                client_id: process.env.GOOGLE_CLIENT_ID!,
-                client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
                 redirect_uri: `${SERVER_URL}/api/campaigns/google-oauth/callback`,
                 grant_type: 'authorization_code',
             }).toString(),
@@ -592,15 +602,11 @@ router.get('/google-oauth/callback', async (req: Request, res: Response) => {
 // POST /api/campaigns/sync-google — sync campaigns from Google Ads API
 router.post('/sync-google', async (req: Request, res: Response) => {
     try {
-        const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-        const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+        const GOOGLE_CLIENT_ID = await getSettingOrEnv('google_client_id', 'GOOGLE_CLIENT_ID');
+        const GOOGLE_CLIENT_SECRET = await getSettingOrEnv('google_client_secret', 'GOOGLE_CLIENT_SECRET');
 
-        // Get developer token (env > DB)
-        let developerToken: string | null = process.env.GOOGLE_DEVELOPER_TOKEN || null;
-        if (!developerToken) {
-            const dtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_developer_token' LIMIT 1`).catch(() => ({ rows: [] }));
-            developerToken = dtRow.rows[0]?.value ?? null;
-        }
+        // Get developer token: DB > env
+        const developerToken = await getSettingOrEnv('google_developer_token', 'GOOGLE_DEVELOPER_TOKEN');
 
         // Get refresh token
         const rtRow = await db.query(`SELECT value FROM business_settings WHERE key = 'google_refresh_token' LIMIT 1`).catch(() => ({ rows: [] }));
@@ -611,11 +617,11 @@ router.post('/sync-google', async (req: Request, res: Response) => {
             return;
         }
         if (!developerToken) {
-            res.status(400).json({ error: 'GOOGLE_DEVELOPER_TOKEN no configurado', hint: 'Agrega GOOGLE_DEVELOPER_TOKEN en .env (Google Ads → Herramientas → Centro de API)' });
+            res.status(400).json({ error: 'GOOGLE_DEVELOPER_TOKEN no configurado', hint: 'Configura en Settings → Integraciones → Google Ads' });
             return;
         }
         if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-            res.status(400).json({ error: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET no configurados en .env' });
+            res.status(400).json({ error: 'GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET no configurados. Configura en Settings → Integraciones → Google Ads' });
             return;
         }
 

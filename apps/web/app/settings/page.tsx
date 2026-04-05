@@ -2426,14 +2426,9 @@ function IntegracionesTab() {
                         <p className="text-xs text-slate-500">Reporta conversiones offline para optimizar campañas</p>
                     </div>
                 </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-                    <p className="font-medium">Configura las credenciales en el archivo .env del servidor:</p>
-                    <pre className="mt-1 text-slate-600 font-mono">{`GOOGLE_ADS_CUSTOMER_ID=
-GOOGLE_ADS_DEVELOPER_TOKEN=
-GOOGLE_ADS_CLIENT_ID=
-GOOGLE_ADS_CLIENT_SECRET=
-GOOGLE_ADS_REFRESH_TOKEN=
-GOOGLE_ADS_CONVERSION_ACTION_ID=`}</pre>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+                    <p className="font-medium">Configura las credenciales de Google Ads en la pestaña Integraciones (arriba).</p>
+                    <p className="mt-1 text-slate-500">Client ID, Client Secret, Developer Token y MCC ID se gestionan desde Settings → Integraciones.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={testGA} disabled={testing === 'ga'}
@@ -2787,6 +2782,8 @@ interface GoogleTokenStatus {
     developer_token_masked?: string | null;
     mcc_id?: string | null;
     mcc_id_set?: boolean;
+    client_id_set?: boolean;
+    client_secret_set?: boolean;
 }
 
 function IntegrationsTab() {
@@ -2809,9 +2806,20 @@ function IntegrationsTab() {
     // Google config editing
     const [devTokenInput, setDevTokenInput] = useState('');
     const [mccIdInput, setMccIdInput] = useState('');
+    const [clientIdInput, setClientIdInput] = useState('');
+    const [clientSecretInput, setClientSecretInput] = useState('');
     const [googleConfigSaving, setGoogleConfigSaving] = useState(false);
     const [googleConfigSuccess, setGoogleConfigSuccess] = useState(false);
     const [googleConfigError, setGoogleConfigError] = useState<string | null>(null);
+
+    // Other integrations
+    const [tiktokSecret, setTiktokSecret] = useState('');
+    const [tiktokSecretSet, setTiktokSecretSet] = useState(false);
+    const [wpSecret, setWpSecret] = useState('');
+    const [wpSecretSet, setWpSecretSet] = useState(false);
+    const [integSaving, setIntegSaving] = useState(false);
+    const [integSuccess, setIntegSuccess] = useState(false);
+    const [integError, setIntegError] = useState<string | null>(null);
 
     const loadStatus = useCallback(async () => {
         setLoading(true);
@@ -2833,7 +2841,16 @@ function IntegrationsTab() {
         finally { setGoogleLoading(false); }
     }, []);
 
-    useEffect(() => { loadStatus(); loadGoogleStatus(); }, [loadStatus, loadGoogleStatus]);
+    const loadIntegrations = useCallback(async () => {
+        try {
+            const res = await apiFetch('/api/settings/integrations');
+            const data = await res.json();
+            setTiktokSecretSet(!!data.tiktok_app_secret_set);
+            setWpSecretSet(!!data.wp_myalice_secret_set);
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => { loadStatus(); loadGoogleStatus(); loadIntegrations(); }, [loadStatus, loadGoogleStatus, loadIntegrations]);
 
     // Handle OAuth return params (Meta + Google)
     useEffect(() => {
@@ -2925,8 +2942,28 @@ function IntegrationsTab() {
         await loadGoogleStatus();
     };
 
+    const saveIntegrations = async () => {
+        if (!tiktokSecret.trim() && !wpSecret.trim()) return;
+        setIntegSaving(true); setIntegError(null); setIntegSuccess(false);
+        try {
+            const body: Record<string, string> = {};
+            if (tiktokSecret.trim()) body.tiktok_app_secret = tiktokSecret.trim();
+            if (wpSecret.trim()) body.wp_myalice_secret = wpSecret.trim();
+            const res = await apiFetch('/api/settings/integrations', {
+                method: 'POST', body: JSON.stringify(body),
+            });
+            if (!res.ok) { const d = await res.json(); setIntegError(d.error || 'Error'); return; }
+            setTiktokSecret(''); setWpSecret('');
+            if (body.tiktok_app_secret) setTiktokSecretSet(true);
+            if (body.wp_myalice_secret) setWpSecretSet(true);
+            setIntegSuccess(true);
+            setTimeout(() => setIntegSuccess(false), 3000);
+        } catch { setIntegError('Error de red'); }
+        finally { setIntegSaving(false); }
+    };
+
     const saveGoogleConfig = async () => {
-        if (!devTokenInput.trim() && !mccIdInput.trim()) return;
+        if (!devTokenInput.trim() && !mccIdInput.trim() && !clientIdInput.trim() && !clientSecretInput.trim()) return;
         setGoogleConfigSaving(true);
         setGoogleConfigError(null);
         setGoogleConfigSuccess(false);
@@ -2934,6 +2971,8 @@ function IntegrationsTab() {
             const body: Record<string, string> = {};
             if (devTokenInput.trim()) body.developer_token = devTokenInput.trim();
             if (mccIdInput.trim()) body.mcc_id = mccIdInput.trim();
+            if (clientIdInput.trim()) body.client_id = clientIdInput.trim();
+            if (clientSecretInput.trim()) body.client_secret = clientSecretInput.trim();
             const res = await apiFetch('/api/campaigns/google-config', {
                 method: 'POST',
                 body: JSON.stringify(body),
@@ -2945,6 +2984,8 @@ function IntegrationsTab() {
             }
             setDevTokenInput('');
             setMccIdInput('');
+            setClientIdInput('');
+            setClientSecretInput('');
             setGoogleConfigSuccess(true);
             await loadGoogleStatus();
             setTimeout(() => setGoogleConfigSuccess(false), 3000);
@@ -3213,10 +3254,9 @@ function IntegrationsTab() {
                                 <li>Ve a <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="underline font-medium">console.cloud.google.com</a> → Crea un proyecto nuevo</li>
                                 <li>En <strong>APIs y Servicios → Biblioteca</strong>, activa <strong>Google Ads API</strong></li>
                                 <li>En <strong>Credenciales</strong> → crea <strong>ID de cliente OAuth 2.0</strong> (tipo: Aplicación web)</li>
-                                <li>Agrega URI autorizada: <code className="bg-blue-100 px-1 rounded">http://localhost:3001/api/campaigns/google-oauth/callback</code></li>
-                                <li>Copia Client ID y Secret al <code className="bg-blue-100 px-1 rounded">.env</code> del servidor</li>
-                                <li>Ingresa el <strong>Developer Token</strong> y <strong>MCC ID</strong> en los campos de abajo</li>
-                                <li>Reinicia el servidor y vuelve aquí para conectar</li>
+                                <li>Agrega URI autorizada: <code className="bg-blue-100 px-1 rounded">https://api-crm.botonmedico.com/api/campaigns/google-oauth/callback</code></li>
+                                <li>Ingresa <strong>Client ID</strong>, <strong>Client Secret</strong>, <strong>Developer Token</strong> y <strong>MCC ID</strong> en los campos de abajo</li>
+                                <li>Haz clic en &quot;Guardar credenciales Google&quot; y luego en &quot;Conectar con Google Ads&quot;</li>
                             </ol>
                         </div>
                     </div>
@@ -3290,6 +3330,42 @@ function IntegrationsTab() {
                         />
                     </div>
 
+                    {/* Client ID */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">OAuth Client ID</label>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700 space-y-0.5">
+                            <p><strong>¿Dónde encontrarlo?</strong> En <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="underline font-medium">Google Cloud Console</a> → Credenciales → tu ID de cliente OAuth 2.0.</p>
+                            {googleStatus?.client_id_set && (
+                                <p className="text-green-700 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Configurado</p>
+                            )}
+                        </div>
+                        <input
+                            type="password"
+                            value={clientIdInput}
+                            onChange={e => setClientIdInput(e.target.value)}
+                            placeholder={googleStatus?.client_id_set ? 'Dejar vacío para mantener el actual' : 'Pega aquí el Client ID…'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+
+                    {/* Client Secret */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">OAuth Client Secret</label>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-700 space-y-0.5">
+                            <p><strong>¿Dónde encontrarlo?</strong> Misma ubicación que el Client ID, el campo &quot;Secreto del cliente&quot;.</p>
+                            {googleStatus?.client_secret_set && (
+                                <p className="text-green-700 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Configurado</p>
+                            )}
+                        </div>
+                        <input
+                            type="password"
+                            value={clientSecretInput}
+                            onChange={e => setClientSecretInput(e.target.value)}
+                            placeholder={googleStatus?.client_secret_set ? 'Dejar vacío para mantener el actual' : 'Pega aquí el Client Secret…'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+
                     {googleConfigSuccess && (
                         <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
                             <CheckCircle className="w-4 h-4 shrink-0" /> Credenciales guardadas correctamente.
@@ -3303,11 +3379,74 @@ function IntegrationsTab() {
 
                     <button
                         onClick={saveGoogleConfig}
-                        disabled={googleConfigSaving || (!devTokenInput.trim() && !mccIdInput.trim())}
+                        disabled={googleConfigSaving || (!devTokenInput.trim() && !mccIdInput.trim() && !clientIdInput.trim() && !clientSecretInput.trim())}
                         className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-40"
                     >
                         {googleConfigSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Guardar credenciales
+                        Guardar credenciales Google
+                    </button>
+                </div>
+            </div>
+
+            {/* TikTok & WordPress Bridge Secrets */}
+            <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-white text-lg">🔑</div>
+                    <div>
+                        <h4 className="font-semibold text-slate-800">Otras Integraciones</h4>
+                        <p className="text-xs text-slate-500">Secrets para TikTok y el Bridge de WordPress</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    {/* TikTok App Secret */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">
+                            TikTok App Secret {tiktokSecretSet && <span className="text-green-600 text-xs font-normal ml-1">✓ configurado</span>}
+                        </label>
+                        <p className="text-xs text-slate-500">Se usa para verificar la firma HMAC de los webhooks de TikTok for Business.</p>
+                        <input
+                            type="password"
+                            value={tiktokSecret}
+                            onChange={e => setTiktokSecret(e.target.value)}
+                            placeholder={tiktokSecretSet ? '(dejar en blanco para mantener)' : 'Pega aquí el App Secret de TikTok…'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
+                        />
+                    </div>
+
+                    {/* WP MyAlice Secret */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-slate-700">
+                            WP Bridge Secret {wpSecretSet && <span className="text-green-600 text-xs font-normal ml-1">✓ configurado</span>}
+                        </label>
+                        <p className="text-xs text-slate-500">Clave compartida entre el CRM y el plugin de WordPress para autenticar peticiones al bridge.</p>
+                        <input
+                            type="password"
+                            value={wpSecret}
+                            onChange={e => setWpSecret(e.target.value)}
+                            placeholder={wpSecretSet ? '(dejar en blanco para mantener)' : 'Mismo valor que WP_MYALICE_SECRET en el plugin WP'}
+                            className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-slate-400"
+                        />
+                    </div>
+
+                    {integSuccess && (
+                        <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-sm">
+                            <CheckCircle className="w-4 h-4 shrink-0" /> Guardado correctamente.
+                        </div>
+                    )}
+                    {integError && (
+                        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                            <AlertCircle className="w-4 h-4 shrink-0" /> {integError}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={saveIntegrations}
+                        disabled={integSaving || (!tiktokSecret.trim() && !wpSecret.trim())}
+                        className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-40"
+                    >
+                        {integSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Guardar secrets
                     </button>
                 </div>
             </div>

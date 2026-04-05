@@ -161,6 +161,48 @@ app.post('/api/settings/woocommerce', requireAuth, async (req, res) => {
     }
 });
 
+// ─── Integration Secrets (TikTok, WP Bridge, etc.) ───────────────────────────
+app.get('/api/settings/integrations', requireAuth, async (_req, res) => {
+    try {
+        const keys = ['tiktok_app_secret', 'wp_myalice_secret', 'wc_url'];
+        const r = await db.query(
+            `SELECT key, value FROM business_settings WHERE key = ANY($1)`, [keys]
+        );
+        const map: Record<string, any> = {};
+        for (const row of r.rows) {
+            // Return masked values for secrets, plain for URLs
+            if (row.key.includes('secret')) {
+                map[row.key + '_set'] = true;
+            } else {
+                map[row.key] = row.value;
+            }
+        }
+        res.json(map);
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+app.post('/api/settings/integrations', requireAuth, async (req, res) => {
+    try {
+        const allowed = ['tiktok_app_secret', 'wp_myalice_secret'];
+        const updates: string[] = [];
+        for (const key of allowed) {
+            const val = req.body[key];
+            if (val === undefined) continue;
+            const trimmed = (val || '').trim();
+            if (trimmed) {
+                await db.query(
+                    `INSERT INTO business_settings (key, value) VALUES ($1, $2)
+                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, trimmed]
+                );
+            } else {
+                await db.query(`DELETE FROM business_settings WHERE key = $1`, [key]);
+            }
+            updates.push(key);
+        }
+        res.json({ ok: true, updated: updates });
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
 // ─── AI Settings ─────────────────────────────────────────────────────────────
 app.get('/api/settings/ai', requireAuth, async (_req, res) => {
     const result = await db.query(

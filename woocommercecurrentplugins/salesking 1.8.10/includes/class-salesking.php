@@ -1,0 +1,5426 @@
+<?php
+
+class Salesking
+{
+
+	function __construct()
+	{
+		// Handle Ajax Requests
+		if (wp_doing_ajax()) {
+
+			// Mark announcement read
+			add_action('wp_ajax_saleskingmarkread', array($this, 'saleskingmarkread'));
+			add_action('wp_ajax_nopriv_saleskingmarkread', array($this, 'saleskingmarkread'));
+
+			// Mark all announcement read
+			add_action('wp_ajax_saleskingmarkallread', array($this, 'saleskingmarkallread'));
+			add_action('wp_ajax_nopriv_saleskingmarkallread', array($this, 'saleskingmarkallread'));
+
+			// Mark message read
+			add_action('wp_ajax_saleskingmarkreadmessage', array($this, 'saleskingmarkreadmessage'));
+			add_action('wp_ajax_nopriv_saleskingmarkreadmessage', array($this, 'saleskingmarkreadmessage'));
+
+			// Mark message read admin
+			add_action('wp_ajax_saleskingmarkreadmessagead', array($this, 'saleskingmarkreadmessagead'));
+			add_action('wp_ajax_nopriv_saleskingmarkreadmessagead', array($this, 'saleskingmarkreadmessagead'));
+
+			// Mark message closed
+			add_action('wp_ajax_saleskingmarkclosedmessage', array($this, 'saleskingmarkclosedmessage'));
+			add_action('wp_ajax_nopriv_saleskingmarkclosedmessage', array($this, 'saleskingmarkclosedmessage'));
+
+			// Reply message
+			add_action('wp_ajax_saleskingreplymessage', array($this, 'saleskingreplymessage'));
+			add_action('wp_ajax_nopriv_saleskingreplymessage', array($this, 'saleskingreplymessage'));
+			// Compose message
+			add_action('wp_ajax_saleskingcomposemessage', array($this, 'saleskingcomposemessage'));
+			add_action('wp_ajax_nopriv_saleskingcomposemessage', array($this, 'saleskingcomposemessage'));
+
+			// Save coupon
+			add_action('wp_ajax_saleskingsavecoupon', array($this, 'saleskingsavecoupon'));
+			add_action('wp_ajax_nopriv_saleskingsavecoupon', array($this, 'saleskingsavecoupon'));
+			// Delete coupon
+			add_action('wp_ajax_saleskingdeletecoupon', array($this, 'saleskingdeletecoupon'));
+			add_action('wp_ajax_nopriv_saleskingdeletecoupon', array($this, 'saleskingdeletecoupon'));
+
+			// Create / Save Cart
+			add_action('wp_ajax_saleskingcreatecart', array($this, 'saleskingcreatecart'));
+			add_action('wp_ajax_nopriv_saleskingcreatecart', array($this, 'saleskingcreatecart'));
+			// Delete Cart
+			add_action('wp_ajax_saleskingdeletecart', array($this, 'saleskingdeletecart'));
+			add_action('wp_ajax_nopriv_saleskingdeletecart', array($this, 'saleskingdeletecart'));
+
+			// Add Customer
+			add_action('wp_ajax_saleskingaddcustomer', array($this, 'saleskingaddcustomer'));
+			add_action('wp_ajax_nopriv_saleskingaddcustomer', array($this, 'saleskingaddcustomer'));
+
+			// Add Subagent
+			add_action('wp_ajax_saleskingaddsubagent', array($this, 'saleskingaddsubagent'));
+			add_action('wp_ajax_nopriv_saleskingaddsubagent', array($this, 'saleskingaddsubagent'));
+
+			// Shop As customer
+			add_action('wp_ajax_saleskingshopascustomer', array($this, 'saleskingshopascustomer'));
+			add_action('wp_ajax_nopriv_saleskingshopascustomer', array($this, 'saleskingshopascustomer'));
+
+			// Switch back to agent
+			add_action('wp_ajax_saleskingswitchtoagent', array($this, 'saleskingswitchtoagent'));
+			add_action('wp_ajax_nopriv_saleskingswitchtoagent', array($this, 'saleskingswitchtoagent'));
+
+			// Save Payout Info
+			add_action('wp_ajax_saleskingsaveinfo', array($this, 'saleskingsaveinfo'));
+			add_action('wp_ajax_nopriv_saleskingsaveinfo', array($this, 'saleskingsaveinfo'));
+
+			// Save Payment
+			add_action('wp_ajax_saleskingsavepayment', array($this, 'saleskingsavepayment'));
+			add_action('wp_ajax_nopriv_saleskingsavepayment', array($this, 'saleskingsavepayment'));
+
+			// Tools
+			add_action('wp_ajax_nopriv_saleskingbulksetsubaccounts', array($this, 'saleskingbulksetsubaccounts'));
+			add_action('wp_ajax_saleskingbulksetsubaccounts', array($this, 'saleskingbulksetsubaccounts'));
+			add_action('wp_ajax_nopriv_saleskingbulksetsubaccountsregular', array($this, 'saleskingbulksetsubaccountsregular'));
+			add_action('wp_ajax_saleskingbulksetsubaccountsregular', array($this, 'saleskingbulksetsubaccountsregular'));
+
+			add_action('wp_ajax_nopriv_salesking_setagentall', array($this, 'salesking_setagentall'));
+			add_action('wp_ajax_salesking_setagentall', array($this, 'salesking_setagentall'));
+
+
+			add_action('wp_ajax_saleskingactivatelicense', array($this, 'saleskingactivatelicense'));
+			add_action('wp_ajax_nopriv_saleskingactivatelicense', array($this, 'saleskingactivatelicense'));
+
+			add_action('wp_ajax_saleskingdeactivatelicense', array($this, 'saleskingdeactivatelicense'));
+			add_action('wp_ajax_nopriv_saleskingdeactivatelicense', array($this, 'saleskingdeactivatelicense'));
+
+			// vendor balance history
+			add_action('wp_ajax_saleskingsaveadjustment', array($this, 'saleskingsaveadjustment'));
+			add_action('wp_ajax_nopriv_saleskingsaveadjustment', array($this, 'saleskingsaveadjustment'));
+
+			// Download vendor balance history
+			add_action('wp_ajax_salesking_download_vendor_balance_history', array($this, 'salesking_download_vendor_balance_history'));
+			add_action('wp_ajax_nopriv_salesking_download_vendor_balance_history', array($this, 'salesking_download_vendor_balance_history'));
+
+			// Save User Profile Settings
+			add_action('wp_ajax_salesking_save_profile_settings', array($this, 'salesking_save_profile_settings'));
+			add_action('wp_ajax_nopriv_salesking_save_profile_settings', array($this, 'salesking_save_profile_settings'));
+
+			// Save User Profile Info
+			add_action('wp_ajax_salesking_save_profile_info', array($this, 'salesking_save_profile_info'));
+			add_action('wp_ajax_nopriv_salesking_save_profile_info', array($this, 'salesking_save_profile_info'));
+
+			add_action('wp_ajax_salesking_customers_table_ajax', array($this, 'salesking_customers_table_ajax'));
+			add_action('wp_ajax_nopriv_salesking_customers_table_ajax', array($this, 'salesking_customers_table_ajax'));
+
+			// Load Orders Table AJAX Vendor Dashboard
+			add_action('wp_ajax_salesking_orders_table_ajax', array($this, 'salesking_orders_table_ajax'));
+			add_action('wp_ajax_nopriv_salesking_orders_table_ajax', array($this, 'salesking_orders_table_ajax'));
+
+			// Load Earnings Table AJAX Vendor Dashboard
+			add_action('wp_ajax_salesking_earnings_table_ajax', array($this, 'salesking_earnings_table_ajax'));
+			add_action('wp_ajax_nopriv_salesking_earnings_table_ajax', array($this, 'salesking_earnings_table_ajax'));
+
+			// Dismiss "activate woocommerce" admin notice permanently
+			add_action('wp_ajax_salesking_dismiss_activate_woocommerce_admin_notice', array($this, 'salesking_dismiss_activate_woocommerce_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_groups_howto_admin_notice', array($this, 'salesking_dismiss_groups_howto_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_groupsrules_howto_admin_notice', array($this, 'salesking_dismiss_groupsrules_howto_admin_notice'));
+
+			add_action('wp_ajax_salesking_dismiss_announcements_howto_admin_notice', array($this, 'salesking_dismiss_announcements_howto_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_messages_howto_admin_notice', array($this, 'salesking_dismiss_messages_howto_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_payouts_howto_admin_notice', array($this, 'salesking_dismiss_payouts_howto_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_earnings_howto_admin_notice', array($this, 'salesking_dismiss_earnings_howto_admin_notice'));
+			add_action('wp_ajax_salesking_dismiss_rules_howto_admin_notice', array($this, 'salesking_dismiss_rules_howto_admin_notice'));
+
+			// Reports get data
+			add_action('wp_ajax_salesking_reports_get_data', array($this, 'salesking_reports_get_data'));
+			add_action('wp_ajax_nopriv_salesking_reports_get_data', array($this, 'salesking_reports_get_data'));
+
+			// Reports Teams CSV download
+			add_action('wp_ajax_salesking_reports_download_csv', array($this, 'salesking_reports_download_csv'));
+
+			// Customer Transfer System
+			add_action('wp_ajax_salesking_request_transfer', array($this, 'salesking_request_transfer'));
+			add_action('wp_ajax_salesking_respond_transfer', array($this, 'salesking_respond_transfer'));
+			add_action('wp_ajax_salesking_direct_reassign', array($this, 'salesking_direct_reassign'));
+			add_action('wp_ajax_salesking_claim_customer', array($this, 'salesking_claim_customer'));
+			add_action('wp_ajax_salesking_search_customers', array($this, 'salesking_search_customers'));
+			add_action('wp_ajax_salesking_get_unassigned_customers', array($this, 'salesking_get_unassigned_customers'));
+
+			// Save Order (Frontend Management)
+			add_action('wp_ajax_salesking_save_order', array($this, 'salesking_save_order'));
+			add_action('wp_ajax_nopriv_salesking_save_order', array($this, 'salesking_save_order'));
+
+			// Add Order Note (Frontend Management)
+			add_action('wp_ajax_salesking_add_order_note', array($this, 'salesking_add_order_note'));
+			add_action('wp_ajax_nopriv_salesking_add_order_note', array($this, 'salesking_add_order_note'));
+
+			// Delete order note
+			add_action('wp_ajax_salesking_delete_order_note', array($this, 'salesking_delete_order_note'));
+			add_action('wp_ajax_nopriv_salesking_delete_order_note', array($this, 'salesking_delete_order_note'));
+
+
+			// Offers B2BKing integration
+			add_action('wp_ajax_nopriv_b2bking_save_new_ajax_offer_sk', array($this, 'b2bking_save_new_ajax_offer_sk'));
+			add_action('wp_ajax_b2bking_save_new_ajax_offer_sk', array($this, 'b2bking_save_new_ajax_offer_sk'));
+			// edit offer
+			add_action('wp_ajax_nopriv_b2bking_get_offer_data_sk', array($this, 'b2bking_get_offer_data_sk'));
+			add_action('wp_ajax_b2bking_get_offer_data_sk', array($this, 'b2bking_get_offer_data_sk'));
+			// delete offer
+			add_action('wp_ajax_nopriv_b2bking_delete_ajax_offer_sk', array($this, 'b2bking_delete_ajax_offer_sk'));
+			add_action('wp_ajax_b2bking_delete_ajax_offer_sk', array($this, 'b2bking_delete_ajax_offer_sk'));
+			// email offer
+			add_action('wp_ajax_nopriv_b2bking_email_offer_sk', array($this, 'b2bking_email_offer_sk'));
+			add_action('wp_ajax_b2bking_email_offer_sk', array($this, 'b2bking_email_offer_sk'));
+
+		}
+
+		require_once SALESKING_DIR . '/public/class-salesking-public.php';
+
+		// Run Admin/Public code 
+		if (is_admin()) {
+			require_once SALESKING_DIR . '/admin/class-salesking-admin.php';
+			global $salesking_admin;
+			$salesking_admin = new Salesking_Admin();
+		} else if (!$this->salesking_is_login_page()) {
+			global $salesking_public;
+			$salesking_public = new Salesking_Public();
+		}
+
+		// Prevent the agent from being sent to wp-admin on wrong login
+		add_action('login_redirect', array($this, 'prevent_wp_login'), 10, 3);
+		// Redirect to sales agent page, if sales agent
+		// also remove cookie
+		add_action('wp_logout', array($this, 'auto_redirect_after_logout'), 10, 1);
+
+		// Add email classes
+		add_filter('woocommerce_email_classes', array($this, 'salesking_add_email_classes'));
+		// Add extra email actions (account approved finish)
+		add_filter('woocommerce_email_actions', array($this, 'salesking_add_email_actions'));
+
+		// Add invoice gateway
+		add_filter('woocommerce_payment_gateways', array($this, 'salesking_pending_gateway'));
+		add_action('woocommerce_blocks_loaded', array($this, 'salesking_pending_gateway_blocks'));
+
+		add_action('plugins_loaded', function () {
+			if (defined('WC_PLUGIN_FILE')) {
+				if (!class_exists('Salesking_Pending_Gateway')) {
+					include_once('class-salesking-pending-gateway.php');
+				}
+			}
+		});
+
+		// Allow resending the new order email (for agents assigned to orders)
+		add_filter('woocommerce_new_order_email_allows_resend', '__return_true');
+		// Send new order to agent
+		add_filter('woocommerce_email_recipient_new_order', array($this, 'send_email_to_agent'), 10, 2);
+
+		add_action('plugins_loaded', function () {
+
+			// Compatibility for adding customers with Dokan
+			add_filter('dokan_register_nonce_check', function ($val) {
+				return false;
+			}, 100, 1);
+
+			if (isset($_POST['pwd'])) {
+				remove_filter('authenticate', array('LoginNocaptcha', 'authenticate'), 30, 3);
+			}
+			remove_filter('authenticate', array('WPCaptcha_Functions', 'wp_authenticate_username_password'), 9999, 3);
+
+
+			// only if user is an agent and not admin
+			$agentgroup = get_user_meta(get_current_user_id(), 'salesking_group', true);
+			if (!empty($agentgroup) && $agentgroup !== 'none' && !current_user_can('manage_woocommerce')) {
+				if (intval(get_option('salesking_agents_can_manage_orders_setting', 1)) === 1) {
+					if (apply_filters('salesking_allow_agent_manage_orders', true)) {
+						// Agents capability to manage orders
+						add_filter('user_has_cap', array($this, 'agents_caps_manage_orders'), 1000, 3);
+
+						// Agents restrict backend interface
+						add_action('wp_before_admin_bar_render', array($this, 'mytheme_admin_bar_render'));
+						if (!wp_doing_ajax()) {
+							// add_action( 'admin_init', array($this, 'stop_access_profile' ));
+						}
+						add_action('admin_menu', array($this, 'remove_menus'));
+						add_action('admin_head', array($this, 'restrict_screens'));
+					}
+				}
+			}
+		});
+		add_action('init', function () {
+			if (isset($_POST['pwd'])) {
+				remove_filter('authenticate', array('WPCaptcha_Functions', 'wp_authenticate_username_password'), 9999, 3);
+			}
+		});
+
+
+		// When order status changes, change earning status
+		add_action('woocommerce_order_status_changed', array($this, 'change_earning_status'), 10, 3);
+
+
+		// Add the duplicate link to action list for post_row_actions
+		// for "post" and custom post types
+		add_filter('post_row_actions', array($this, 'rd_duplicate_post_link'), 10, 2);
+		// for "page" post type
+		add_filter('page_row_actions', array($this, 'rd_duplicate_post_link'), 10, 2);
+
+		add_action('admin_action_salesking_duplicate_posts_draft', array($this, 'salesking_duplicate_posts_draft'));
+
+		add_action('admin_notices', array($this, 'salesking_duplication_admin_notice'));
+
+		// salesking templates overwrite
+		add_filter('salesking_dashboard_template', array($this, 'template_file_overwrite_theme_dashboard'), 10, 1);
+
+		// calculate commissions automatically on backend manual orders
+		add_action('woocommerce_process_shop_order_meta', array($this, 'salesking_manual_order_commission_calc'), 10, 2);
+		add_action('woocommerce_saved_order_items', array($this, 'update_agent_commission_edit_order'), 10, 2);
+
+		// enable wc help tips on b2bking settings
+		add_filter('woocommerce_screen_ids', [$this, 'set_wc_screen_ids']);
+
+		// Allow assigning an agent to a coupon 
+		add_action('woocommerce_coupon_options', [$this, 'add_coupon_text_field'], 10);
+		add_action('woocommerce_coupon_options_save', [$this, 'save_coupon_text_field'], 10, 2);
+
+
+		// Hide Pending Payment Method if not agent placing order for customer
+		add_filter('woocommerce_available_payment_gateways', array($this, 'salesking_disable_pending_payment_gateway'), 1);
+
+	}
+
+	function check_user_is_agent_with_access()
+	{
+		// check if switch cookie is set
+		if (isset($_COOKIE['salesking_switch_cookie'])) {
+			$switch_to = sanitize_text_field($_COOKIE['salesking_switch_cookie']);
+			$current_id = get_current_user_id();
+
+			if (!empty($switch_to) && is_user_logged_in()) {
+				// show bar
+				$udata = get_userdata(get_current_user_id());
+				$name = $udata->first_name . ' ' . $udata->last_name;
+
+				// get agent details
+				$agent = explode('_', $switch_to);
+				$customer_id = intval($agent[0]);
+				$agent_id = intval($agent[1]);
+				$agent_registration = $agent[2];
+				// check real registration in database
+				$udataagent = get_userdata($agent_id);
+				$registered_date = $udataagent->user_registered;
+
+				// if current logged in user is the one in the cookie + agent cookie checks out
+				if ($current_id === $customer_id && $agent_registration === $registered_date) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	function salesking_disable_pending_payment_gateway($gateways)
+	{
+
+		$enable = 'no';
+		// check if switch cookie is set
+		if ($this->check_user_is_agent_with_access()) {
+			$enable = 'yes';
+		}
+
+		if ($enable === 'no') {
+
+			foreach ($gateways as $gateway_id => $gateway_value) {
+				if ($gateway_id === 'salesking-pending-gateway') {
+					unset($gateways[$gateway_id]);
+				}
+			}
+
+		}
+
+		return $gateways;
+	}
+
+	public function set_wc_screen_ids($screen)
+	{
+		$screen[] = 'toplevel_page_salesking';
+		$screen[] = 'salesking_rule';
+		return $screen;
+	}
+
+	function salesking_manual_order_commission_calc($order_id, $order = array())
+	{
+		$public = new Salesking_Public();
+		$public->salesking_register_order_calculate_earnings($order_id);
+	}
+
+	function update_agent_commission_edit_order($order_id, $items = null)
+	{
+		if (isset($_POST['salesking_main_commission_order_value_edited'])) {
+			return;
+		}
+
+		if (isset($_POST['salesking_recalculate_commission_edit_order']) && intval($_POST['salesking_recalculate_commission_edit_order']) === 1) {
+			$order = wc_get_order($order_id);
+			if (!$order)
+				return;
+
+			$public = new Salesking_Public();
+			$public->salesking_register_order_calculate_earnings($order_id, array('recalculate' => 1));
+		}
+	}
+
+	function template_file_overwrite_theme_dashboard($templatefile)
+	{
+
+		$theme_directory = get_stylesheet_directory();
+
+		if (file_exists($theme_directory . '/salesking/' . $templatefile)) {
+			return $theme_directory . '/salesking/' . $templatefile;
+		} else {
+			// check salesking pro file
+			$templatefilearray = explode('/', $templatefile);
+
+			// we are in a salesking pro file
+			if (file_exists($theme_directory . '/salesking/' . end($templatefilearray))) {
+				return $theme_directory . '/salesking/' . end($templatefilearray);
+			}
+		}
+
+		return $templatefile;
+
+	}
+
+	function rd_duplicate_post_link($actions, $post)
+	{
+
+		if (!current_user_can('edit_posts')) {
+			return $actions;
+		}
+
+		if (get_post_type($post->ID) !== 'salesking_rule') {
+			return $actions;
+		}
+
+		$url = wp_nonce_url(
+			add_query_arg(
+				array(
+					'action' => 'salesking_duplicate_posts_draft',
+					'post' => $post->ID,
+				),
+				'admin.php'
+			),
+			basename(__FILE__),
+			'duplicate_nonce'
+		);
+
+		$actions['duplicate'] = '<a href="' . $url . '" title="Duplicate this item" rel="permalink">' . esc_html__('Duplicate', 'salesking') . '</a>';
+
+		return $actions;
+	}
+
+	function salesking_duplicate_posts_draft()
+	{
+
+		// check if post ID has been provided and action
+		if (empty($_GET['post'])) {
+			wp_die('No post to duplicate has been provided!');
+		}
+
+		// Nonce verification
+		if (!isset($_GET['duplicate_nonce']) || !wp_verify_nonce($_GET['duplicate_nonce'], basename(__FILE__))) {
+			return;
+		}
+
+		// Get the original post id
+		$post_id = absint($_GET['post']);
+
+		// And all the original post data then
+		$post = get_post($post_id);
+
+		$current_user = wp_get_current_user();
+		$new_post_author = $current_user->ID;
+
+		if ($post) {
+
+			// new post data array
+			$args = array(
+				'comment_status' => $post->comment_status,
+				'ping_status' => $post->ping_status,
+				'post_author' => $new_post_author,
+				'post_content' => $post->post_content,
+				'post_excerpt' => $post->post_excerpt,
+				'post_name' => $post->post_name,
+				'post_parent' => $post->post_parent,
+				'post_password' => $post->post_password,
+				'post_status' => 'publish',
+				'post_title' => $post->post_title,
+				'post_type' => $post->post_type,
+				'to_ping' => $post->to_ping,
+				'menu_order' => $post->menu_order
+			);
+
+			// insert the post by wp_insert_post() function
+			$new_post_id = wp_insert_post($args);
+
+			$taxonomies = get_object_taxonomies(get_post_type($post)); // returns array of taxonomy names for post type, ex array("category", "post_tag");
+			if ($taxonomies) {
+				foreach ($taxonomies as $taxonomy) {
+					$post_terms = wp_get_object_terms($post_id, $taxonomy, array('fields' => 'slugs'));
+					wp_set_object_terms($new_post_id, $post_terms, $taxonomy, false);
+				}
+			}
+
+			// duplicate all post meta
+			$post_meta = get_post_meta($post_id);
+			if ($post_meta) {
+
+				foreach ($post_meta as $meta_key => $meta_values) {
+
+					if ('_wp_old_slug' == $meta_key) { // do nothing for this meta key
+						continue;
+					}
+
+					foreach ($meta_values as $meta_value) {
+						add_post_meta($new_post_id, $meta_key, $meta_value);
+					}
+				}
+			}
+
+			wp_safe_redirect(
+				add_query_arg(
+					array(
+						'post_type' => ('post' !== get_post_type($post) ? get_post_type($post) : false),
+						'saved' => 'post_duplication_created' // just a custom slug here
+					),
+					admin_url('edit.php')
+				)
+			);
+			exit;
+
+		} else {
+			wp_die('Post creation failed, could not find original post.');
+		}
+
+	}
+
+	/*
+	 * In case we decided to add admin notices
+	 */
+
+	function salesking_duplication_admin_notice()
+	{
+
+		// Get the current screen
+		$screen = get_current_screen();
+
+		if ('edit' !== $screen->base) {
+			return;
+		}
+
+		//Checks if settings updated
+		if (isset($_GET['saved']) && 'post_duplication_created' == $_GET['saved']) {
+
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__('Duplicate has been created', 'salesking') . '</p></div>';
+
+		}
+	}
+
+
+	function saleskingbulksetsubaccounts()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// Capability check
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Failed capability check.');
+			wp_die();
+		}
+
+		$option_first = trim(sanitize_text_field($_POST['option_first']));
+		$option_second = trim(sanitize_text_field($_POST['option_second']));
+
+		$subaccount_ids = explode(',', $option_first);
+		$parent_id = trim($option_second);
+
+		foreach ($subaccount_ids as $subaccount_id) {
+			$subaccount_id_trimmed = trim($subaccount_id);
+
+			// set assigned agent
+			update_user_meta($subaccount_id_trimmed, 'salesking_parent_agent', $parent_id);
+			$parentaggroup = get_user_meta($parent_id, 'salesking_group', true);
+
+			if (apply_filters('salesking_set_subagents_tool_change_group', true)) {
+				update_user_meta($subaccount_id_trimmed, 'salesking_group', $parentaggroup);
+			}
+			update_user_meta($subaccount_id_trimmed, 'salesking_user_choice', 'agent');
+			update_user_meta($subaccount_id_trimmed, 'salesking_assigned_agent', 'none');
+
+		}
+
+		echo 'success';
+		exit();
+
+	}
+
+	function salesking_setagentall()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$option_first = trim(sanitize_text_field($_POST['option_first']));
+
+		// get users
+		$users = get_users(array(
+			'role' => 'customer',
+			'fields' => 'ids',
+		));
+
+		if (!empty($users)) {
+			// loop trough each author
+			foreach ($users as $user) {
+				// move all users to the group
+				update_user_meta($user, 'salesking_assigned_agent', $option_first);
+
+				$choice = get_user_meta($user, 'salesking_user_choice', true);
+				if ($choice !== 'agent') {
+					update_user_meta($user, 'salesking_user_choice', 'customer');
+				}
+			}
+		}
+
+		// delete all b2bking transients
+
+		b2bking()->clear_caches_transients();
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingbulksetsubaccountsregular()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// Capability check
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Failed capability check.');
+			wp_die();
+		}
+
+		$option_first = trim(sanitize_text_field($_POST['option_first']));
+
+		$subaccount_ids = explode(',', $option_first);
+
+		foreach ($subaccount_ids as $subaccount_id) {
+			$subaccount_id_trimmed = trim($subaccount_id);
+			update_user_meta($subaccount_id_trimmed, 'salesking_parent_agent', '');
+
+
+		}
+
+		echo 'success';
+		exit();
+
+	}
+
+	function change_earning_status($order_id, $status_from, $status_to)
+	{
+		// get earning id, if any
+		$order = wc_get_order($order_id);
+		$earning_id = $order->get_meta('salesking_earning_id');
+
+		if (!empty($earning_id)) {
+			update_post_meta($earning_id, 'order_status', $status_to);
+
+			// Check if the commission has already been added or removed
+			$commission_status = get_post_meta($earning_id, 'salesking_commission_status', true);
+
+			$agent_id = get_post_meta($earning_id, 'agent_id', true);
+			$outstanding_balance = get_user_meta($agent_id, 'salesking_outstanding_earnings', true);
+			if (empty($outstanding_balance)) {
+				$outstanding_balance = 0;
+			}
+			$total_earnings_on_order = get_post_meta($earning_id, 'salesking_commission_total', true);
+			$agents_of_earning = get_post_meta($earning_id, 'agents_of_earning', true);
+			if (empty($agents_of_earning)) {
+				$agents_of_earning = array();
+			}
+
+			// add balance for payouts
+			if (in_array($status_to, apply_filters('salesking_earning_completed_statuses', array('completed'))) && $commission_status !== 'added') {
+				$this->update_agent_balance($agent_id, $outstanding_balance, $total_earnings_on_order, $order_id, 'add');
+				$this->update_parent_agents_balance($agents_of_earning, $earning_id, $order_id, 'add');
+				update_post_meta($earning_id, 'salesking_commission_status', 'added');
+			}
+
+			// remove balance for payouts
+			if (!in_array($status_to, apply_filters('salesking_earning_completed_statuses', array('completed'))) && $commission_status === 'added') {
+				$this->update_agent_balance($agent_id, $outstanding_balance, $total_earnings_on_order, $order_id, 'remove');
+				$this->update_parent_agents_balance($agents_of_earning, $earning_id, $order_id, 'remove');
+				update_post_meta($earning_id, 'salesking_commission_status', 'removed');
+			}
+		}
+	}
+
+	private function update_agent_balance($agent_id, $outstanding_balance, $total_earnings_on_order, $order_id, $action)
+	{
+		if (apply_filters('salesking_balance_calculation_method', 'standard') === 'standard') {
+			$new_balance = ($action === 'add')
+				? floatval($outstanding_balance) + floatval($total_earnings_on_order)
+				: floatval($outstanding_balance) - floatval($total_earnings_on_order);
+
+			$amount = ($action === 'add') ? '+ ' . $total_earnings_on_order : '- ' . $total_earnings_on_order;
+			$note = ($action === 'add')
+				? 'Order #' . $order_id . ' status changed to completed'
+				: 'Order #' . $order_id . ' status changed away from completed';
+
+			$this->update_user_balance_history($agent_id, $amount, $new_balance, $note);
+			update_user_meta($agent_id, 'salesking_outstanding_earnings', $new_balance);
+		} else if (apply_filters('salesking_balance_calculation_method', 'standard') === 'recalculate') {
+			require_once(SALESKING_DIR . 'includes/class-salesking-helper.php');
+			$helper = new Salesking_Helper();
+			$helper->recalculate_agent_earnings($agent_id);
+		}
+	}
+
+	private function update_parent_agents_balance($agents_of_earning, $earning_id, $order_id, $action)
+	{
+		foreach ($agents_of_earning as $ag_id) {
+			$outstanding_balance = get_user_meta($ag_id, 'salesking_outstanding_earnings', true);
+			if (empty($outstanding_balance)) {
+				$outstanding_balance = 0;
+			}
+			$ag_earnings_on_order = get_post_meta($earning_id, 'parent_agent_id_' . $ag_id . '_earnings', true);
+
+			if (apply_filters('salesking_balance_calculation_method', 'standard') === 'standard') {
+				$new_balance = ($action === 'add')
+					? floatval($outstanding_balance) + floatval($ag_earnings_on_order)
+					: floatval($outstanding_balance) - floatval($ag_earnings_on_order);
+
+				$amount = ($action === 'add') ? '+ ' . $ag_earnings_on_order : '- ' . $ag_earnings_on_order;
+				$note = ($action === 'add')
+					? 'Order #' . $order_id . ' status changed to completed'
+					: 'Order #' . $order_id . ' status changed away from completed';
+
+				$this->update_user_balance_history($ag_id, $amount, $new_balance, $note);
+				update_user_meta($ag_id, 'salesking_outstanding_earnings', $new_balance);
+			} else if (apply_filters('salesking_balance_calculation_method', 'standard') === 'recalculate') {
+				require_once(SALESKING_DIR . 'includes/class-salesking-helper.php');
+				$helper = new Salesking_Helper();
+				$helper->recalculate_agent_earnings($ag_id);
+			}
+		}
+	}
+
+	private function update_user_balance_history($user_id, $amount, $new_balance, $note)
+	{
+		$old_balance = get_user_meta($user_id, 'salesking_outstanding_earnings', true);
+		$date = date_i18n('Y/m/d', time() + (get_option('gmt_offset') * 3600));
+		$user_balance_history = sanitize_text_field(get_user_meta($user_id, 'salesking_user_balance_history', true));
+		$new_entry = $date . ':' . $amount . ':' . $old_balance . ':' . $new_balance . ':' . $note;
+		update_user_meta($user_id, 'salesking_user_balance_history', $user_balance_history . ';' . $new_entry);
+	}
+
+	function add_coupon_text_field()
+	{
+
+		if (!apply_filters('salesking_coupon_set_agent', true)) {
+			// remove
+			return;
+		}
+
+		$args = array(
+			'id' => 'salesking_agent',
+			'label' => __('Set agent', 'salesking'),
+			'desc_tip' => true,
+			'description' => __('Select an agent this coupon will belong to. When the coupon is used, the agent will be credited for the purchase.', 'salesking'),
+			'options' => array(
+				1 => esc_html__('admin', 'salesking')
+			),
+		);
+
+		// get all agents
+		$agents = get_users(array(
+			'meta_key' => 'salesking_group',
+			'meta_value' => 'none',
+			'meta_compare' => '!=',
+		));
+
+		foreach ($agents as $agent) {
+			$args['options'][$agent->ID] = $agent->user_login;
+		}
+
+		woocommerce_wp_select($args);
+
+
+	}
+	// Save the custom field value from Admin coupon settings pages
+	function save_coupon_text_field($post_id, $coupon)
+	{
+		if (isset($_POST['salesking_agent'])) {
+			$coupon->update_meta_data('salesking_agent', sanitize_text_field($_POST['salesking_agent']));
+			$coupon->save();
+		}
+	}
+	function salesking_customers_table_ajax()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group) && !current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_die();
+		}
+
+
+		$user_id = get_current_user_id();
+
+		$start = sanitize_text_field($_POST['start']);
+		$length = sanitize_text_field($_POST['length']);
+		$search = sanitize_text_field($_POST['search']['value']);
+		$pagenr = ($start / $length) + 1;
+
+		$args = array(
+			'fields' => 'ids',
+			'search' => '*' . esc_attr($search) . '*',
+		);
+		$total_items = get_users($args);
+		$itemnr = count($total_items);
+
+		$data = array(
+			'length' => $length,
+			'data' => array(),
+			'recordsTotal' => $itemnr,
+			'recordsFiltered' => $itemnr
+		);
+		// get all customers of the user
+
+		// if all agents can shop for all customers
+		if (intval(get_option('salesking_all_agents_shop_all_customers_setting', 0)) === 1) {
+			// first get all customers that have this assigned agent individually
+			$args = apply_filters('salesking_customers_ajax_args', array(
+				'fields' => 'ids',
+				'search' => '*' . esc_attr($search) . '*',
+				'paged' => floatval($pagenr),
+				'number' => 3,
+				'orderby' => 'user_registered',
+				'order' => 'DESC',
+			));
+			$user_ids_assigned = get_users($args);
+			$customers = $user_ids_assigned;
+
+		} else {
+			// Transfer system: Get ALL customers with assigned agents (own + others)
+			// so agents can see and request transfers for customers assigned to other agents
+			global $wpdb;
+
+			$search_clause = '';
+			if (!empty($search)) {
+				$search_like = '%' . $wpdb->esc_like($search) . '%';
+				$search_clause = $wpdb->prepare(
+					" AND (u.user_login LIKE %s OR u.user_email LIKE %s OR um_fn.meta_value LIKE %s OR um_ln.meta_value LIKE %s OR um_co.meta_value LIKE %s)",
+					$search_like, $search_like, $search_like, $search_like, $search_like
+				);
+			}
+
+			// Count total matching customers (for DataTables pagination)
+			$itemnr = intval($wpdb->get_var(
+				"SELECT COUNT(DISTINCT um.user_id) FROM {$wpdb->usermeta} um
+				 INNER JOIN {$wpdb->users} u ON um.user_id = u.ID
+				 LEFT JOIN {$wpdb->usermeta} um_fn ON um.user_id = um_fn.user_id AND um_fn.meta_key = 'first_name'
+				 LEFT JOIN {$wpdb->usermeta} um_ln ON um.user_id = um_ln.user_id AND um_ln.meta_key = 'last_name'
+				 LEFT JOIN {$wpdb->usermeta} um_co ON um.user_id = um_co.user_id AND um_co.meta_key = 'billing_company'
+				 WHERE um.meta_key = 'salesking_assigned_agent'
+				 AND um.meta_value != '' AND um.meta_value != 'none' AND um.meta_value != '0'
+				 AND um.user_id NOT IN (
+				     SELECT u2.user_id FROM {$wpdb->usermeta} u2
+				     WHERE u2.meta_key = 'salesking_group' AND u2.meta_value != 'none' AND u2.meta_value != ''
+				 )
+				 {$search_clause}"
+			));
+
+			// Update counts for DataTables
+			$data['recordsTotal'] = $itemnr;
+			$data['recordsFiltered'] = $itemnr;
+
+			// Get paginated results (respects the 3-result security limit)
+			$offset_val = intval($start);
+			$limit_val = intval($length);
+			$customers = $wpdb->get_col(
+				"SELECT DISTINCT um.user_id FROM {$wpdb->usermeta} um
+				 INNER JOIN {$wpdb->users} u ON um.user_id = u.ID
+				 LEFT JOIN {$wpdb->usermeta} um_fn ON um.user_id = um_fn.user_id AND um_fn.meta_key = 'first_name'
+				 LEFT JOIN {$wpdb->usermeta} um_ln ON um.user_id = um_ln.user_id AND um_ln.meta_key = 'last_name'
+				 LEFT JOIN {$wpdb->usermeta} um_co ON um.user_id = um_co.user_id AND um_co.meta_key = 'billing_company'
+				 WHERE um.meta_key = 'salesking_assigned_agent'
+				 AND um.meta_value != '' AND um.meta_value != 'none' AND um.meta_value != '0'
+				 AND um.user_id NOT IN (
+				     SELECT u2.user_id FROM {$wpdb->usermeta} u2
+				     WHERE u2.meta_key = 'salesking_group' AND u2.meta_value != 'none' AND u2.meta_value != ''
+				 )
+				 {$search_clause}
+				 ORDER BY u.user_registered DESC
+				 LIMIT {$limit_val} OFFSET {$offset_val}"
+			);
+		}
+
+		// Transfer system: pre-fetch data needed for action buttons
+		$current_agent_id = get_current_user_id();
+		$my_customer_ids = get_users(array(
+			'meta_key'     => 'salesking_assigned_agent',
+			'meta_value'   => $current_agent_id,
+			'meta_compare' => '=',
+			'fields'       => 'ids',
+		));
+		// Pre-fetch: current user's direct children (subagents)
+		$my_children_ids = get_users(array(
+			'fields' => 'ids',
+			'meta_query' => array(
+				'relation' => 'AND',
+				array('key' => 'salesking_group', 'value' => 'none', 'compare' => '!='),
+				array('key' => 'salesking_parent_agent', 'value' => $current_agent_id, 'compare' => '='),
+			),
+		));
+		$my_children_ids_map = array_flip(array_map('strval', $my_children_ids));
+		// Pre-fetch: pending transfer requests
+		global $wpdb;
+		$sk_transfer_options = $wpdb->get_results(
+			"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE 'sk_transfer_%'"
+		);
+		$pending_requests_for_me = array();
+		$pending_requests_by_me  = array();
+		foreach ($sk_transfer_options as $opt) {
+			$tdata = maybe_unserialize($opt->option_value);
+			if (is_array($tdata)) {
+				if (intval($tdata['from_agent']) === intval($current_agent_id)) {
+					$pending_requests_for_me[] = $tdata;
+				}
+				if (intval($tdata['to_agent']) === intval($current_agent_id)) {
+					$pending_requests_by_me[] = $tdata;
+				}
+			}
+		}
+
+		foreach ($customers as $customer_id) {
+			$customerobj = new WC_Customer($customer_id);
+			$user_info = get_userdata($customer_id);
+			$company_name = get_user_meta($customer_id, 'billing_company', true);
+			if (empty($company_name)) {
+				$company_name = '';
+			}
+
+			if (empty($user_info->first_name) && empty($user_info->last_name)) {
+				$name = $user_info->user_login;
+			} else {
+				$name = $user_info->first_name . ' ' . $user_info->last_name;
+			}
+			$name = apply_filters('salesking_customers_page_name_display', $name, $customer_id);
+
+			?>
+
+			<?php ob_start(); ?>
+			<td class="nk-tb-col">
+
+				<div>
+					<div class="user-card">
+						<div class="user-avatar bg-primary">
+							<span><?php echo esc_html(substr($name, 0, 2)); ?></span>
+						</div>
+						<div class="user-info">
+							<span class="tb-lead"><?php echo esc_html($name); ?> <span
+									class="dot dot-success d-md-none ml-1"></span></span>
+						</div>
+					</div>
+				</div>
+
+			</td>
+			<?php $col1 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+			if (apply_filters('b2bking_show_customers_page_company_column', true)) {
+				?>
+				<td class="nk-tb-col tb-col-md">
+					<div>
+						<span><?php echo esc_html($company_name); ?></span>
+					</div>
+				</td>
+				<?php
+			}
+			?>
+			<?php $col2 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+			// Agente Asignado column
+			$customer_assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+			$agent_display_name = '-';
+			if (!empty($customer_assigned_agent)) {
+				$agent_info_ajax = get_userdata(intval($customer_assigned_agent));
+				if ($agent_info_ajax) {
+					$agent_display_name = $agent_info_ajax->first_name . ' ' . $agent_info_ajax->last_name;
+					if (trim($agent_display_name) === '') $agent_display_name = $agent_info_ajax->user_login;
+				}
+			}
+			?>
+			<td class="nk-tb-col tb-col-md">
+				<div>
+					<span><?php echo esc_html($agent_display_name); ?></span>
+				</div>
+			</td>
+			<?php $col_agent = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+
+			do_action('salesking_customers_custom_columns_content', $customerobj);
+
+			if (apply_filters('b2bking_show_customers_page_total_spent_column', true)) {
+				?>
+				<td class="nk-tb-col tb-col-md" data-order="<?php echo esc_attr($customerobj->get_total_spent()); ?>">
+					<div>
+						<span class="tb-amount"><?php echo wc_price($customerobj->get_total_spent()); ?></span>
+					</div>
+				</td>
+				<?php
+			}
+			?>
+
+			<?php $col3 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+			if (apply_filters('b2bking_show_customers_page_order_count_column', true)) {
+				?>
+				<td class="nk-tb-col tb-col-lg">
+					<div>
+						<?php
+						if (apply_filters('salesking_customers_show_orders_link', false)) {
+							?>
+							<a class="salesking_clickable_highlight"
+								href="<?php echo esc_attr(trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true)))) . 'orders/?search=' . $user_info->user_email; ?>">
+								<?php
+						}
+						?>
+
+							<span class="tb-amount"><?php echo $customerobj->get_order_count(); ?></span>
+							<?php
+
+							if (apply_filters('salesking_customers_show_orders_link', false)) {
+								?>
+							</a>
+							<?php
+							}
+							?>
+					</div>
+				</td>
+				<?php
+			}
+			?>
+			<?php $col4 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+
+
+			<?php /*
+																												   <td class="nk-tb-col tb-col-lg" data-order="<?php 
+																												   $last_order = $customerobj->get_last_order();
+																												   if (is_a($last_order, 'WC_Order')){
+																													   $date = explode('T',$last_order->get_date_created())[0];
+																													   echo esc_attr(strtotime($date));
+																												   }
+																												   ?>"> 
+																													   <div>
+																														   <span><?php 
+																														   if (is_a($last_order, 'WC_Order')){
+
+																															   $date = ucfirst(date_i18n('F j, Y', strtotime($date)));
+
+																															   echo $date;
+																														   }?></span>
+																													   </div>
+																												   </td>
+																												   */ ?>
+			<?php
+			if (apply_filters('b2bking_show_customers_page_email_column', true)) {
+				?>
+				<td class="nk-tb-col tb-col-lg">
+					<div>
+						<span><?php echo esc_html($user_info->user_email); ?></span>
+					</div>
+				</td>
+				<?php
+			}
+			?>
+			<?php $col5 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+			if (apply_filters('b2bking_show_customers_page_phone_column', true)) {
+				?>
+				<td class="nk-tb-col tb-col-lg">
+					<div>
+						<span><?php echo esc_html(get_user_meta($customer_id, 'billing_phone', true)); ?></span>
+					</div>
+				</td>
+				<?php
+			}
+			?>
+			<?php $col6 = ob_get_clean(); ?>
+			<?php ob_start(); ?>
+			<?php
+			if (apply_filters('salesking_show_customers_page_actions_column', true)) {
+				$customer_assigned_agent_action = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+				$is_my_customer = in_array($customer_id, $my_customer_ids);
+				if (!user_can($customer_id, 'manage_woocommerce') && !user_can($customer_id, 'manage_options')) {
+					?>
+					<td class="nk-tb-col">
+					<?php
+					if ($is_my_customer) {
+						// MY customer: show Shop + Edit buttons
+						?>
+						<div class="tb-odr-btns d-md-inline">
+							<button class="btn btn-sm btn-primary salesking_shop_as_customer" value="<?php echo esc_attr($customer_id); ?>"><em class="icon ni ni-cart-fill"></em><span><?php esc_html_e('Shop as Customer', 'salesking'); ?></span></button>
+						</div>
+						<?php
+						if (intval(get_option('salesking_agents_can_edit_customers_setting', 1)) === 1) {
+							?>
+							<div class="tb-odr-btns d-none d-md-inline">
+								<button class="btn btn-sm btn-secondary salesking_shop_as_customer_edit" value="<?php echo esc_attr($customer_id); ?>"><em class="icon ni ni-pen-alt-fill"></em><span><?php echo apply_filters('salesking_shop_customer_edit_button_text', esc_html__('Edit', 'salesking')); ?></span></button>
+							</div>
+							<?php
+						}
+						// Check for incoming transfer requests on MY customer
+						$incoming_for_customer = array_filter($pending_requests_for_me, function($r) use ($customer_id) {
+							return intval($r['customer_id']) === intval($customer_id);
+						});
+						foreach ($incoming_for_customer as $req) {
+							$requester_info = get_userdata(intval($req['to_agent']));
+							$requester_name = $requester_info ? ($requester_info->first_name . ' ' . $requester_info->last_name) : 'Agente #' . $req['to_agent'];
+							if (trim($requester_name) === '') $requester_name = $requester_info->user_login;
+							?>
+							<div style="margin-top:6px;padding:6px 10px;background:#fff3cd;border-radius:5px;font-size:12px;border:1px solid #ffc107;">
+								<span>&#128276; <strong><?php echo esc_html($requester_name); ?></strong> solicita este cliente</span><br>
+								<button class="btn btn-sm btn-success salesking_respond_transfer" data-customer="<?php echo esc_attr($customer_id); ?>" data-requester="<?php echo esc_attr($req['to_agent']); ?>" data-response="accept" style="margin-top:4px;padding:2px 10px;font-size:11px;">&#9989; Aceptar</button>
+								<button class="btn btn-sm btn-danger salesking_respond_transfer" data-customer="<?php echo esc_attr($customer_id); ?>" data-requester="<?php echo esc_attr($req['to_agent']); ?>" data-response="reject" style="margin-top:4px;padding:2px 10px;font-size:11px;">&#10060; Rechazar</button>
+							</div>
+							<?php
+						}
+						do_action('salesking_customers_action_buttons', $customer_id);
+
+					} else if (!empty($customer_assigned_agent_action) && isset($my_children_ids_map[strval($customer_assigned_agent_action)])) {
+						// Customer belongs to MY CHILD: direct reassign
+						?>
+						<div class="tb-odr-btns d-md-inline">
+							<button class="btn btn-sm btn-warning salesking_direct_reassign" value="<?php echo esc_attr($customer_id); ?>" title="Reasignar este cliente de tu subagente a ti"><em class="icon ni ni-exchange"></em><span><?php esc_html_e('Reasignar', 'salesking'); ?></span></button>
+						</div>
+						<?php
+
+					} else {
+						// NOT my customer, NOT my child's: request transfer
+						$already_requested = array_filter($pending_requests_by_me, function($r) use ($customer_id) {
+							return intval($r['customer_id']) === intval($customer_id);
+						});
+						if (!empty($already_requested)) {
+							?>
+							<div class="tb-odr-btns d-md-inline">
+								<button class="btn btn-sm btn-outline-secondary" disabled><em class="icon ni ni-clock"></em><span>&#9203; Solicitud enviada</span></button>
+							</div>
+							<?php
+						} else {
+							?>
+							<div class="tb-odr-btns d-md-inline">
+								<button class="btn btn-sm btn-info salesking_request_transfer" value="<?php echo esc_attr($customer_id); ?>"><em class="icon ni ni-swap"></em><span><?php esc_html_e('Solicitar Transferencia', 'salesking'); ?></span></button>
+							</div>
+							<?php
+						}
+					}
+					?>
+					</td>
+					<?php
+				} else {
+					?>
+					<td class="nk-tb-col">
+						<?php esc_html_e('No permission', 'salesking'); ?>
+					</td>
+					<?php
+				}
+			}
+			?>
+			<?php $col7 = ob_get_clean();
+
+			$display_columns = apply_filters('salesking_customers_ajax_columns_data', array($col1, $col2, $col_agent, $col3, $col4, $col5, $col6, $col7), $customerobj);
+			foreach ($display_columns as $index => $col) {
+				if (empty(trim($col))) {
+					unset($display_columns[$index]);
+				}
+			}
+			$reindexed_columns = array_values($display_columns);
+
+			array_push($data['data'], $reindexed_columns);
+			?>
+
+
+			<?php
+		}
+
+
+
+		echo json_encode($data);
+
+		exit();
+	}
+
+	function salesking_download_vendor_balance_history()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// Capability check
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Failed capability check.');
+			wp_die();
+		}
+
+		$vendorid = sanitize_text_field($_GET['userid']);
+
+		$list_name = 'agent_balance_history';
+		$list_name = apply_filters('salesking_balance_history_file_name', $list_name);
+
+		// Clean all output buffers to prevent WordPress from corrupting CSV headers
+		while (ob_get_level()) {
+			ob_end_clean();
+		}
+
+		header("Content-type: text/csv");
+		header("Content-Disposition: attachment; filename=" . $list_name . "_" . $vendorid . ".csv");
+		header("Pragma: no-cache");
+		header("Expires: 0");
+
+		$output = fopen("php://output", "wb");
+		// build header
+
+		$headerrow = apply_filters('salesking_balance_history_columns_header', array(esc_html__('Date', 'salesking'), esc_html__('Amount', 'salesking'), esc_html__('Old balance', 'salesking'), esc_html__('New balance', 'salesking'), esc_html__('Note', 'salesking')));
+
+		fputcsv($output, $headerrow);
+
+
+		$user_balance_history = sanitize_text_field(get_user_meta($vendorid, 'salesking_user_balance_history', true));
+
+		if ($user_balance_history) {
+			$transactions = explode(';', $user_balance_history);
+			$transactions = array_filter($transactions);
+		} else {
+			// empty, no transactions
+			$transactions = array();
+		}
+		$transactions = array_reverse($transactions);
+		foreach ($transactions as $transaction) {
+			$elements = explode(':', $transaction);
+			$date = $elements[0];
+			$amount = $elements[1];
+			$old_balance = $elements[2];
+			$new_balance = $elements[3];
+			$note = $elements[4];
+
+			$csv_array = apply_filters('salesking_balance_history_download_columns_items', array($date, $amount, $old_balance, $new_balance, $note), $transaction);
+
+			fputcsv($output, $csv_array);
+		}
+
+		fclose($output);
+		exit();
+	}
+
+	function saleskingactivatelicense()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+		// If nonce verification didn't fail, run further
+
+		$email = sanitize_text_field($_POST['email']);
+		$key = sanitize_text_field($_POST['key']);
+
+		$info = parse_url(get_site_url());
+		$host = $info['host'];
+		$host_names = explode(".", $host);
+		$bottom_host_name = $host_names[count($host_names) - 2] . "." . $host_names[count($host_names) - 1];
+
+		if (strlen($host_names[count($host_names) - 2]) <= 3) {    // likely .com.au, .co.uk, .org.uk etc
+			if (isset($host_names[count($host_names) - 3])) {
+				$bottom_host_name = $host_names[count($host_names) - 3] . "." . $host_names[count($host_names) - 2] . "." . $host_names[count($host_names) - 1];
+			}
+		}
+
+		// send activation request
+		$curl = curl_init();
+
+		curl_setopt_array($curl, [
+			CURLOPT_URL => "https://kingsplugins.com/wp-json/licensing/v1/request?email=" . $email . "&license=" . $key . "&requesttype=siteactivation&plugin=SK&website=" . $bottom_host_name,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_ENCODING => "",
+			CURLOPT_MAXREDIRS => 10,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_SSL_VERIFYHOST => 0,
+			CURLOPT_SSL_VERIFYPEER => false,
+			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+			CURLOPT_CUSTOMREQUEST => "GET",
+			CURLOPT_HTTPHEADER => [
+				"Content-Type: application/json"
+			],
+		]);
+
+		$response = curl_exec($curl);
+		$err = curl_error($curl);
+
+		curl_close($curl);
+
+		if ($err) {
+			$response = $err;
+		} else {
+			$response = json_decode($response);
+		}
+
+		update_option('skdebug', $response);
+
+		if ($response === 'success') {
+			echo 'success';
+			// activate
+			update_option('pluginactivation_' . $email . '_' . $key . '_' . $bottom_host_name, 'active');
+			update_option('salesking_use_legacy_activation', 'no');
+			update_option('salesking_failed_license_' . $key, 0);
+
+		} else {
+			if (empty($response)) {
+				$response = "connection issue, there may be a temporary timeout of the activation server. Please try it again later. It could also be a conflict with another plugin blocking the connection.";
+			}
+
+			echo 'Failed to activate: ' . $response;
+		}
+
+
+		exit();
+	}
+
+	function saleskingdeactivatelicense()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$license = get_option('salesking_license_key_setting', '');
+		$email = get_option('salesking_license_email_setting', '');
+		$info = parse_url(get_site_url());
+		$host = $info['host'];
+		$host_names = explode(".", $host);
+		$bottom_host_name = $host_names[count($host_names) - 2] . "." . $host_names[count($host_names) - 1];
+
+		if (strlen($host_names[count($host_names) - 2]) <= 3) {    // likely .com.au, .co.uk, .org.uk etc
+			if (isset($host_names[count($host_names) - 3])) {
+				$bottom_host_name_new = $host_names[count($host_names) - 3] . "." . $host_names[count($host_names) - 2] . "." . $host_names[count($host_names) - 1];
+
+				$bottom_host_name = $bottom_host_name_new;
+			}
+		}
+
+		update_option('pluginactivation_' . $email . '_' . $license . '_' . $bottom_host_name, 'inactive');
+		update_option('salesking_license_key_setting', '');
+		update_option('salesking_license_email_setting', '');
+
+		exit();
+	}
+
+	function saleskingsaveadjustment()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// Capability check
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Failed capability check.');
+			wp_die();
+		}
+
+		$amount = sanitize_text_field($_POST['pamount']);
+		$note = '(MANUAL ADJUSTMENT) ' . sanitize_text_field($_POST['pnote']);
+		$user_id = sanitize_text_field($_POST['userid']);
+
+		$user_balance_history = sanitize_text_field(get_user_meta($user_id, 'salesking_user_balance_history', true));
+
+		// create transaction
+		$date = date_i18n('Y/m/d', time() + (get_option('gmt_offset') * 3600));
+		$old_balance = get_user_meta($user_id, 'salesking_outstanding_earnings', true);
+		$new_balance = floatval($old_balance) + floatval($amount);
+
+		$new_entry = $date . ':' . $amount . ':' . $old_balance . ':' . $new_balance . ':' . $note;
+		update_user_meta($user_id, 'salesking_user_balance_history', $user_balance_history . ';' . $new_entry);
+		// user balance history end
+
+		$earning = array(
+			'post_title' => sanitize_text_field(esc_html__('Earning', 'salesking')),
+			'post_status' => 'publish',
+			'post_type' => 'salesking_earning',
+			'post_author' => 1,
+		);
+		$earning_post_id = wp_insert_post($earning);
+		update_post_meta($earning_post_id, 'time', time());
+		update_post_meta($earning_post_id, 'order_id', 'manual');
+		update_post_meta($earning_post_id, 'customer_id', '');
+		update_post_meta($earning_post_id, 'order_status', '');
+		update_post_meta($earning_post_id, 'agent_id', $user_id);
+		update_post_meta($earning_post_id, 'salesking_commission_total', $amount);
+
+		// do NOT replace with $order obj, this is a post not an order object
+		//	update_post_meta($order_id, 'salesking_earning_id', $earning_post_id); // unclear order_id
+		if ($note !== false) {
+			update_post_meta($earning_post_id, 'note', $note);
+		}
+
+
+
+		// update user consumed balance
+		update_user_meta($user_id, 'salesking_outstanding_earnings', $new_balance);
+
+		echo 'success';
+		exit();
+	}
+
+
+	function send_email_to_agent($recipient, $order)
+	{
+
+		// Bail on WC settings pages since the order object isn't yet set yet
+		$page = isset($_GET['page']) ? $_GET['page'] : '';
+		if ('wc-settings' === $page) {
+			return $recipient;
+		}
+
+		// just in case
+		if (!$order instanceof WC_Order) {
+			return $recipient;
+		}
+
+		// if setting for agents to receive emails is enabled
+		if (intval(get_option('salesking_agents_receive_order_emails_setting', 1)) === 1) {
+			// if the customer of this order, or his group has an assigned agent
+			$customer_id = $order->get_customer_id();
+
+			// first, check if the customer has an agent assigned directly.
+			$customer_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+			if (!empty($customer_agent) && $customer_agent !== 'none') {
+				// found agent
+			} else {
+				// keep searching in the group
+				$customer_is_b2b = get_user_meta($customer_id, 'b2bking_b2buser', true);
+				if ($customer_is_b2b === 'yes') {
+					$customergroup = get_user_meta($customer_id, 'b2bking_customergroup', true);
+					$customer_agent = get_post_meta($customergroup, 'salesking_assigned_agent', true);
+				}
+			}
+
+			if (empty($customer_agent) or $customer_agent === 'none') {
+				$order_id = $order->get_id();
+				$customer_agent = $order->get_meta('salesking_assigned_agent');
+			}
+
+			if (!empty($customer_agent) && $customer_agent !== 'none') {
+				// send email to agent as well
+				$agent_info = get_userdata($customer_agent);
+				$agent_email = $agent_info->user_email;
+
+
+				if (apply_filters('salesking_only_agent_gets_order_emails', false, $order, $customer_agent)) {
+					$recipient = $agent_email;
+
+				} else {
+					// also send it to admin
+					// only once
+
+					$recipient .= ', ' . $agent_email;
+
+					$recipient = apply_filters('salesking_agent_new_order_email_recipient', $recipient, $customer_agent);
+				}
+
+			}
+		}
+
+		return $recipient;
+	}
+
+
+	// Add email classes to the list of email classes that WooCommerce loads
+	function salesking_add_email_classes($email_classes)
+	{
+
+		$email_classes['Salesking_New_Announcement_Email'] = include SALESKING_DIR . '/includes/emails/class-salesking-new-announcement-email.php';
+		$email_classes['Salesking_New_Payout_Email'] = include SALESKING_DIR . '/includes/emails/class-salesking-new-payout-email.php';
+		$email_classes['Salesking_New_Message_Email'] = include SALESKING_DIR . '/includes/emails/class-salesking-new-message-email.php';
+		$email_classes['Salesking_Order_Pending_Email'] = include SALESKING_DIR . '/includes/emails/class-salesking-order-pending-email.php';
+
+		return $email_classes;
+	}
+
+	// Add email actions
+	function salesking_add_email_actions($actions)
+	{
+		$actions[] = 'salesking_new_announcement';
+		$actions[] = 'salesking_new_message';
+		$actions[] = 'salesking_new_payout';
+		$actions[] = 'salesking_new_order_pending';
+
+		return $actions;
+	}
+
+	// Add pending payment gateway
+	function salesking_pending_gateway($methods)
+	{
+		$methods[] = 'Salesking_Pending_Gateway';
+		return $methods;
+	}
+	function salesking_pending_gateway_blocks($methods)
+	{
+		if (class_exists('Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType')) {
+			if (class_exists('Salesking_Pending_Gateway')) {
+				require_once 'blocks/class-salesking-pending-gateway-blocks.php';
+				add_action(
+					'woocommerce_blocks_payment_method_type_registration',
+					function (Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry) {
+						$payment_method_registry->register(new Salesking_Pending_Gateway_Blocks());
+					}
+				);
+			}
+		}
+	}
+
+	function auto_redirect_after_logout($user_id)
+	{
+
+		// if sales agent, redirect to sales agent page
+		$is_sales_agent = get_user_meta($user_id, 'salesking_group', true);
+		if ($is_sales_agent === 'none' || empty($is_sales_agent)) {
+
+		} else {
+			wp_redirect(apply_filters('salesking_sales_agent_redirect', trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true)))));
+			exit();
+		}
+
+
+	}
+
+	function prevent_wp_login($redirect_to, $requested_redirect_to, $user)
+	{
+		// WP tracks the current page - global the variable to access it
+		global $pagenow;
+		if ($pagenow === 'wp-login.php' && isset($_POST['salesking_dashboard_login'])) {
+
+			if (is_wp_error($user)) {
+
+				//Login failed, find out why...
+				$error_types = array_keys($user->errors);
+				//Error type seems to be empty if none of the fields are filled out
+				$error_type = 'both_empty';
+
+				if (is_array($error_types) && !empty($error_types)) {
+					$error_type = $error_types[0];
+				}
+
+				wp_redirect(trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true))) . "?login=failed&reason=" . $error_type);
+				// Stop execution to prevent the page loading for any reason
+				exit();
+			} else {
+				wp_redirect(trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true))));
+			}
+		}
+		return $redirect_to;
+	}
+
+	// Helps prevent public code from running on login / register pages, where is_admin() returns false
+	function salesking_is_login_page()
+	{
+		if (isset($GLOBALS['pagenow'])) {
+			return in_array($GLOBALS['pagenow'], array('wp-login.php', 'wp-register.php', 'admin.php'), true);
+		}
+	}
+
+	function agents_caps_manage_orders($allcaps, $caps, $args)
+	{
+
+		if (apply_filters('salesking_allow_agent_manage_orders', true)) {
+
+			$caps = array('edit_shop_order', 'edit_shop_orders', 'edit_published_shop_orders', 'edit_private_shop_orders', 'edit_others_shop_orders', 'read_shop_order', 'shop_order', 'view_admin_dashboard', 'woocommerce_order_itemmeta', 'woocommerce_order_items', 'woocommerce_view_order', 'read_product', 'administrator', 'publish_shop_order');
+
+			foreach ($caps as $cap) {
+				$allcaps[$cap] = 1;
+			}
+
+		}
+
+		return $allcaps;
+	}
+
+	function mytheme_admin_bar_render()
+	{
+		global $wp_admin_bar;
+		$wp_admin_bar->remove_menu('edit-profile', 'user-actions');
+	}
+
+	function stop_access_profile()
+	{
+		if (IS_PROFILE_PAGE === true) {
+			wp_die(esc_html__('Please contact your administrator to have your profile information changed.', 'salesking'));
+		}
+		remove_menu_page('profile.php');
+		remove_submenu_page('users.php', 'profile.php');
+	}
+
+	function remove_menus()
+	{
+		global $menu;
+		$restricted = apply_filters('salesking_restricted_admin_menu_items', array('Dashboard', 'Subscriptions', 'Jetpack', 'Avada', 'Posts', 'Media', 'Pages', 'Comments', 'Portfolio', 'FAQs', 'Contact', 'Products', 'Profile', 'Tools', 'Yoast', 'Elastic'));
+		end($menu);
+		while (prev($menu)) {
+			$value = explode(' ', $menu[key($menu)][0]);
+			if (in_array($value[0] != NULL ? $value[0] : '', $restricted)) {
+				unset($menu[key($menu)]);
+			}
+		}
+	}
+	function restrict_screens()
+	{
+
+		if (apply_filters('salesking_restrict_backend_screens', false)) {  // NEW, must enable for shops previously using this feature
+			$restricted = apply_filters('salesking_restricted_admin_menu_screens', array('edit-shop_subscription', 'toplevel_page_jetpack'));
+
+			$current_screen = get_current_screen();
+			if (in_array($current_screen->id, $restricted)) {
+				wp_die(esc_html__('Sorry, you are not allowed to access this page.', 'salesking'));
+			}
+
+			$restricted = apply_filters('salesking_restricted_admin_menu_elements', array('.toplevel_page_avada_sliders'));
+			?>
+			<style type="text/css">
+				.toplevel_page_avada_sliders {
+					display: none;
+				}
+			</style>
+			<?php
+		}
+
+
+	}
+
+	function salesking_orders_table_ajax()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group) && !current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_die();
+		}
+
+
+		$start = sanitize_text_field($_POST['start']);
+		$length = sanitize_text_field($_POST['length']);
+		$search = sanitize_text_field($_POST['search']['value']);
+		$pagenr = ($start / $length) + 1;
+
+		$current_id = get_current_user_id();
+
+		// get total nr of records
+		$args = array(
+			'limit' => -1,
+			'type' => 'shop_order',
+			'meta_key' => 'salesking_assigned_agent', // Postmeta key field
+			'meta_value' => get_current_user_id(), // Postmeta value field
+			'meta_compare' => '=', // P
+			'return' => 'ids',
+			's' => $search,
+		);
+
+		if (apply_filters('salesking_agents_see_all_orders', false)) {
+			// all orders
+			$args = array(
+				'limit' => -1,
+				'type' => 'shop_order',
+				'return' => 'ids',
+				's' => $search,
+			);
+		}
+
+
+		$total_orders = wc_get_orders($args);
+
+		$itemnr = count($total_orders);
+
+		$data = array(
+			'length' => $length,
+			'data' => array(),
+			'recordsTotal' => $itemnr,
+			'recordsFiltered' => $itemnr,
+		);
+
+		$args = array(
+			'limit' => $length,
+			'type' => 'shop_order',
+			'meta_key' => 'salesking_assigned_agent', // Postmeta key field
+			'meta_value' => get_current_user_id(), // Postmeta value field
+			'meta_compare' => '=', // P
+			'paged' => floatval($pagenr),
+			's' => $search,
+		);
+
+		if (apply_filters('salesking_agents_see_all_orders', false)) {
+			// all orders
+			$args = array(
+				'limit' => $length,
+				'type' => 'shop_order',
+				'paged' => floatval($pagenr),
+				's' => $search,
+			);
+		}
+
+
+		$agent_orders = wc_get_orders($args);
+
+
+		foreach ($agent_orders as $order) {
+			$orderobj = $order;
+
+			if ($orderobj !== false) {
+				?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col">
+
+					<div>
+						<span class="tb-lead">#<?php echo esc_html($orderobj->get_order_number()); ?></span>
+					</div>
+
+				</td>
+				<?php $col1 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col tb-col-md" data-order="<?php
+				$date = explode('T', $orderobj->get_date_created())[0];
+				echo apply_filters('salesking_dashboard_date_display', strtotime($date), $orderobj->get_date_created());
+
+				?>">
+					<div>
+						<span class="tb-sub"><?php
+
+						echo apply_filters('salesking_dashboard_date_display', ucfirst(date_i18n('F j, Y', strtotime($date))), $orderobj->get_date_created());
+
+
+						?></span>
+					</div>
+				</td>
+				<?php $col2 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col">
+					<div>
+						<span class="dot bg-warning d-mb-none"></span>
+						<?php
+						$status = $orderobj->get_status();
+						$statustext = $badge = '';
+						if ($status === 'processing') {
+							$badge = 'badge-success';
+							$statustext = esc_html__('Processing', 'salesking');
+						} else if ($status === 'on-hold') {
+							$badge = 'badge-warning';
+							$statustext = esc_html__('On Hold', 'salesking');
+						} else if (in_array($status, apply_filters('salesking_earning_completed_statuses', array('completed')))) {
+							$badge = 'badge-info';
+							$statustext = esc_html__('Completed', 'salesking');
+						} else if ($status === 'refunded') {
+							$badge = 'badge-gray';
+							$statustext = esc_html__('Refunded', 'salesking');
+						} else if ($status === 'cancelled') {
+							$badge = 'badge-gray';
+							$statustext = esc_html__('Cancelled', 'salesking');
+						} else if ($status === 'pending') {
+							$badge = 'badge-dark';
+							$statustext = esc_html__('Pending Payment', 'salesking');
+						} else if ($status === 'failed') {
+							$badge = 'badge-danger';
+							$statustext = esc_html__('Failed', 'salesking');
+						} else {
+							// custom status
+							$badge = 'badge-gray';
+							$wcstatuses = wc_get_order_statuses();
+							if (isset($wcstatuses['wc-' . $status])) {
+								$statustext = $wcstatuses['wc-' . $status];
+							} else {
+								$statustext = '';
+							}
+						}
+						?>
+						<span class="badge badge-sm badge-dot has-bg <?php echo esc_attr($badge); ?> d-none d-mb-inline-flex"><?php
+							echo esc_html($statustext);
+							?></span>
+					</div>
+				</td>
+				<?php $col3 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col tb-col-sm">
+					<div>
+						<span class="tb-sub"><?php
+						$customer_id = $orderobj->get_customer_id();
+						$data2 = get_userdata($customer_id);
+						$name = $orderobj->get_billing_first_name() . ' ' . $orderobj->get_billing_last_name();
+
+						// if guest user, show name by order
+						if ($data2 === false) {
+							$name = $orderobj->get_formatted_billing_full_name() . ' ' . esc_html__('(guest user)', 'salesking');
+						}
+						$name = apply_filters('salesking_customers_page_name_display', $name, $customer_id);
+
+						echo $name;
+						?></span>
+					</div>
+				</td>
+				<?php $col4 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col tb-col-md">
+					<div>
+						<span class="tb-sub text-primary"><?php
+						$items = $orderobj->get_items();
+						$items_count = count($items);
+						if ($items_count > apply_filters('salesking_dashboard_item_count_limit', 4)) {
+							echo $items_count . ' ' . esc_html__('Items', 'salesking');
+						} else {
+							// show the items
+							foreach ($items as $item) {
+								echo apply_filters('salesking_item_display_dashboard', $item->get_name() . ' x ' . $item->get_quantity() . '<br>', $item);
+							}
+						}
+						?></span>
+					</div>
+				</td>
+				<?php $col5 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col"
+					data-order="<?php echo esc_attr(apply_filters('salesking_orders_order_total', $orderobj->get_total(), $orderobj)); ?>">
+					<div>
+						<span
+							class="tb-lead"><?php echo wc_price(apply_filters('salesking_orders_order_total', $orderobj->get_total(), $orderobj), array('currency' => $orderobj->get_currency())); ?></span>
+					</div>
+				</td>
+				<?php $col6 = ob_get_clean(); ?>
+				<?php ob_start(); ?>
+				<td class="nk-tb-col">
+					<div class="salesking_manage_order_container">
+						<?php
+						// Check if frontend order management is enabled
+						if (apply_filters('salesking_use_frontend_order_management', false)) {
+							// Use frontend manage-order page
+							$manage_url = trailingslashit(get_page_link(get_option('salesking_agents_page_setting', 'disabled'))) . 'manage-order/' . $orderobj->get_id();
+						} else {
+							// Use default WP admin URL
+							$manage_url = $orderobj->get_edit_order_url();
+						}
+						?>
+						<a href="<?php echo esc_attr($manage_url); ?>"><button class="btn btn-sm btn-primary salesking_manage_order"
+								value="<?php echo esc_attr($orderobj->get_id()); ?>"><em
+									class="icon ni ni-bag-fill"></em><span><?php esc_html_e('Manage Order', 'salesking'); ?></span></button></a>
+					</div>
+				</td>
+				<?php $col7 = ob_get_clean(); ?>
+				<?php
+
+				array_push($data['data'], array($col1, $col2, $col3, $col4, $col5, $col6, $col7));
+
+			}
+
+		}
+
+		$data = apply_filters('salesking_orders_table_ajax_data', $data);
+		echo json_encode($data);
+
+		exit();
+	}
+
+	function salesking_earnings_table_ajax()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group) && !current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_die();
+		}
+
+
+		$start = sanitize_text_field($_POST['start']);
+		$length = sanitize_text_field($_POST['length']);
+		$search = sanitize_text_field($_POST['search']['value']);
+		$pagenr = ($start / $length) + 1;
+
+		$current_id = get_current_user_id();
+
+		// get total nr of records
+		$earnings = get_posts(array(
+			'post_type' => 'salesking_earning',
+			'numberposts' => -1,
+			'post_status' => 'any',
+			'fields' => 'ids',
+			'meta_key' => 'agent_id',
+			'meta_value' => get_current_user_id(),
+		));
+
+		$total_earnings = array();
+		foreach ($earnings as $earning_id) {
+			$order_id = get_post_meta($earning_id, 'order_id', true);
+			$orderobj = wc_get_order($order_id);
+			if ($orderobj !== false) {
+				$earnings_total = get_post_meta($earning_id, 'salesking_commission_total', true);
+				if (!empty($earnings_total) && floatval($earnings_total) !== 0) {
+					if (
+						empty($search) ||
+						stripos($orderobj->get_order_number(), $search) !== false ||
+						stripos($orderobj->get_billing_first_name() . ' ' . $orderobj->get_billing_last_name(), $search) !== false
+					) {
+						$total_earnings[] = $earning_id;
+					}
+				}
+			}
+			// display manual adjustments
+			if ($order_id == 'manual') {
+				$earnings_total = get_post_meta($earning_id, 'salesking_commission_total', true);
+				if (!empty($earnings_total) && floatval($earnings_total) !== 0) {
+					if (empty($search) || stripos(esc_html__('Manual Adjustment', 'salesking'), $search) !== false) {
+						$total_earnings[] = $earning_id;
+					}
+				}
+			}
+		}
+
+		$itemnr = count($total_earnings);
+
+		$data = array(
+			'length' => $length,
+			'data' => array(),
+			'recordsTotal' => $itemnr,
+			'recordsFiltered' => $itemnr,
+		);
+
+		$paginated_earnings = array_slice($total_earnings, $start, $length);
+
+		foreach ($paginated_earnings as $earning_id) {
+			$order_id = get_post_meta($earning_id, 'order_id', true);
+			$orderobj = wc_get_order($order_id);
+			if ($orderobj !== false) {
+				$earnings_total = get_post_meta($earning_id, 'salesking_commission_total', true);
+				if (!empty($earnings_total) && floatval($earnings_total) !== 0) {
+					?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col" data-order="<?php echo esc_html($orderobj->get_order_number()); ?>">
+						<div>
+							<span class="tb-lead">#<?php echo esc_html($orderobj->get_order_number()); ?></span>
+						</div>
+					</td>
+					<?php $col1 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col tb-col-md" data-order="<?php
+					$date = explode('T', $orderobj->get_date_created())[0];
+					echo strtotime($date);
+					?>">
+						<div>
+							<span class="tb-sub"><?php
+							echo date_i18n(get_option('date_format'), strtotime($date));
+							?></span>
+						</div>
+					</td>
+					<?php $col2 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col">
+						<div>
+							<span class="dot bg-warning d-mb-none"></span>
+							<?php
+							$status = $orderobj->get_status();
+							$statustext = $badge = '';
+							if ($status === 'processing') {
+								$badge = 'badge-warning';
+								$statustext = esc_html__('Pending Order Completion', 'salesking');
+							} else if ($status === 'on-hold') {
+								$badge = 'badge-warning';
+								$statustext = esc_html__('Pending Order Completion', 'salesking');
+							} else if (in_array($status, apply_filters('salesking_earning_completed_statuses', array('completed')))) {
+								$badge = 'badge-success';
+								$statustext = esc_html__('Completed', 'salesking');
+							} else if ($status === 'refunded') {
+								$badge = 'badge-danger';
+								$statustext = esc_html__('Order Refunded', 'salesking');
+							} else if ($status === 'cancelled') {
+								$badge = 'badge-danger';
+								$statustext = esc_html__('Order Cancelled', 'salesking');
+							} else if ($status === 'pending') {
+								$badge = 'badge-warning';
+								$statustext = esc_html__('Pending Order Payment', 'salesking');
+							} else if ($status === 'failed') {
+								$badge = 'badge-danger';
+								$statustext = esc_html__('Order Failed', 'salesking');
+							} else {
+								// custom status
+								$badge = 'badge-gray';
+								$wcstatuses = wc_get_order_statuses();
+								if (isset($wcstatuses['wc-' . $status])) {
+									$statustext = $wcstatuses['wc-' . $status];
+								} else {
+									$statustext = '';
+								}
+							}
+
+							if (in_array($status, apply_filters('salesking_earning_completed_statuses', array('completed')))) {
+								$badge = 'badge-success';
+								$statustext = esc_html__('Completed', 'salesking');
+							}
+
+							$badge = apply_filters('salesking_earnings_status_badge', $badge, $orderobj, $status);
+							$statustext = apply_filters('salesking_earnings_status_text', $statustext, $orderobj, $status);
+							?>
+							<span class="badge badge-sm badge-dot has-bg <?php echo esc_attr($badge); ?> d-none d-mb-inline-flex"><?php
+								echo esc_html($statustext);
+								?></span>
+						</div>
+					</td>
+					<?php $col3 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (apply_filters('salesking_dashboard_show_customer_column', true)) {
+						?>
+						<td class="nk-tb-col tb-col-sm">
+							<div>
+								<span class="tb-sub"><?php
+								$customer_id = $orderobj->get_customer_id();
+								$name = $orderobj->get_billing_first_name() . ' ' . $orderobj->get_billing_last_name();
+
+								$name = apply_filters('salesking_customers_page_name_display', $name, $customer_id);
+								echo $name;
+								?></span>
+							</div>
+						</td>
+						<?php
+					}
+					?>
+					<?php $col4 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php do_action('salesking_my_earnings_custom_columns_content', $orderobj); ?>
+					<?php $col5 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col tb-col-md">
+						<div>
+							<span class="tb-sub text-primary"><?php
+							$items = $orderobj->get_items();
+							$items_count = count($items);
+
+							if ($items_count > apply_filters('salesking_dashboard_item_count_limit', 4)) {
+								echo $items_count . ' ' . esc_html__('Items', 'salesking');
+							} else {
+								// show the items
+								foreach ($items as $item) {
+									echo apply_filters('salesking_item_display_dashboard', $item->get_name() . ' x ' . $item->get_quantity() . '<br>', $item);
+								}
+							}
+							?></span>
+						</div>
+					</td>
+					<?php $col6 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (apply_filters('salesking_dashboard_earnings_show_total_column', true)) {
+						?>
+						<td class="nk-tb-col tb-col-sm"
+							data-order="<?php echo esc_attr(apply_filters('salesking_earnings_order_total', $orderobj->get_total(), $orderobj)); ?>">
+							<div>
+								<span
+									class="tb-lead"><?php echo wc_price(apply_filters('salesking_earnings_order_total', $orderobj->get_total(), $orderobj), array('currency' => $orderobj->get_currency())); ?></span>
+							</div>
+						</td>
+						<?php
+					}
+					?>
+					<?php $col7 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col" data-order="<?php echo esc_attr($earnings_total); ?>">
+						<div>
+							<?php
+							ob_start();
+							if (in_array($status, apply_filters('salesking_earning_completed_statuses', array('completed')))) {
+								$text_color = 'text-success';
+							} else {
+								$text_color = 'text-soft';
+							}
+							?>
+							<span class="tb-lead <?php echo esc_attr($text_color); ?>"><?php
+
+							   $multicurrency = false;
+
+							   if (defined('WOOCS_VERSION')) {
+								   // base woocs currency
+		   						global $WOOCS;
+								   echo $WOOCS->default_currency . ' ' . $earnings_total;
+								   $multicurrency = true;
+							   }
+
+							   if (defined('WOOMULTI_CURRENCY_F_DIR') || defined('WOOMULTI_CURRENCY_DIR')) {
+
+								   if (defined('WOOMULTI_CURRENCY_F_DIR')) {
+									   $curcy_settings = WOOMULTI_CURRENCY_F_Data::get_ins();
+								   } else {
+									   $curcy_settings = WOOMULTI_CURRENCY_Data::get_ins();
+								   }
+
+								   $default_currency = $curcy_settings->get_default_currency();
+
+								   echo $default_currency . ' ' . $earnings_total;
+
+								   $multicurrency = true;
+							   }
+
+							   if (!$multicurrency) {
+								   echo wc_price($earnings_total);
+							   }
+
+							   if (!in_array($status, apply_filters('salesking_earning_completed_statuses', array('completed')))) {
+								   esc_html_e(' (pending)', 'salesking');
+							   }
+
+							   $content = ob_get_clean();
+
+							   echo apply_filters('salesking_your_earnings_content', $content, $orderobj, $earning_id, $earnings_total);
+							   ?></span>
+						</div>
+					</td>
+					<?php $col8 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (intval(get_option('salesking_agents_can_manage_orders_setting', 1)) === 1) {
+						if (apply_filters('salesking_show_actions_my_earnings_page', true)) {
+							?>
+							<td class="nk-tb-col">
+								<div class="salesking_manage_order_container">
+									<?php
+									// Check if frontend order management is enabled
+									if (apply_filters('salesking_use_frontend_order_management', false)) {
+										// Use frontend manage-order page
+										$manage_url = trailingslashit(get_page_link(get_option('salesking_agents_page_setting', 'disabled'))) . 'manage-order/' . $order_id;
+									} else {
+										// Use default WP admin URL
+										$manage_url = $orderobj->get_edit_order_url();
+									}
+									?>
+									<a href="<?php echo esc_attr($manage_url); ?>"><button class="btn btn-sm btn-primary salesking_manage_order"
+											value="<?php echo esc_attr($order_id); ?>"><em
+												class="icon ni ni-bag-fill"></em><span><?php esc_html_e('Manage Order', 'salesking'); ?></span></button></a>
+								</div>
+							</td>
+							<?php
+						}
+					}
+					?>
+					<?php $col9 = ob_get_clean(); ?>
+					<?php
+
+					$row_data = array($col1, $col2, $col3);
+					if (apply_filters('salesking_dashboard_show_customer_column', true)) {
+						$row_data[] = $col4;
+					}
+					$row_data[] = $col5;
+					$row_data[] = $col6;
+					if (apply_filters('salesking_dashboard_earnings_show_total_column', true)) {
+						$row_data[] = $col7;
+					}
+					$row_data[] = $col8;
+					if (intval(get_option('salesking_agents_can_manage_orders_setting', 1)) === 1 && apply_filters('salesking_show_actions_my_earnings_page', true)) {
+						$row_data[] = $col9;
+					}
+
+					array_push($data['data'], $row_data);
+
+				}
+			}
+			// display manual adjustments
+			if ($order_id == 'manual') {
+				$earnings_total = get_post_meta($earning_id, 'salesking_commission_total', true);
+				if (!empty($earnings_total) && floatval($earnings_total) !== 0) {
+					?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col" data-order="<?php echo esc_html($order_id); ?>">
+						<div>
+							<span class="tb-lead"><?php
+							esc_html_e('Manual Adjustment', 'salesking');
+							?></span>
+						</div>
+					</td>
+					<?php $col1 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col tb-col-md" data-order="<?php
+					$date = get_post_meta($earning_id, 'time', true);
+					echo $date;
+					?>">
+						<div>
+							<span class="tb-sub"><?php
+							echo date_i18n(get_option('date_format'), $date + (get_option('gmt_offset') * 3600));
+							?></span>
+						</div>
+					</td>
+					<?php $col2 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col">
+						<div>
+							<span class="dot bg-warning d-mb-none"></span>
+							<?php
+							$note = get_post_meta($earning_id, 'note', true);
+							if (empty($note)) {
+								echo '-';
+							} else {
+								echo $note;
+							}
+							?>
+						</div>
+					</td>
+					<?php $col3 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (apply_filters('salesking_dashboard_show_customer_column', true)) {
+						?>
+						<td class="nk-tb-col tb-col-sm">
+							<div>
+								<span class="tb-sub"><?php
+								echo '-';
+								?></span>
+							</div>
+						</td>
+						<?php
+					}
+					?>
+					<?php $col4 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php do_action('salesking_my_earnings_custom_columns_content', null); ?>
+					<?php $col5 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col tb-col-md">
+						<div>
+							<span class="tb-sub text-primary"><?php
+							echo '-';
+							?></span>
+						</div>
+					</td>
+					<?php $col6 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (apply_filters('salesking_dashboard_earnings_show_total_column', true)) {
+						?>
+						<td class="nk-tb-col tb-col-sm">
+							<div>
+								<span class="tb-lead"><?php echo '-'; ?></span>
+							</div>
+						</td>
+						<?php
+					}
+					?>
+					<?php $col7 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<td class="nk-tb-col" data-order="<?php echo esc_attr($earnings_total); ?>">
+						<div>
+							<?php
+							echo wc_price($earnings_total);
+							?>
+						</div>
+					</td>
+					<?php $col8 = ob_get_clean(); ?>
+					<?php ob_start(); ?>
+					<?php
+					if (intval(get_option('salesking_agents_can_manage_orders_setting', 1)) === 1) {
+						if (apply_filters('salesking_show_actions_my_earnings_page', true)) {
+							?>
+							<td class="nk-tb-col tb-col-md">
+								<div>
+									<span class="tb-sub text-primary"><?php
+									echo '-';
+									?></span>
+								</div>
+							</td>
+							<?php
+						}
+					}
+					?>
+					<?php $col9 = ob_get_clean(); ?>
+					<?php
+
+					$row_data = array($col1, $col2, $col3);
+					if (apply_filters('salesking_dashboard_show_customer_column', true)) {
+						$row_data[] = $col4;
+					}
+					$row_data[] = $col5;
+					$row_data[] = $col6;
+					if (apply_filters('salesking_dashboard_earnings_show_total_column', true)) {
+						$row_data[] = $col7;
+					}
+					$row_data[] = $col8;
+					if (intval(get_option('salesking_agents_can_manage_orders_setting', 1)) === 1 && apply_filters('salesking_show_actions_my_earnings_page', true)) {
+						$row_data[] = $col9;
+					}
+
+					array_push($data['data'], $row_data);
+
+				}
+			}
+		}
+
+		echo json_encode($data);
+
+		exit();
+	}
+
+
+	function salesking_dismiss_activate_woocommerce_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_activate_woocommerce_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_groups_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_groups_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_groupsrules_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_groupsrules_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_announcements_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_announcements_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_messages_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_messages_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_payouts_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_payouts_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_earnings_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_earnings_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_dismiss_rules_howto_admin_notice()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_notice_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_dismiss_rules_howto_notice', 1);
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingmarkallread()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$user_id = get_current_user_id();
+
+		$announcements_ids = sanitize_text_field($_POST['announcementsid']);
+
+		$announcements_ids = explode(':', $announcements_ids);
+
+
+		foreach ($announcements_ids as $announcement_id) {
+			update_user_meta($user_id, 'salesking_announce_read_' . $announcement_id, 'read');
+
+		}
+
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_reports_get_data()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// Capability check
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Failed capability check.');
+			wp_die();
+		}
+
+		@set_time_limit(300); // Allow up to 5 min for heavy date-range reports
+		require_once(SALESKING_DIR . 'includes/class-salesking-helper.php');
+		$helper = new Salesking_Helper();
+
+		remove_all_filters('salesking_reports_data_standard');
+		if (apply_filters('salesking_reports_data_standard', true)) {
+
+			$vendor = sanitize_text_field($_POST['vendor']);
+			$firstday = sanitize_text_field($_POST['firstday']);
+			$lastday = sanitize_text_field($_POST['lastday']);
+
+			$timezone = get_option('timezone_string');
+			if (empty($timezone) || $timezone === null) {
+				$timezone = 'UTC';
+			}
+			date_default_timezone_set($timezone);
+
+			$date_to = $lastday;
+			$date_from = $firstday;
+
+			// Transient cache: return cached result for repeated same-range requests (10 min TTL)
+			$cache_key = 'sk_rpt_' . md5($vendor . '|' . $date_from . '|' . $date_to . '|' . get_current_user_id());
+			$cached_result = get_transient($cache_key);
+			if ($cached_result !== false) {
+				echo $cached_result;
+				exit();
+			}
+
+			$post_status = implode("','", apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')));
+
+			if ($vendor === 'all' || $vendor === 'all_team') {
+				// all orders = general marketplace report or all my team
+				$current_user_id = get_current_user_id();
+				$team_member_ids = array();
+
+
+				if ($vendor === 'all_team') {
+					if (current_user_can('manage_woocommerce')) {
+						// Admin view: include all agents (group != none OR user_choice == agent)
+						$team_member_ids = get_users(array(
+							'meta_query' => array(
+								'relation' => 'OR',
+								array('key' => 'salesking_group', 'value' => 'none', 'compare' => '!='),
+								array('key' => 'salesking_user_choice', 'value' => 'agent', 'compare' => '='),
+							),
+							'fields' => 'ids',
+						));
+					} else {
+						// Agent view: Check if current user is a team leader (has sub-agents)
+						$user_subagents = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_direct_subagents'))
+							? Salesking_Admin::get_direct_subagents(intval($current_user_id))
+							: array();
+						if (!empty($user_subagents)) {
+							// Team leader view: get their own recursive team
+							$team_member_ids = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids'))
+								? Salesking_Admin::get_recursive_team_ids(intval($current_user_id), true)
+								: array(intval($current_user_id));
+						} else {
+							$team_member_ids = array(intval($current_user_id));
+						}
+					}
+				} else if (!current_user_can('manage_woocommerce')) {
+					// Fallback for non-admin 'all'
+					$team_member_ids = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids'))
+						? Salesking_Admin::get_recursive_team_ids(intval($current_user_id), true)
+						: array(intval($current_user_id));
+				}
+
+				$args = array(
+					'status' => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+					'date_completed' => $date_from . '...' . $date_to,
+					'limit' => -1,
+					'type' => 'shop_order',
+				);
+
+				$orders = wc_get_orders($args);
+
+				// For team reports, only show orders placed by agents (HPOS no soporta meta_query)
+				if ($vendor === 'all_team') {
+					$orders = array_filter($orders, function($order) {
+						return $order->get_meta('salesking_order_placed_type') === 'placed_by_agent';
+					});
+					$orders = array_values($orders);
+				}
+
+				if (!empty($team_member_ids)) {
+					$team_member_ids_str = array_map('strval', $team_member_ids);
+					$team_member_ids_mapped = array_flip($team_member_ids_str);
+
+					// Bulk retrieval of earning agent IDs to optimize performance
+					$earning_ids_to_agent = array();
+					$orders_earning_ids = array();
+					foreach ($orders as $order) {
+						$eid = $order->get_meta('salesking_earning_id');
+						if (!empty($eid)) {
+							$orders_earning_ids[] = intval($eid);
+						}
+					}
+					if (!empty($orders_earning_ids)) {
+						global $wpdb;
+						$eid_list = implode(',', $orders_earning_ids);
+						$results = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'agent_id' AND post_id IN ($eid_list)");
+						foreach ($results as $row) {
+							$earning_ids_to_agent[$row->post_id] = strval($row->meta_value);
+						}
+					}
+
+					foreach ($orders as $index => $order) {
+						$earning_id = $order->get_meta('salesking_earning_id');
+						$order_agent = strval($order->get_meta('salesking_assigned_agent'));
+
+						$found = false;
+						if (!empty($order_agent) && isset($team_member_ids_mapped[$order_agent])) {
+							$found = true;
+						}
+						if (!$found && !empty($earning_id) && isset($earning_ids_to_agent[$earning_id])) {
+							$agent_id = $earning_ids_to_agent[$earning_id];
+							if (isset($team_member_ids_mapped[$agent_id])) {
+								$found = true;
+							}
+						}
+
+						if (!$found) {
+							unset($orders[$index]);
+						}
+					}
+				}
+
+
+			} else if (strpos($vendor, 'team_') === 0) {
+				// Team report: get all orders for team members
+				$team_leader_id = str_replace('team_', '', $vendor);
+
+				// Get all team member IDs recursively
+				$team_member_ids = array();
+				if (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids')) {
+					$team_member_ids = Salesking_Admin::get_recursive_team_ids(intval($team_leader_id), true);
+				} else {
+					$team_member_ids = array(intval($team_leader_id));
+				}
+				$team_member_ids_str = array_map('strval', $team_member_ids);
+				$team_member_ids_mapped = array_flip($team_member_ids_str);
+
+				$args = array(
+					'status' => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+					'date_completed' => $date_from . '...' . $date_to,
+					'limit' => -1,
+					'type' => 'shop_order',
+				);
+				$orders = wc_get_orders($args);
+
+				// Only show orders placed by agents (HPOS no soporta meta_query)
+				$orders = array_filter($orders, function($order) {
+					return $order->get_meta('salesking_order_placed_type') === 'placed_by_agent';
+				});
+				$orders = array_values($orders);
+
+				// Filter orders to only include those belonging to team members
+				if (!empty($team_member_ids)) {
+					// Bulk retrieval of earning agent IDs
+					$earning_ids_to_agent = array();
+					$orders_earning_ids = array();
+					foreach ($orders as $order) {
+						$eid = $order->get_meta('salesking_earning_id');
+						if (!empty($eid)) {
+							$orders_earning_ids[] = intval($eid);
+						}
+					}
+					if (!empty($orders_earning_ids)) {
+						global $wpdb;
+						$eid_list = implode(',', $orders_earning_ids);
+						$results = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'agent_id' AND post_id IN ($eid_list)");
+						foreach ($results as $row) {
+							$earning_ids_to_agent[$row->post_id] = strval($row->meta_value);
+						}
+					}
+
+					foreach ($orders as $index => $order) {
+						$earning_id = $order->get_meta('salesking_earning_id');
+						$order_agent = strval($order->get_meta('salesking_assigned_agent'));
+
+						$found = false;
+						if (!empty($order_agent) && isset($team_member_ids_mapped[$order_agent])) {
+							$found = true;
+						}
+						if (!$found && !empty($earning_id) && isset($earning_ids_to_agent[$earning_id])) {
+							$agent_id = $earning_ids_to_agent[$earning_id];
+							if (isset($team_member_ids_mapped[$agent_id])) {
+								$found = true;
+							}
+						}
+
+						if (!$found) {
+							unset($orders[$index]);
+						}
+					}
+				}
+
+			} else {
+				// report for specific vendor $vendor is vendor_id
+				$args = array(
+					'status' => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+					'date_completed' => $date_from . '...' . $date_to,
+					'limit' => -1,
+					'type' => 'shop_order',
+				);
+				$orders = wc_get_orders($args);
+
+				// Bulk retrieval of earning agent IDs
+				$earning_ids_to_agent = array();
+				$orders_earning_ids = array();
+				foreach ($orders as $order) {
+					$eid = $order->get_meta('salesking_earning_id');
+					if (!empty($eid)) {
+						$orders_earning_ids[] = intval($eid);
+					}
+				}
+				if (!empty($orders_earning_ids)) {
+					global $wpdb;
+					$eid_list = implode(',', $orders_earning_ids);
+					$results = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'agent_id' AND post_id IN ($eid_list)");
+					foreach ($results as $row) {
+						$earning_ids_to_agent[$row->post_id] = strval($row->meta_value);
+					}
+				}
+
+				foreach ($orders as $index => $order) {
+					$earning_id = $order->get_meta('salesking_earning_id');
+					$order_agent = strval($order->get_meta('salesking_assigned_agent'));
+
+					$found = false;
+					// if agent is assigned as managing the order
+					if ($order_agent === strval($vendor)) {
+						$found = true;
+					}
+
+					// if agent is the one who earned the commission
+					if (!$found && !empty($earning_id) && isset($earning_ids_to_agent[$earning_id])) {
+						$agent_id = $earning_ids_to_agent[$earning_id];
+						if (strval($vendor) === $agent_id) {
+							$found = true;
+						}
+					}
+
+					if (!$found) {
+						unset($orders[$index]);
+					}
+				}
+
+			}
+
+
+
+			//calculate sales total and order numbers
+			$sales_total = 0;
+			$order_number = 0;
+			$timestamps_sales = array();
+			$timestamps_orders = array();
+			$catalog_total = 0;
+			$agent_reduction = 0;
+			$coupon_discount = 0;
+			$catalog_timed_out = false;
+			$calc_start_time = microtime(true);
+
+			foreach ($orders as $order) {
+
+				$orderobj = $order;
+
+				$sales_total += ($order->get_total() - $order->get_total_tax() - $order->get_shipping_total());
+				$order_number++;
+
+				// Calculate catalog price and discounts (with timeout protection)
+				if (!$catalog_timed_out) {
+					if ((microtime(true) - $calc_start_time) > 15) {
+						$catalog_timed_out = true;
+					} else {
+						$coupon_discount += $order->get_total_discount();
+						$order_catalog = 0;
+						foreach ($order->get_items() as $item) {
+							$product = $item->get_product();
+							if ($product) {
+								$regular_price = $product->get_regular_price();
+								if ($regular_price === '' || $regular_price === null) {
+									$regular_price = $product->get_price();
+								}
+								if ($regular_price === '' || $regular_price === null) {
+									$regular_price = $item->get_subtotal() / max(1, $item->get_quantity());
+								}
+								$order_catalog += floatval($regular_price) * $item->get_quantity();
+							}
+						}
+						$catalog_total += $order_catalog;
+						$agent_reduction += max(0, $order_catalog - $order->get_subtotal());
+					}
+				}
+
+				$completed_date_obj = $orderobj->get_date_completed();
+				if ($completed_date_obj === null) {
+					continue; // Skip orders without a completed date
+				}
+				$date = $completed_date_obj->getTimestamp() + (get_option('gmt_offset') * 3600);
+
+				if (!isset($timestamps_sales[$date])) {
+					$timestamps_sales[$date] = ($order->get_total() - $order->get_total_tax() - $order->get_shipping_total());
+				} else {
+					$timestamps_sales[$date] += ($order->get_total() - $order->get_total_tax() - $order->get_shipping_total());
+				}
+
+				if (!isset($timestamps_orders[$date])) {
+					$timestamps_orders[$date] = 1;
+				} else {
+					$timestamps_orders[$date] += 1;
+				}
+
+			}
+
+			$sales_total_wc = wc_price($sales_total);
+
+			// calculate new vendors if "all option"
+			if ($vendor === 'all' || $vendor === 'all_team') {
+				if (!current_user_can('manage_woocommerce')) {
+					// Treat as team report for the current user
+					$new_vendors_count = 0;
+					if (!empty($team_member_ids)) {
+						$new_members = get_users(array(
+							'include' => $team_member_ids,
+							'date_query' => array(
+								array(
+									'after' => $date_from,
+									'before' => $date_to,
+									'inclusive' => true,
+								),
+							),
+							'fields' => 'ID'
+						));
+						$new_vendors_count = count($new_members);
+					}
+					$new_vendors = $new_vendors_count;
+
+					// Sum commissions for all team members
+					$commission = 0;
+					$timestamps_commissions = array();
+
+					if (!empty($team_member_ids)) {
+						foreach ($team_member_ids as $member_id) {
+							$member_commission_data = Salesking_Helper::get_earnings(strval($member_id), 'fromto', false, false, false, false, $date_from, $date_to, true);
+							$member_commission = explode('***', $member_commission_data)[0];
+							$member_timestamps = unserialize(explode('***', $member_commission_data)[1]);
+
+							$commission += floatval($member_commission);
+
+							// Merge timestamps
+							if (is_array($member_timestamps)) {
+								foreach ($member_timestamps as $ts => $val) {
+									if (isset($timestamps_commissions[$ts])) {
+										$timestamps_commissions[$ts] += $val;
+									} else {
+										$timestamps_commissions[$ts] = $val;
+									}
+								}
+							}
+						}
+					}
+				} else {
+					$vendors = get_users(array(
+						'meta_query' => array(
+							array(
+								'key' => 'salesking_group',
+								'value' => 'none',
+								'compare' => '!=',
+							),
+						),
+						'date_query' => array(
+							array(
+								'before' => $date_to,
+								'after' => $date_from,
+								'inclusive' => true,
+							),
+						)
+					));
+					$new_vendors = count($vendors);
+
+					if (current_user_can('manage_woocommerce') && ($vendor === 'all' || $vendor === 'all_team')) {
+						// General store report (admin, all agents) - also handles all_team admin (single query)
+						$commission_data = Salesking_Helper::get_earnings('allagents', 'fromto', false, false, false, false, $date_from, $date_to, true);
+						$commission = explode('***', $commission_data)[0];
+						$timestamps_commissions = unserialize(explode('***', $commission_data)[1]);
+					} else {
+						// Team report for leader (all_team) or leader selecting specific team
+						$commission = 0;
+						$timestamps_commissions = array();
+						if (!empty($team_member_ids)) {
+							foreach ($team_member_ids as $member_id) {
+								$member_commission_data = Salesking_Helper::get_earnings(strval($member_id), 'fromto', false, false, false, false, $date_from, $date_to, true);
+								$member_commission = explode('***', $member_commission_data)[0];
+								$member_timestamps = unserialize(explode('***', $member_commission_data)[1]);
+
+								$commission += floatval($member_commission);
+
+								if (is_array($member_timestamps)) {
+									foreach ($member_timestamps as $ts => $val) {
+										if (isset($timestamps_commissions[$ts])) {
+											$timestamps_commissions[$ts] += $val;
+										} else {
+											$timestamps_commissions[$ts] = $val;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+			} else if (strpos($vendor, 'team_') === 0) {
+				// Count new team members in range
+				$new_vendors_count = 0;
+				if (!empty($team_member_ids)) {
+					$new_members = get_users(array(
+						'include' => $team_member_ids,
+						'date_query' => array(
+							array(
+								'after' => $date_from,
+								'before' => $date_to,
+								'inclusive' => true,
+							),
+						),
+						'fields' => 'ID'
+					));
+					$new_vendors_count = count($new_members);
+				}
+				$new_vendors = $new_vendors_count;
+
+				// Sum commissions for all team members
+				$commission = 0;
+				$timestamps_commissions = array();
+
+				// $team_member_ids was already set above during order filtering
+				if (!empty($team_member_ids)) {
+					foreach ($team_member_ids as $member_id) {
+						$member_commission_data = Salesking_Helper::get_earnings(strval($member_id), 'fromto', false, false, false, false, $date_from, $date_to, true);
+						$member_commission = explode('***', $member_commission_data)[0];
+						$member_timestamps = unserialize(explode('***', $member_commission_data)[1]);
+
+						$commission += floatval($member_commission);
+
+						// Merge timestamps
+						if (is_array($member_timestamps)) {
+							foreach ($member_timestamps as $ts => $val) {
+								if (isset($timestamps_commissions[$ts])) {
+									$timestamps_commissions[$ts] += $val;
+								} else {
+									$timestamps_commissions[$ts] = $val;
+								}
+							}
+						}
+					}
+				}
+
+			} else {
+				$new_vendors = '-';
+
+				// get admin commission
+				$commission_data = $helper->get_earnings($vendor, 'fromto', false, false, false, false, $date_from, $date_to, true);
+				$commission = explode('***', $commission_data)[0];
+				$timestamps_commissions = unserialize(explode('***', $commission_data)[1]);
+			}
+
+			$commission_wc = wc_price($commission);
+
+			// 1. Establish draw labels in chart
+			/*
+			if user chooses < 32 days, show by day ; if they choose > 31 < 366 show by month; > 366 show by year
+			*/
+			$timedifference = strtotime($lastday) - strtotime($firstday);
+			$nrdays = intval(ceil($timedifference / 86400));
+			if ($nrdays < 32) { // 32 days
+				// show days
+				$firstdaynumber = date('d', strtotime($firstday));
+
+				$days_array = array();
+				$sales_array = array();
+				$ordernr_array = array();
+				$commissions_array = array();
+
+				$i = 0;
+				while ($i <= $nrdays) {
+					// build label
+					array_push($days_array, date('d', (strtotime($firstday) + 86400 * $i)));
+
+					// for each day, get sales, ordernr, commission
+					$sales_of_the_day = 0;
+					$ordernr_of_the_day = 0;
+					$sales_of_the_day = 0;
+					$commissions_of_the_day = 0;
+
+					foreach ($timestamps_sales as $timestamp => $sales) {
+						if (date("m.d.y", $timestamp) === date("m.d.y", strtotime($firstday) + 86400 * $i)) {
+							$sales_of_the_day += $sales;
+							$ordernr_of_the_day++;
+						}
+					}
+
+					foreach ($timestamps_commissions as $timestamp => $commissions) {
+						if (date("m.d.y", $timestamp) === date("m.d.y", strtotime($firstday) + 86400 * $i)) {
+							$commissions_of_the_day += $commissions;
+						}
+					}
+					array_push($sales_array, $sales_of_the_day);
+					array_push($ordernr_array, $ordernr_of_the_day);
+					array_push($commissions_array, $commissions_of_the_day);
+
+
+					$i++;
+
+				}
+
+				$labels = json_encode($days_array);
+
+			} else if ($nrdays >= 32) {
+
+				// show months
+				$firstmonthnumber = date('m.y', strtotime($firstday));
+				$lastmonthnumber = date('m.y', strtotime($lastday));
+
+				$months_array = array();
+				$sales_array = array();
+				$ordernr_array = array();
+				$commissions_array = array();
+				$i = 1;
+				while ($i !== 'stop') {
+
+					// for each month, get sales, ordernr, commission
+					$sales_of_the_month = 0;
+					$ordernr_of_the_month = 0;
+					$sales_of_the_month = 0;
+					$commissions_of_the_month = 0;
+
+					foreach ($timestamps_orders as $timestamp => $order_count) {
+						if (date("m.y", $timestamp) === $firstmonthnumber) {
+							$ordernr_of_the_month += $order_count;
+						}
+					}
+					foreach ($timestamps_sales as $timestamp => $sales) {
+						if (date("m.y", $timestamp) === $firstmonthnumber) {
+							$sales_of_the_month += $sales;
+						}
+					}
+
+					foreach ($timestamps_commissions as $timestamp => $commissions) {
+						if (date("m.y", $timestamp) === $firstmonthnumber) {
+							$commissions_of_the_month += $commissions;
+						}
+					}
+					array_push($sales_array, $sales_of_the_month);
+					array_push($ordernr_array, $ordernr_of_the_month);
+					array_push($commissions_array, $commissions_of_the_month);
+
+
+					// build label
+					array_push($months_array, date("M y", strtotime("+" . ($i - 1) . " month", strtotime($firstday))));
+
+					if ($firstmonthnumber === $lastmonthnumber) {
+						$i = 'stop';
+					} else {
+						$firstmonthnumber = date("m.y", strtotime("+" . $i . " month", strtotime($firstday)));
+						$i++;
+					}
+
+
+				}
+
+				$labels = json_encode($months_array);
+
+			}
+
+			// round values to 2 decimals
+			foreach ($sales_array as $index => $value) {
+				$sales_array[$index] = round($value, 2);
+			}
+			foreach ($commissions_array as $index => $value) {
+				$commissions_array[$index] = round($value, 2);
+			}
+
+
+			$salestotal = json_encode($sales_array);
+			$ordernumbers = json_encode($ordernr_array);
+			$commissiontotal = json_encode($commissions_array);
+
+		}
+
+
+		// JSON safety fallbacks - prevent JS JSON.parse crash
+		if ($labels === false || !is_string($labels)) { $labels = '[]'; }
+		if ($salestotal === false || !is_string($salestotal)) { $salestotal = '[]'; }
+		if ($ordernumbers === false || !is_string($ordernumbers)) { $ordernumbers = '[]'; }
+		if ($commissiontotal === false || !is_string($commissiontotal)) { $commissiontotal = '[]'; }
+
+		// Fix: remove any hooks that may replace the output with zeros
+		remove_all_filters('salesking_reports_data_final');
+
+
+		// Catalog metrics already calculated in main loop above
+		if ($catalog_timed_out) {
+			// Don't cache timed-out results so next request retries
+			$raw_report_output = $sales_total . '*' . $sales_total_wc . '*' . $order_number . '*' . $new_vendors . '*' . $commission . '*' . $commission_wc . '*' . $labels . '*' . $salestotal . '*' . $ordernumbers . '*' . $commissiontotal . '*Timeout*Timeout*Timeout*Timeout*' . $sales_total_wc;
+		} else {
+			$total_descuentos = $catalog_total - $sales_total;
+			$raw_report_output = $sales_total . '*' . $sales_total_wc . '*' . $order_number . '*' . $new_vendors . '*' . $commission . '*' . $commission_wc . '*' . $labels . '*' . $salestotal . '*' . $ordernumbers . '*' . $commissiontotal . '*' . wc_price($catalog_total) . '*' . wc_price($agent_reduction) . '*' . wc_price($coupon_discount) . '*' . wc_price($total_descuentos) . '*' . wc_price($sales_total);
+			// Cache result for 24 hours (use Limpiar Caché button to refresh)
+			set_transient($cache_key, $raw_report_output, 24 * HOUR_IN_SECONDS);
+		}
+		echo $raw_report_output;
+
+
+		exit();
+	}
+
+	/**
+	 * CSV download for Reports Teams page.
+	 * Reuses the same filtering logic as salesking_reports_get_data.
+	 * Restricted to last 45 days from today.
+	 */
+	function salesking_reports_download_csv()
+	{
+		// Security
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+		if (!current_user_can(apply_filters('salesking_backend_capability_needed', 'manage_woocommerce'))) {
+			wp_send_json_error('Insufficient permissions.');
+			wp_die();
+		}
+
+		@set_time_limit(300);
+		require_once(SALESKING_DIR . 'includes/class-salesking-helper.php');
+
+		$vendor   = sanitize_text_field($_POST['vendor']);
+		$firstday = sanitize_text_field($_POST['firstday']);
+		$lastday  = sanitize_text_field($_POST['lastday']);
+
+		// 45-day restriction (server-side)
+		$limit_date = date('Y-m-d', strtotime('-45 days'));
+		if ($firstday < $limit_date) {
+			wp_send_json_error('El rango de descarga no puede exceder los últimos 45 días. Fecha mínima permitida: ' . $limit_date);
+			wp_die();
+		}
+
+		$timezone = get_option('timezone_string');
+		if (empty($timezone)) { $timezone = 'UTC'; }
+		date_default_timezone_set($timezone);
+
+		$date_from = $firstday;
+		$date_to   = $lastday;
+
+		// ---------- Order fetching (same logic as salesking_reports_get_data) ----------
+		if ($vendor === 'all' || $vendor === 'all_team') {
+			$current_user_id = get_current_user_id();
+			$team_member_ids = array();
+
+			if ($vendor === 'all_team') {
+				if (current_user_can('manage_woocommerce')) {
+					$team_member_ids = get_users(array(
+						'meta_query' => array(
+							'relation' => 'OR',
+							array('key' => 'salesking_group', 'value' => 'none', 'compare' => '!='),
+							array('key' => 'salesking_user_choice', 'value' => 'agent', 'compare' => '='),
+						),
+						'fields' => 'ids',
+					));
+				} else {
+					$user_subagents = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_direct_subagents'))
+						? Salesking_Admin::get_direct_subagents(intval($current_user_id))
+						: array();
+					if (!empty($user_subagents)) {
+						$team_member_ids = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids'))
+							? Salesking_Admin::get_recursive_team_ids(intval($current_user_id), true)
+							: array(intval($current_user_id));
+					} else {
+						$team_member_ids = array(intval($current_user_id));
+					}
+				}
+			} else if (!current_user_can('manage_woocommerce')) {
+				$team_member_ids = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids'))
+					? Salesking_Admin::get_recursive_team_ids(intval($current_user_id), true)
+					: array(intval($current_user_id));
+			}
+
+			$args = array(
+				'status'         => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+				'date_completed' => $date_from . '...' . $date_to,
+				'limit'          => -1,
+				'type'           => 'shop_order',
+			);
+			$orders = wc_get_orders($args);
+
+			if ($vendor === 'all_team') {
+				$orders = array_filter($orders, function($order) {
+					return $order->get_meta('salesking_order_placed_type') === 'placed_by_agent';
+				});
+				$orders = array_values($orders);
+			}
+
+			if (!empty($team_member_ids)) {
+				$orders = $this->csv_filter_orders_by_team($orders, $team_member_ids);
+			}
+
+		} else if (strpos($vendor, 'team_') === 0) {
+			$team_leader_id  = str_replace('team_', '', $vendor);
+			$team_member_ids = (class_exists('Salesking_Admin') && method_exists('Salesking_Admin', 'get_recursive_team_ids'))
+				? Salesking_Admin::get_recursive_team_ids(intval($team_leader_id), true)
+				: array(intval($team_leader_id));
+
+			$args = array(
+				'status'         => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+				'date_completed' => $date_from . '...' . $date_to,
+				'limit'          => -1,
+				'type'           => 'shop_order',
+			);
+			$orders = wc_get_orders($args);
+
+			$orders = array_filter($orders, function($order) {
+				return $order->get_meta('salesking_order_placed_type') === 'placed_by_agent';
+			});
+			$orders = array_values($orders);
+
+			if (!empty($team_member_ids)) {
+				$orders = $this->csv_filter_orders_by_team($orders, $team_member_ids);
+			}
+
+		} else {
+			// Specific vendor
+			$args = array(
+				'status'         => apply_filters('salesking_reports_statuses', array('wc-on-hold', 'wc-pending', 'wc-processing', 'wc-completed')),
+				'date_completed' => $date_from . '...' . $date_to,
+				'limit'          => -1,
+				'type'           => 'shop_order',
+			);
+			$orders = wc_get_orders($args);
+
+			// Bulk-fetch earning agent IDs
+			$earning_ids_to_agent = array();
+			$orders_earning_ids   = array();
+			foreach ($orders as $order) {
+				$eid = $order->get_meta('salesking_earning_id');
+				if (!empty($eid)) { $orders_earning_ids[] = intval($eid); }
+			}
+			if (!empty($orders_earning_ids)) {
+				global $wpdb;
+				$eid_list = implode(',', $orders_earning_ids);
+				$results  = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'agent_id' AND post_id IN ($eid_list)");
+				foreach ($results as $row) {
+					$earning_ids_to_agent[$row->post_id] = strval($row->meta_value);
+				}
+			}
+
+			foreach ($orders as $index => $order) {
+				$earning_id  = $order->get_meta('salesking_earning_id');
+				$order_agent = strval($order->get_meta('salesking_assigned_agent'));
+				$found       = false;
+				if ($order_agent === strval($vendor)) { $found = true; }
+				if (!$found && !empty($earning_id) && isset($earning_ids_to_agent[$earning_id])) {
+					if (strval($vendor) === $earning_ids_to_agent[$earning_id]) { $found = true; }
+				}
+				if (!$found) { unset($orders[$index]); }
+			}
+		}
+
+		// ---------- Build CSV rows ----------
+		$rows = array();
+		$rows[] = array(
+			'# Orden',
+			'Fecha Completado',
+			'Agente',
+			'Subtotal (sin IVA/envío)',
+			'Precio Catálogo',
+			'Desc. Agente',
+			'Desc. Cupón',
+			'Comisión',
+		);
+
+		foreach ($orders as $order) {
+			$completed_date = $order->get_date_completed();
+			$date_str       = $completed_date ? $completed_date->date('Y-m-d H:i') : '-';
+
+			$agent_id   = strval($order->get_meta('salesking_assigned_agent'));
+			$agent_user = $agent_id ? get_user_by('id', $agent_id) : null;
+			$agent_name = $agent_user ? $agent_user->display_name : '-';
+
+			$subtotal = $order->get_total() - $order->get_total_tax() - $order->get_shipping_total();
+
+			// Catalog price
+			$catalog = 0;
+			foreach ($order->get_items() as $item) {
+				$product = $item->get_product();
+				if ($product) {
+					$regular_price = $product->get_regular_price();
+					if ($regular_price === '' || $regular_price === null) {
+						$regular_price = $product->get_price();
+					}
+					if ($regular_price === '' || $regular_price === null) {
+						$regular_price = $item->get_subtotal() / max(1, $item->get_quantity());
+					}
+					$catalog += floatval($regular_price) * $item->get_quantity();
+				}
+			}
+
+			$agent_reduction = max(0, $catalog - $order->get_subtotal());
+			$coupon_discount = $order->get_total_discount();
+
+			// Commission from earning
+			$earning_id = $order->get_meta('salesking_earning_id');
+			$commission = 0;
+			if (!empty($earning_id)) {
+				$commission = floatval(get_post_meta($earning_id, 'salesking_commission_total', true));
+			}
+
+			$rows[] = array(
+				$order->get_order_number(),
+				$date_str,
+				$agent_name,
+				number_format($subtotal, 2, '.', ''),
+				number_format($catalog, 2, '.', ''),
+				number_format($agent_reduction, 2, '.', ''),
+				number_format($coupon_discount, 2, '.', ''),
+				number_format($commission, 2, '.', ''),
+			);
+		}
+
+		// Output CSV
+		$filename = 'salesking_teams_report_' . $date_from . '_' . $date_to . '.csv';
+
+		header('Content-Type: text/csv; charset=utf-8');
+		header('Content-Disposition: attachment; filename="' . $filename . '"');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+
+		$output = fopen('php://output', 'w');
+		// BOM for Excel UTF-8
+		fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+		foreach ($rows as $row) {
+			fputcsv($output, $row);
+		}
+
+		fclose($output);
+		exit();
+	}
+
+	/**
+	 * Helper: filter orders to only those belonging to a set of team member IDs.
+	 */
+	private function csv_filter_orders_by_team($orders, $team_member_ids)
+	{
+		$team_member_ids_str    = array_map('strval', $team_member_ids);
+		$team_member_ids_mapped = array_flip($team_member_ids_str);
+
+		// Bulk-fetch earning agent IDs
+		$earning_ids_to_agent = array();
+		$orders_earning_ids   = array();
+		foreach ($orders as $order) {
+			$eid = $order->get_meta('salesking_earning_id');
+			if (!empty($eid)) { $orders_earning_ids[] = intval($eid); }
+		}
+		if (!empty($orders_earning_ids)) {
+			global $wpdb;
+			$eid_list = implode(',', $orders_earning_ids);
+			$results  = $wpdb->get_results("SELECT post_id, meta_value FROM {$wpdb->postmeta} WHERE meta_key = 'agent_id' AND post_id IN ($eid_list)");
+			foreach ($results as $row) {
+				$earning_ids_to_agent[$row->post_id] = strval($row->meta_value);
+			}
+		}
+
+		foreach ($orders as $index => $order) {
+			$earning_id  = $order->get_meta('salesking_earning_id');
+			$order_agent = strval($order->get_meta('salesking_assigned_agent'));
+			$found       = false;
+			if (!empty($order_agent) && isset($team_member_ids_mapped[$order_agent])) { $found = true; }
+			if (!$found && !empty($earning_id) && isset($earning_ids_to_agent[$earning_id])) {
+				if (isset($team_member_ids_mapped[$earning_ids_to_agent[$earning_id]])) { $found = true; }
+			}
+			if (!$found) { unset($orders[$index]); }
+		}
+
+		return array_values($orders);
+	}
+
+	/**
+	 * Customer Transfer: Request transfer of a customer to the current agent.
+	 * Creates a pending request in wp_options.
+	 */
+	function salesking_request_transfer()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$current_user = get_current_user_id();
+		$customer_id  = intval($_POST['customer_id']);
+
+		// Get the currently assigned agent
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+
+		if (empty($assigned_agent) || intval($assigned_agent) === $current_user) {
+			wp_send_json_error('No se puede solicitar transferencia de un cliente que ya es tuyo.');
+			wp_die();
+		}
+
+		// Check if there's already a pending request from this agent
+		$existing = get_option('sk_transfer_' . $customer_id . '_' . $current_user, false);
+		if ($existing !== false) {
+			wp_send_json_error('Ya existe una solicitud pendiente para este cliente.');
+			wp_die();
+		}
+
+		// Create the transfer request
+		$request_data = array(
+			'customer_id'  => $customer_id,
+			'from_agent'   => intval($assigned_agent),
+			'to_agent'     => $current_user,
+			'requested_by' => $current_user,
+			'timestamp'    => current_time('timestamp'),
+		);
+
+		update_option('sk_transfer_' . $customer_id . '_' . $current_user, $request_data, false);
+
+		wp_send_json_success('Solicitud de transferencia enviada.');
+		wp_die();
+	}
+
+	/**
+	 * Customer Transfer: Respond to a transfer request (accept/reject).
+	 * Only the currently assigned agent can respond.
+	 */
+	function salesking_respond_transfer()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$current_user  = get_current_user_id();
+		$customer_id   = intval($_POST['customer_id']);
+		$requester_id  = intval($_POST['requester_id']);
+		$response_type = sanitize_text_field($_POST['response']); // 'accept' or 'reject'
+
+		// Verify the current user is the assigned agent OR a parent/grandparent in the hierarchy
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+		$can_respond = false;
+
+		if (intval($assigned_agent) === $current_user) {
+			$can_respond = true;
+		} else {
+			// Check if current user is an ancestor (parent, grandparent, etc.) of the assigned agent
+			$check_agent = intval($assigned_agent);
+			$depth = 0;
+			while ($check_agent && $depth < 10) {
+				$parent_of_agent = get_user_meta($check_agent, 'salesking_parent_agent', true);
+				if (!empty($parent_of_agent) && intval($parent_of_agent) === $current_user) {
+					$can_respond = true;
+					break;
+				}
+				$check_agent = !empty($parent_of_agent) ? intval($parent_of_agent) : 0;
+				$depth++;
+			}
+		}
+
+		if (!$can_respond) {
+			wp_send_json_error('Solo el agente asignado o sus superiores pueden responder a solicitudes de transferencia.');
+			wp_die();
+		}
+
+		// Check the request exists
+		$request = get_option('sk_transfer_' . $customer_id . '_' . $requester_id, false);
+		if ($request === false) {
+			wp_send_json_error('La solicitud de transferencia no existe.');
+			wp_die();
+		}
+
+		if ($response_type === 'accept') {
+			// Transfer the customer
+			update_user_meta($customer_id, 'salesking_assigned_agent', $requester_id);
+
+			// Clean up all pending requests for this customer
+			global $wpdb;
+			$wpdb->query($wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+				'sk_transfer_' . $customer_id . '_%'
+			));
+
+			wp_send_json_success('Transferencia aceptada. El cliente fue reasignado.');
+		} else {
+			// Just delete the request
+			delete_option('sk_transfer_' . $customer_id . '_' . $requester_id);
+			wp_send_json_success('Solicitud rechazada.');
+		}
+
+		wp_die();
+	}
+
+	/**
+	 * Customer Transfer: Direct reassign by parent agent (no approval needed).
+	 * Parent can reassign customers from their children to themselves or another child.
+	 */
+	function salesking_direct_reassign()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$current_user  = get_current_user_id();
+		$customer_id   = intval($_POST['customer_id']);
+
+		// Get the currently assigned agent
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+
+		if (empty($assigned_agent)) {
+			wp_send_json_error('El cliente no tiene agente asignado.');
+			wp_die();
+		}
+
+		// Verify the current user is the parent of the assigned agent
+		$agent_parent = get_user_meta(intval($assigned_agent), 'salesking_parent_agent', true);
+		if (intval($agent_parent) !== $current_user) {
+			wp_send_json_error('Solo el agente parent del agente asignado puede reasignar directamente.');
+			wp_die();
+		}
+
+		// Reassign to the current user (parent)
+		update_user_meta($customer_id, 'salesking_assigned_agent', $current_user);
+
+		// Clean up any pending requests for this customer
+		global $wpdb;
+		$wpdb->query($wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+			'sk_transfer_' . $customer_id . '_%'
+		));
+
+		wp_send_json_success('Cliente reasignado exitosamente.');
+		wp_die();
+	}
+
+	/**
+	 * Customer Claim: Immediately assign an unassigned customer to the current agent.
+	 * No approval needed since the customer has no agent.
+	 */
+	function salesking_claim_customer()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$current_user = get_current_user_id();
+		$customer_id  = intval($_POST['customer_id']);
+
+		// Verify the customer exists
+		$customer_info = get_userdata($customer_id);
+		if (!$customer_info) {
+			wp_send_json_error('El cliente no existe.');
+			wp_die();
+		}
+
+		// Verify the customer has NO assigned agent
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+		if (!empty($assigned_agent) && $assigned_agent !== 'none' && $assigned_agent !== '0') {
+			wp_send_json_error('Este cliente ya tiene un agente asignado.');
+			wp_die();
+		}
+
+		// Assign the current user as the agent (user meta level)
+		update_user_meta($customer_id, 'salesking_assigned_agent', $current_user);
+
+		// SYNC: Also update order-level meta so Kanban board filters work correctly
+		// Get the agent display name for order meta
+		$agent_user = get_user_by('id', $current_user);
+		$agent_display_name = '';
+		if ($agent_user) {
+			$agent_display_name = trim($agent_user->first_name . ' ' . $agent_user->last_name);
+			if (empty($agent_display_name)) $agent_display_name = $agent_user->user_login;
+		}
+
+		global $wpdb;
+
+		// Find all orders from this customer that have no agent assigned at order level
+		$order_ids = $wpdb->get_col($wpdb->prepare(
+			"SELECT pm.post_id FROM {$wpdb->postmeta} pm
+			 INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID
+			 WHERE pm.meta_key = '_customer_user'
+			 AND pm.meta_value = %s
+			 AND p.post_type IN ('shop_order', 'shop_order_placehold')
+			 AND p.post_status IN ('wc-completed','wc-processing','wc-on-hold','wc-pending')
+			 AND pm.post_id NOT IN (
+			     SELECT post_id FROM {$wpdb->postmeta}
+			     WHERE meta_key = 'salesking_assigned_agent'
+			     AND meta_value != '' AND meta_value != '0' AND meta_value IS NOT NULL
+			 )",
+			$customer_id
+		));
+
+		// Assign the agent to those orders (so Kanban and SalesKing earnings/orders pages work)
+		foreach ($order_ids as $oid) {
+			update_post_meta($oid, 'salesking_assigned_agent', $current_user);
+			update_post_meta($oid, 'salesking_assigned_agent_name', $agent_display_name);
+			// Also set parent agent if applicable
+			$parent_agent = get_user_meta($current_user, 'salesking_parent_agent', true);
+			if (!empty($parent_agent) && $parent_agent !== 'none') {
+				update_post_meta($oid, 'salesking_parent_agent', $parent_agent);
+			}
+		}
+
+		// Clean up any pending transfer requests for this customer (just in case)
+		$wpdb->query($wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+			'sk_transfer_' . $customer_id . '_%'
+		));
+
+		$synced_count = count($order_ids);
+		wp_send_json_success('Cliente asignado exitosamente.' . ($synced_count > 0 ? ' Se actualizaron ' . $synced_count . ' pedidos.' : ''));
+		wp_die();
+	}
+
+	/**
+	 * AJAX: Search customers across full database (for transfer/claim).
+	 * Requires minimum 3 characters, returns maximum 3 results.
+	 * Excludes agents (users with salesking_group).
+	 */
+	function salesking_search_customers()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
+		if (mb_strlen($search_term) < 3) {
+			wp_send_json_error('Se requieren al menos 3 caracteres.');
+			wp_die();
+		}
+
+		$current_user_id = get_current_user_id();
+
+		// Get agent user IDs to exclude them from results
+		global $wpdb;
+		$agent_ids = $wpdb->get_col(
+			"SELECT DISTINCT user_id FROM {$wpdb->usermeta}
+			 WHERE meta_key = 'salesking_group' AND meta_value != 'none' AND meta_value != ''"
+		);
+		$exclude_ids = !empty($agent_ids) ? array_map('intval', $agent_ids) : array(0);
+
+		// Search by name, email, or login — max 3 results
+		$users = get_users(array(
+			'search'         => '*' . $search_term . '*',
+			'search_columns' => array('user_login', 'user_email', 'user_nicename', 'display_name'),
+			'exclude'        => $exclude_ids,
+			'number'         => 3,
+			'fields'         => 'all',
+		));
+
+		// Also search by first_name, last_name, billing_phone meta
+		$meta_user_ids = $wpdb->get_col($wpdb->prepare(
+			"SELECT DISTINCT user_id FROM {$wpdb->usermeta}
+			 WHERE meta_key IN ('first_name','last_name','billing_phone','billing_company')
+			 AND meta_value LIKE %s
+			 LIMIT 6",
+			'%' . $wpdb->esc_like($search_term) . '%'
+		));
+
+		// Merge and deduplicate
+		$found_ids = array_map(function($u){ return $u->ID; }, $users);
+		$all_ids = array_unique(array_merge($found_ids, $meta_user_ids));
+		// Exclude agents
+		$all_ids = array_diff($all_ids, $exclude_ids);
+		// Limit to 3
+		$all_ids = array_slice($all_ids, 0, 3);
+
+		// Pre-fetch children for reassign detection
+		$my_children_ids = get_users(array(
+			'fields' => 'ids',
+			'meta_query' => array(
+				'relation' => 'AND',
+				array('key' => 'salesking_group', 'value' => 'none', 'compare' => '!='),
+				array('key' => 'salesking_parent_agent', 'value' => $current_user_id, 'compare' => '='),
+			),
+		));
+		$my_children_map = array_flip(array_map('strval', $my_children_ids));
+
+		// Pre-fetch pending transfers by me
+		$my_pending = $wpdb->get_results($wpdb->prepare(
+			"SELECT option_value FROM {$wpdb->options}
+			 WHERE option_name LIKE 'sk_transfer_%%'
+			 AND option_value LIKE %s",
+			'%"to_agent";i:' . $current_user_id . '%'
+		));
+		$pending_by_me_cids = array();
+		foreach ($my_pending as $p) {
+			$d = maybe_unserialize($p->option_value);
+			if (is_array($d) && !empty($d['customer_id'])) {
+				$pending_by_me_cids[] = intval($d['customer_id']);
+			}
+		}
+
+		$results = array();
+		foreach ($all_ids as $uid) {
+			$u = get_userdata($uid);
+			if (!$u) continue;
+
+			$name = trim($u->first_name . ' ' . $u->last_name);
+			if (empty($name)) $name = $u->user_login;
+
+			$assigned_agent = get_user_meta($uid, 'salesking_assigned_agent', true);
+			$agent_name = '';
+			$action = '';
+
+			if (!empty($assigned_agent) && $assigned_agent !== 'none' && $assigned_agent !== '0') {
+				$agent_info = get_userdata(intval($assigned_agent));
+				$agent_name = $agent_info ? trim($agent_info->first_name . ' ' . $agent_info->last_name) : '';
+				if (empty($agent_name) && $agent_info) $agent_name = $agent_info->user_login;
+
+				if (intval($assigned_agent) === $current_user_id) {
+					$action = 'mine'; // Already my customer
+				} else if (isset($my_children_map[strval($assigned_agent)])) {
+					$action = 'reassign'; // My child's customer
+				} else if (in_array($uid, $pending_by_me_cids)) {
+					$action = 'pending'; // Already requested
+				} else {
+					$action = 'transfer'; // Someone else's customer
+				}
+			} else {
+				$agent_name = 'Sin agente';
+				$action = 'claim'; // No agent, can claim
+			}
+
+			$results[] = array(
+				'id'         => $uid,
+				'name'       => $name,
+				'email'      => $u->user_email,
+				'phone'      => get_user_meta($uid, 'billing_phone', true),
+				'company'    => get_user_meta($uid, 'billing_company', true),
+				'agent_name' => $agent_name,
+				'action'     => $action,
+			);
+		}
+
+		wp_send_json_success($results);
+		wp_die();
+	}
+
+	/**
+	 * AJAX: Get recent customers without an agent who have placed orders.
+	 * Returns max 5 customers sorted by most recent order date.
+	 * Used for the "Clientes recientes sin agente" section.
+	 */
+	function salesking_get_unassigned_customers()
+	{
+		if (!check_ajax_referer('salesking_security_nonce', 'security', false)) {
+			wp_send_json_error('Invalid security token.');
+			wp_die();
+		}
+
+		$current_user_id = get_current_user_id();
+		$page = isset($_POST['page']) ? max(1, intval($_POST['page'])) : 1;
+		$per_page = 5;
+		$offset = ($page - 1) * $per_page;
+
+		global $wpdb;
+
+		// Get agent user IDs to exclude them from results
+		$agent_ids = $wpdb->get_col(
+			"SELECT DISTINCT user_id FROM {$wpdb->usermeta}
+			 WHERE meta_key = 'salesking_group' AND meta_value != 'none' AND meta_value != ''"
+		);
+		$exclude_ids = !empty($agent_ids) ? array_map('intval', $agent_ids) : array(0);
+		$exclude_str = implode(',', $exclude_ids);
+
+		// Find customers WITHOUT an assigned agent who have at least one order
+		// Uses a subquery to find the most recent order date for sorting
+		$query = "
+			SELECT u.ID as customer_id,
+			       MAX(p.post_date) as last_order_date,
+			       COUNT(DISTINCT p.ID) as order_count,
+			       COALESCE(SUM(pm_total.meta_value), 0) as total_spent
+			FROM {$wpdb->users} u
+			INNER JOIN {$wpdb->postmeta} pm_customer
+			    ON u.ID = pm_customer.meta_value
+			    AND pm_customer.meta_key = '_customer_user'
+			INNER JOIN {$wpdb->posts} p
+			    ON pm_customer.post_id = p.ID
+			    AND p.post_type IN ('shop_order', 'shop_order_placehold')
+			    AND p.post_status IN ('wc-completed','wc-processing','wc-on-hold')
+			LEFT JOIN {$wpdb->postmeta} pm_total
+			    ON p.ID = pm_total.post_id
+			    AND pm_total.meta_key = '_order_total'
+			LEFT JOIN {$wpdb->usermeta} um_agent
+			    ON u.ID = um_agent.user_id
+			    AND um_agent.meta_key = 'salesking_assigned_agent'
+			WHERE u.ID NOT IN ({$exclude_str})
+			AND (um_agent.meta_value IS NULL OR um_agent.meta_value = '' OR um_agent.meta_value = 'none' OR um_agent.meta_value = '0')
+			GROUP BY u.ID
+			ORDER BY last_order_date DESC
+			LIMIT %d OFFSET %d
+		";
+
+		$results_raw = $wpdb->get_results($wpdb->prepare($query, $per_page + 1, $offset));
+
+		// Check if there are more pages
+		$has_more = count($results_raw) > $per_page;
+		if ($has_more) {
+			array_pop($results_raw); // Remove the extra row
+		}
+
+		$results = array();
+		foreach ($results_raw as $row) {
+			$u = get_userdata($row->customer_id);
+			if (!$u) continue;
+
+			$name = trim($u->first_name . ' ' . $u->last_name);
+			if (empty($name)) $name = $u->user_login;
+
+			$phone = get_user_meta($row->customer_id, 'billing_phone', true);
+			$company = get_user_meta($row->customer_id, 'billing_company', true);
+			$city = get_user_meta($row->customer_id, 'billing_city', true);
+
+			$results[] = array(
+				'id'              => intval($row->customer_id),
+				'name'            => $name,
+				'email'           => $u->user_email,
+				'phone'           => $phone ?: '',
+				'company'         => $company ?: '',
+				'city'            => $city ?: '',
+				'order_count'     => intval($row->order_count),
+				'total_spent'     => floatval($row->total_spent),
+				'last_order_date' => $row->last_order_date,
+			);
+		}
+
+		wp_send_json_success(array(
+			'customers' => $results,
+			'page'      => $page,
+			'has_more'  => $has_more,
+		));
+		wp_die();
+	}
+
+	function saleskingmarkread()
+	{
+
+		// Check security nonce.
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$announcement_id = sanitize_text_field($_POST['announcementid']);
+		$user_id = get_current_user_id();
+
+		update_user_meta($user_id, 'salesking_announce_read_' . $announcement_id, 'read');
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingmarkreadmessage()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$messageid = sanitize_text_field($_POST['messageid']);
+		$messagetype = sanitize_text_field($_POST['messagetype']);
+		$user_id = get_current_user_id();
+
+		if ($messagetype === 'b2bking_conversation') {
+			update_user_meta($user_id, 'b2bking_conversation_last_read_' . $messageid, time());
+		} else {
+			update_user_meta($user_id, 'salesking_message_last_read_' . $messageid, time());
+		}
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingmarkreadmessagead()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$messageid = sanitize_text_field($_POST['messageid']);
+
+		update_post_meta($messageid, 'salesking_last_read_time_admin', time());
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingmarkclosedmessage()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$messageid = sanitize_text_field($_POST['messageid']);
+		$messagetype = sanitize_text_field($_POST['messagetype']);
+		$user_id = get_current_user_id();
+
+		$is_closed = 'no';
+		// get currently selected message
+		if (!empty($messageid)) {
+			if ($messagetype === 'b2bking_conversation') {
+				$nr_messages = get_post_meta($messageid, 'b2bking_conversation_messages_number', true);
+				$last_message = get_post_meta($messageid, 'b2bking_conversation_message_' . $nr_messages, true);
+
+				// check if message is closed
+				$last_closed_time = get_user_meta($user_id, 'b2bking_conversation_last_closed_' . $messageid, true);
+				if (!empty($last_closed_time)) {
+					$last_message_time = get_post_meta($messageid, 'b2bking_conversation_message_' . $nr_messages . '_time', true);
+					if (floatval($last_closed_time) > floatval($last_message_time)) {
+						$is_closed = 'yes';
+					}
+				}
+			} else {
+				$nr_messages = get_post_meta($messageid, 'salesking_message_messages_number', true);
+				$last_message = get_post_meta($messageid, 'salesking_message_message_' . $nr_messages, true);
+
+				// check if message is closed
+				$last_closed_time = get_user_meta($user_id, 'salesking_message_last_closed_' . $messageid, true);
+				if (!empty($last_closed_time)) {
+					$last_message_time = get_post_meta($messageid, 'salesking_message_message_' . $nr_messages . '_time', true);
+					if (floatval($last_closed_time) > floatval($last_message_time)) {
+						$is_closed = 'yes';
+					}
+				}
+			}
+		}
+
+		if ($is_closed === 'yes') {
+			if ($messagetype === 'b2bking_conversation') {
+				update_user_meta($user_id, 'b2bking_conversation_last_closed_' . $messageid, 1);
+			} else {
+				update_user_meta($user_id, 'salesking_message_last_closed_' . $messageid, 1);
+			}
+		} else {
+			if ($messagetype === 'b2bking_conversation') {
+				update_user_meta($user_id, 'b2bking_conversation_last_closed_' . $messageid, time());
+			} else {
+				update_user_meta($user_id, 'salesking_message_last_closed_' . $messageid, time());
+			}
+		}
+
+
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingreplymessage()
+	{
+
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$message_content = sanitize_textarea_field($_POST['messagecontent']);
+		$conversationid = $message_id = sanitize_text_field($_POST['messageid']);
+		$messagetype = sanitize_text_field($_POST['messagetype']);
+
+		$currentuser = wp_get_current_user()->user_login;
+
+		// Check message not empty
+		if ($message_content !== NULL && trim($message_content) !== '') {
+
+			if ($messagetype === 'b2bking_conversation') {
+				$conversationuser = get_post_meta($conversationid, 'b2bking_conversation_user', true);
+
+				$nr_messages = get_post_meta($conversationid, 'b2bking_conversation_messages_number', true);
+				$current_message_nr = $nr_messages + 1;
+				update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr, $message_content);
+				update_post_meta($conversationid, 'b2bking_conversation_messages_number', $current_message_nr);
+				update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr . '_author', $currentuser);
+				update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr . '_time', time());
+
+				// Update last reply time
+				update_post_meta($conversationid, 'b2bking_conversation_last_reply_time', time());
+
+				// send email notification
+				$recipient = get_option('admin_email');
+				$recipient = apply_filters('b2bking_recipient_new_message', $recipient, $conversationid);
+				do_action('b2bking_new_message', $recipient, $message_content, get_current_user_id(), $conversationid);
+			} else {
+				$conversationuser = get_post_meta($conversationid, 'salesking_message_user', true);
+
+				$nr_messages = get_post_meta($conversationid, 'salesking_message_messages_number', true);
+				$current_message_nr = $nr_messages + 1;
+				update_post_meta($conversationid, 'salesking_message_message_' . $current_message_nr, $message_content);
+				update_post_meta($conversationid, 'salesking_message_messages_number', $current_message_nr);
+				update_post_meta($conversationid, 'salesking_message_message_' . $current_message_nr . '_author', $currentuser);
+				update_post_meta($conversationid, 'salesking_message_message_' . $current_message_nr . '_time', time());
+
+				// send email notification
+				$recipient = get_option('admin_email');
+				$recipient = apply_filters('salesking_recipient_new_message', $recipient, $conversationid);
+				do_action('salesking_new_message', $recipient, $message_content, get_current_user_id(), $conversationid);
+			}
+		}
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingcomposemessage()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$message_content = sanitize_textarea_field($_POST['messagecontent']);
+		$recipient = sanitize_text_field($_POST['recipient']);
+		$title = sanitize_text_field($_POST['title']);
+
+		$currentuser = wp_get_current_user()->user_login;
+
+		// Check message not empty
+		if ($message_content !== NULL && trim($message_content) !== '') {
+
+			// Insert post
+			$args = array(
+				'post_title' => $title,
+				'post_type' => 'salesking_message',
+				'post_status' => 'publish',
+			);
+			$conversationid = wp_insert_post($args);
+
+
+			update_post_meta($conversationid, 'salesking_message_user', $currentuser);
+			update_post_meta($conversationid, 'salesking_message_message_1', $message_content);
+			update_post_meta($conversationid, 'salesking_message_messages_number', 1);
+			update_post_meta($conversationid, 'salesking_message_message_1_author', $currentuser);
+			update_post_meta($conversationid, 'salesking_message_message_1_time', time());
+			update_post_meta($conversationid, 'salesking_message_user', $recipient);
+
+
+			$recipient_email = get_option('admin_email');
+			$recipient_email = apply_filters('salesking_recipient_new_message', $recipient_email, $conversationid);
+
+			if ($recipient !== 'shop') {
+				$recipient_user = new WP_User($recipient);
+				$recipient_username = $recipient_user->user_login;
+
+				update_post_meta($conversationid, 'salesking_message_user', $recipient_username);
+
+				$recipient_email = $recipient_user->user_email;
+
+				update_post_meta($conversationid, 'salesking_message_type', 'message');
+			}
+
+			// send email notification
+			do_action('salesking_new_message', $recipient_email, $message_content, get_current_user_id(), $conversationid);
+
+
+		}
+
+
+		// return conversation id URL
+		echo trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true))) . 'messages?id=' . esc_attr($conversationid);
+		exit();
+
+	}
+
+	function saleskingshopascustomer()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$customer_id = sanitize_text_field($_POST['customer']);
+		$agent_id = get_current_user_id();
+
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			if (apply_filters('salesking_enable_shopcustomer_checks', true)) {
+				wp_die();
+			}
+		}
+
+		// first check that customer is indeed assigned to this agent
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+		if (empty($assigned_agent) || $assigned_agent === 'none') {
+			$assigned_agent = -1;
+		}
+
+		if (intval($agent_id) !== intval($assigned_agent)) {
+			// check group agent
+			$customer_group = get_user_meta($customer_id, 'b2bking_customergroup', true);
+			$assigned_agent = get_post_meta($customer_group, 'salesking_assigned_agent', true);
+
+			if (empty($assigned_agent) || $assigned_agent === 'none') {
+				$assigned_agent = -1;
+			}
+		}
+
+		// check additonal agents
+		// additional agents
+		if (apply_filters('salesking_use_additional_agents', false)) {
+
+			$selected_options_string = get_user_meta($customer_id, 'salesking_additional_agents', true);
+			$selected_options = array_filter(array_unique(explode(',', $selected_options_string)));
+
+			if (in_array(get_current_user_id(), $selected_options)) {
+				$assigned_agent = get_current_user_id();
+			}
+		}
+
+		// additional checks
+		$allow_login = false;
+		if (intval(get_option('salesking_all_agents_shop_all_customers_setting', 0)) === 1 || apply_filters('salesking_allow_shop_customer_filter', false)) {
+			$allow_login = true;
+		}
+
+		// if assigned OR if all customers setting enabled
+		if (intval($agent_id) === intval($assigned_agent) || $allow_login) {
+
+			// check that customer is not admin or has backend capabilities
+			if (user_can($customer_id, 'manage_woocommerce') || user_can($customer_id, 'manage_options')) {
+				if (apply_filters('salesking_enable_shopcustomer_checks', true)) {
+					wp_die();
+				}
+			}
+
+			// checks out, continue
+			wp_set_current_user($customer_id);
+			wp_set_auth_cookie($customer_id);
+
+			// get the agent's registration date as a secure info point
+			$udata = get_userdata($agent_id);
+			$registered_date = $udata->user_registered;
+
+			setcookie("salesking_switch_cookie", $customer_id . '_' . $agent_id . '_' . $registered_date, time() + 86400, "/");
+
+			if (apply_filters('salesking_empty_cart_on_switch', false)) {
+				WC()->cart->empty_cart();
+			}
+
+		}
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingswitchtoagent()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = sanitize_text_field($_POST['agent']);
+		$date_registered = sanitize_text_field($_POST['agentdate']);
+
+		$customer_id = get_current_user_id();
+
+		// first check that agent is indeed assigned to this customer
+		$assigned_agent = get_user_meta($customer_id, 'salesking_assigned_agent', true);
+		if (empty($assigned_agent) || $assigned_agent === 'none') {
+			$assigned_agent = -1;
+		}
+
+		if (intval($agent_id) !== intval($assigned_agent)) {
+			// check group agent
+			$customer_group = get_user_meta($customer_id, 'b2bking_customergroup', true);
+			$assigned_agent = get_post_meta($customer_group, 'salesking_assigned_agent', true);
+			if (empty($assigned_agent) || $assigned_agent === 'none') {
+				$assigned_agent = -1;
+			}
+		}
+
+		// check additonal agents
+		// additional agents
+		if (apply_filters('salesking_use_additional_agents', false)) {
+
+			$selected_options_string = get_user_meta($customer_id, 'salesking_additional_agents', true);
+			$selected_options = array_filter(array_unique(explode(',', $selected_options_string)));
+			if (in_array($agent_id, $selected_options)) {
+				$assigned_agent = $agent_id;
+			}
+		}
+
+		if (intval($agent_id) === intval($assigned_agent) || (intval(get_option('salesking_all_agents_shop_all_customers_setting', 0)) === 1) or apply_filters('salesking_allow_shop_customer_filter', false)) {
+
+			// get the agent's registration date as a secure info point
+			$udata = get_userdata($agent_id);
+			$registered_date = $udata->user_registered;
+
+			if ($registered_date === $date_registered) {
+
+				// checks out, continue
+				wp_set_current_user($agent_id);
+				wp_set_auth_cookie($agent_id);
+
+				setcookie("salesking_switch_cookie", "", time() - 3600, "/");
+
+				if (apply_filters('salesking_empty_cart_on_switch', false)) {
+					WC()->cart->empty_cart();
+				}
+			}
+
+		}
+
+		echo 'success';
+		exit();
+	}
+
+	function b2bking_email_offer_sk()
+	{
+		// Check security nonce.
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// get all recipients of the offer
+		$offer_id = sanitize_text_field($_POST['offerid']);
+		$offer_link = sanitize_text_field($_POST['offerlink']);
+		$emails_send_to = array();
+		$emails_send_to_guest = array();
+		// for each group, check if visible
+		$groups = get_posts(array('post_type' => 'b2bking_group', 'post_status' => 'publish', 'numberposts' => -1));
+		foreach ($groups as $group) {
+			$visible = get_post_meta($offer_id, 'b2bking_group_' . $group->ID, true);
+			if (intval($visible) === 1) {
+				// get all users with this group and add them to array
+				$users = get_users(array(
+					'meta_key' => 'b2bking_customergroup',
+					'meta_value' => $group->ID,
+					'fields' => array('user_email'),
+				));
+				foreach ($users as $email) {
+					array_push($emails_send_to, $email->user_email);
+				}
+			}
+		}
+
+		// get users
+		$userstextarea = get_post_meta($offer_id, 'b2bking_category_users_textarea', true);
+		$userarray = explode(',', $userstextarea);
+		foreach ($userarray as $user) {
+			$user = trim($user);
+			if (!empty($user)) {
+				// if email, add directly
+				if (strpos($user, '@') !== false) {
+					array_push($emails_send_to_guest, $user);
+				} else {
+					if (username_exists($user)) {
+						// get email
+						$usertemp = get_user_by('login', $user);
+						array_push($emails_send_to, $usertemp->user_email);
+					}
+				}
+			}
+		}
+
+		foreach ($emails_send_to as $emailad) {
+			do_action('b2bking_new_offer', $emailad, '1', $offer_id, $offer_link);
+		}
+		foreach ($emails_send_to_guest as $emailad) {
+			do_action('b2bking_new_offer', $emailad, '0', $offer_id, $offer_link);
+		}
+
+		echo 'success';
+		exit();
+	}
+
+
+	function b2bking_save_new_ajax_offer_sk()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// get if this is new or edit
+		$newedit = sanitize_text_field($_POST['newedit']);
+		// get offer details
+		$offer_title = sanitize_text_field($_POST['offertitle']);
+		$userid = sanitize_text_field($_POST['userid']);
+		$uservisibility = sanitize_text_field($_POST['uservisibility']);
+		if (!isset($_POST['groupvisibility'])) {
+			$_POST['groupvisibility'] = array();
+		}
+		$groupvisibility = sanitize_text_field($_POST['groupvisibility']);
+		$customtext = sanitize_textarea_field($_POST['customtext']);
+		$offerdetails = sanitize_text_field($_POST['offerdetails']);
+
+		// create new offer if fields not empty
+		if (!empty($offerdetails) && $offerdetails !== NULL) {
+
+			if ($newedit === 'new') {
+				$offer = array(
+					'post_title' => $offer_title,
+					'post_status' => 'publish',
+					'post_type' => 'b2bking_offer',
+					'post_author' => $userid,
+				);
+				$offer_id = wp_insert_post($offer);
+			} else {
+				$offer_id = intval($newedit);
+				// update title
+				$my_post = array(
+					'ID' => $newedit,
+					'post_title' => $offer_title,
+				);
+				// Update the post into the database
+				wp_update_post($my_post);
+			}
+
+			update_post_meta($offer_id, 'b2bking_post_status_enabled', 1);
+
+
+			// Save offer details
+			if ($offerdetails !== NULL && !empty($offerdetails)) {
+				update_post_meta($offer_id, 'b2bking_offer_details', $offerdetails);
+			}
+
+			// Save group visibility 
+			$group_visibility_items = explode(',', $groupvisibility);
+
+			// First set all groups to invisible
+			$groups = get_posts([
+				'post_type' => 'b2bking_group',
+				'post_status' => 'publish',
+				'numberposts' => -1
+			]);
+			foreach ($groups as $group) {
+				update_post_meta($offer_id, 'b2bking_group_' . $group->ID, 0);
+			}
+			// Next set visible groups
+			$group_visibility_items = explode(',', $groupvisibility);
+			foreach ($group_visibility_items as $item) {
+				if (!empty($item) && $item !== NULL) {
+					$item_details = explode('_', $item);
+					update_post_meta($offer_id, 'b2bking_group_' . $item_details[2], 1);
+				}
+			}
+
+			// Save user visibility
+			if ($uservisibility !== NULL) {
+				// get new users list
+				$newusersarray = explode(',', $uservisibility);
+				// set new user meta
+				foreach ($newusersarray as $newuser) {
+					update_post_meta($offer_id, 'b2bking_user_' . sanitize_text_field(trim($newuser)), 1);
+				}
+				// Update users textarea
+				update_post_meta($offer_id, 'b2bking_category_users_textarea', sanitize_text_field($uservisibility));
+			}
+
+			// Save user visibilitycustom text
+			if ($customtext !== NULL) {
+				update_post_meta($offer_id, 'b2bking_offer_customtext_textarea', $customtext);
+			}
+
+			// finally save offer to user list ids
+			if ($newedit === 'new') {
+				update_post_meta($offer_id, 'offer_created_by', get_current_user_id());
+			}
+
+			// message user if response to quote
+			if (isset($_POST['b2bking_quote_response'])) {
+				if (!empty($_POST['b2bking_quote_response'])) {
+					$conversationid = sanitize_text_field($_POST['b2bking_quote_response']);
+					$requester = get_post_meta($conversationid, 'b2bking_quote_requester', true);
+					// verify requester is included in category_Textarea
+					// yes, add message
+					$nr_messages = intval(get_post_meta($conversationid, 'b2bking_conversation_messages_number', true));
+					$current_message_nr = $nr_messages + 1;
+					$message = '----- ' . esc_html__('You have received a new offer in response to your quote request: ', 'b2bking') . '<a href="' . apply_filters('b2bking_offers_link', get_permalink(get_option('woocommerce_myaccount_page_id')) . get_option('b2bking_offers_endpoint_setting', 'offers')) . '">#' . $offer_id . '</a> -----';
+					$cruser = wp_get_current_user();
+					$current_id = get_current_user_id();
+					if (function_exists('marketking')) {
+						if (marketking()->is_vendor_team_member()) {
+							$current_id = marketking()->get_team_member_parent();
+							$cruser = new WP_User($current_id);
+						}
+					}
+
+
+					$currentuser = $cruser->user_login;
+					update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr, $message);
+					update_post_meta($conversationid, 'b2bking_conversation_messages_number', $current_message_nr);
+					update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr . '_author', $currentuser);
+					update_post_meta($conversationid, 'b2bking_conversation_message_' . $current_message_nr . '_time', time());
+
+					// if status is new, change to open
+					$status = get_post_meta($conversationid, 'b2bking_conversation_status', true);
+					if ($status === 'new') {
+						update_post_meta($conversationid, 'b2bking_conversation_status', 'open');
+					}
+
+					if (strpos($requester, '@') !== false) {
+						// ok we have email
+						$recipient = $requester;
+					} else {
+						// get email
+						$userreq = get_user_by('login', $requester);
+						$recipient = $userreq->user_email;
+					}
+
+					do_action('b2bking_new_message', $recipient, $message, $cruser->ID, $conversationid);
+				}
+			}
+
+
+		}
+
+		if (isset($_POST['quoteid'])) {
+			update_post_meta($offer_id, 'quote_request_id', sanitize_text_field($_POST['quoteid']));
+		}
+
+		do_action('salesking_save_new_offer', $offer_id);
+
+		echo esc_html($offer_id);
+		exit();
+	}
+
+	function b2bking_delete_ajax_offer_sk()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$offerid = sanitize_text_field($_POST['offerid']);
+		$userid = sanitize_text_field($_POST['userid']);
+		// check that ID belongs to author
+		if (get_post_meta($offerid, 'offer_created_by', true) == intval($userid) || !apply_filters('salesking_agent_show_only_own_offers', true)) {
+			// delete offer
+			wp_delete_post($offerid);
+		}
+
+		echo 'success';
+		exit();
+	}
+
+	function b2bking_get_offer_data_sk()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// check if this is in response to get quote, and if so, change behaviour
+		$quoteid = '';
+		if (isset($_POST['quoteid'])) {
+			$quoteid = sanitize_text_field($_POST['quoteid']);
+		}
+
+		if (!empty($quoteid)) {
+
+			$conversationid = $quoteid;
+			if (!empty($conversationid)) {
+				$requester = get_post_meta($conversationid, 'b2bking_quote_requester', true);
+				$uservisibility = esc_html($requester);
+
+				$productsstring = get_post_meta($conversationid, 'b2bking_quote_products', true);
+				$offerdetails = esc_html($productsstring);
+			}
+
+			$make_offer_additional_text = apply_filters('salesking_make_offer_additional_text', $conversationid);
+
+			$sendstring = $uservisibility . '*' . '' . '*' . $offerdetails . '*' . $make_offer_additional_text . '*' . '';
+			echo $sendstring;
+
+		} else {
+			$offerid = sanitize_text_field($_POST['offerid']);
+			$userid = sanitize_text_field($_POST['userid']);
+			// check that ID belongs to author
+			if (intval(get_post_meta($offerid, 'offer_created_by', true)) == intval($userid) || !apply_filters('salesking_agent_show_only_own_offers', true)) {
+				// get offer data
+				$uservisibility = get_post_meta($offerid, 'b2bking_category_users_textarea', true);
+				$customtext = get_post_meta($offerid, 'b2bking_offer_customtext_textarea', true);
+				$offerdetails = get_post_meta($offerid, 'b2bking_offer_details', true);
+				$title = get_the_title($offerid);
+				$groupvisibility = '';
+				$groups = get_posts([
+					'post_type' => 'b2bking_group',
+					'post_status' => 'publish',
+					'numberposts' => -1,
+					'fields' => 'ids'
+				]);
+				foreach ($groups as $group) {
+					$visible = get_post_meta($offerid, 'b2bking_group_' . $group, true);
+					if (intval($visible) === 1) {
+						$groupvisibility .= 'b2bking_group_' . $group . ',';
+					}
+				}
+
+				$sendstring = $uservisibility . '*' . $groupvisibility . '*' . $offerdetails . '*' . $customtext . '*' . $title;
+				echo $sendstring;
+			} else {
+				esc_html_e('no permission', 'marketking');
+			}
+		}
+
+
+
+		exit();
+	}
+
+	function saleskingsavepayment()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$amount = sanitize_text_field($_POST['pamount']);
+		$method = sanitize_text_field($_POST['pmethod']);
+		$note = sanitize_text_field($_POST['pnote']);
+		$user_id = sanitize_text_field($_POST['userid']);
+		$havebonus = sanitize_text_field($_POST['bonus']); //bool
+		$havebonus = filter_var($havebonus, FILTER_VALIDATE_BOOLEAN);
+
+
+		// get user history
+		$user_payout_history = sanitize_text_field(get_user_meta($user_id, 'salesking_user_payout_history', true));
+
+		// create transaction
+		$date = date_i18n('Y/m/d', time() + (get_option('gmt_offset') * 3600));
+		$outstanding_balance = get_user_meta($user_id, 'salesking_outstanding_earnings', true);
+		$new_outstanding_balance = floatval($outstanding_balance) - floatval($amount);
+		if ($havebonus === true) {
+			$new_outstanding_balance = $outstanding_balance; // is bonus, so does not count
+		}
+		$transaction_new = $date . ':' . $amount . ':' . $new_outstanding_balance . ':' . $note . ':' . $method;
+
+		// update credit history
+		update_user_meta($user_id, 'salesking_user_payout_history', $user_payout_history . ';' . $transaction_new);
+
+
+		// user balance history start
+		$old_balance = get_user_meta($user_id, 'salesking_outstanding_earnings', true);
+		$new_balance = $new_outstanding_balance;
+		$amount = '- ' . $amount;
+		$date = date_i18n('Y/m/d', time() + (get_option('gmt_offset') * 3600));
+		$note_history = esc_html__('Payout was sent to user.', 'salesking');
+		$user_balance_history = sanitize_text_field(get_user_meta($user_id, 'salesking_user_balance_history', true));
+		$new_entry = $date . ':' . $amount . ':' . $old_balance . ':' . $new_balance . ':' . $note_history;
+		update_user_meta($user_id, 'salesking_user_balance_history', $user_balance_history . ';' . $new_entry);
+		// user balance history end
+
+
+		// update user consumed balance
+		update_user_meta($user_id, 'salesking_outstanding_earnings', $new_outstanding_balance);
+		// send email to user
+		$userdata = get_userdata($user_id);
+		$recipient = $userdata->user_email;
+		do_action('salesking_new_payout', $recipient, $amount, $method, $note);
+
+		echo 'success';
+		exit();
+	}
+
+	function salesking_save_profile_info()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$user_id = get_current_user_id();
+
+		$fn = sanitize_text_field($_POST['firstname']);
+		$ln = sanitize_text_field($_POST['lastname']);
+		$dn = sanitize_text_field($_POST['displayname']);
+		$em = sanitize_text_field($_POST['emailad']);
+
+		update_user_meta($user_id, 'first_name', $fn);
+		update_user_meta($user_id, 'last_name', $ln);
+
+		if (apply_filters('salesking_allow_email_update', true)) {
+			wp_update_user(array('ID' => $user_id, 'display_name' => $dn, 'user_email' => $em));
+		} else {
+			wp_update_user(array('ID' => $user_id, 'display_name' => $dn));
+		}
+
+		echo 'success';
+		exit();
+	}
+
+
+	function salesking_save_profile_settings()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$user_id = sanitize_text_field($_POST['userid']);
+
+		$ann = sanitize_text_field($_POST['announcementsemails']);
+		$msg = sanitize_text_field($_POST['messagesemails']);
+		$ann = filter_var($ann, FILTER_VALIDATE_BOOLEAN);
+		$msg = filter_var($msg, FILTER_VALIDATE_BOOLEAN);
+
+		if ($ann === true) {
+			update_user_meta($user_id, 'salesking_receive_new_announcements_emails', 'yes');
+		} else {
+			update_user_meta($user_id, 'salesking_receive_new_announcements_emails', 'no');
+		}
+
+		if ($msg === true) {
+			update_user_meta($user_id, 'salesking_receive_new_messages_emails', 'yes');
+		} else {
+			update_user_meta($user_id, 'salesking_receive_new_messages_emails', 'no');
+		}
+
+		echo 'success';
+		exit();
+	}
+
+	function saleskingsaveinfo()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$user_id = get_current_user_id();
+
+		$method = sanitize_text_field($_POST['chosenmethod']);
+		update_user_meta($user_id, 'salesking_agent_selected_payout_method', $method);
+
+		$paypalemail = '';
+		$custominfo = '';
+		if (isset($_POST['paypal'])) {
+			$paypalemail = sanitize_text_field($_POST['paypal']);
+		}
+		if (isset($_POST['custom'])) {
+			$custominfo = sanitize_text_field($_POST['custom']);
+		}
+
+		$fullname = sanitize_text_field($_POST['fullname']);
+		$billingaddress1 = sanitize_text_field($_POST['billingaddress1']);
+		$billingaddress2 = sanitize_text_field($_POST['billingaddress2']);
+		$city = sanitize_text_field($_POST['city']);
+		$state = sanitize_text_field($_POST['state']);
+		$postcode = sanitize_text_field($_POST['postcode']);
+		$country = sanitize_text_field($_POST['country']);
+		$bank_account_holder_name = sanitize_text_field($_POST['bankholdername']);
+		$bank_account_number = sanitize_text_field($_POST['bankaccountnumber']);
+		$branchcity = sanitize_text_field($_POST['branchcity']);
+		$branchcountry = sanitize_text_field($_POST['branchcountry']);
+		$intermediarycode = sanitize_text_field($_POST['intermediarycode']);
+		$intermediaryname = sanitize_text_field($_POST['intermediaryname']);
+		$intermediarycity = sanitize_text_field($_POST['intermediarycity']);
+		$intermediarycountry = sanitize_text_field($_POST['intermediarycountry']);
+
+		$linkedinfo = $paypalemail . '**&&' . $custominfo . '**&&' . $fullname . '**&&' . $billingaddress1 . '**&&' . $billingaddress2 . '**&&' . $city . '**&&' . $state . '**&&' . $postcode . '**&&' . $country . '**&&' . $bank_account_holder_name . '**&&' . $bank_account_number . '**&&' . $branchcity . '**&&' . $branchcountry . '**&&' . $intermediarycode . '**&&' . $intermediaryname . '**&&' . $intermediarycity . '**&&' . $intermediarycountry;
+
+		update_user_meta($user_id, 'salesking_payout_info', base64_encode($linkedinfo));
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingaddsubagent()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		// remove google captcha
+		remove_action('woocommerce_register_post', 'advanced_google_recaptcha_check_woo_register_form', 10, 3);
+		remove_action('woocommerce_register_post', 'rcfwc_woo_register_check', 10, 3);
+
+		$firstname = sanitize_text_field($_POST['firstname']);
+		$lastname = sanitize_text_field($_POST['lastname']);
+		$phoneno = sanitize_text_field($_POST['phoneno']);
+		$username = sanitize_text_field($_POST['username']);
+		$emailaddress = sanitize_text_field($_POST['emailaddress']);
+		$password = sanitize_text_field($_POST['password']);
+		$agent_id = get_current_user_id();
+
+		$user_id = wp_create_user($username, $password, $emailaddress);
+
+
+		if (!(is_wp_error($user_id))) {
+			// no errors, proceed
+			// set user meta
+			update_user_meta($user_id, 'billing_first_name', $firstname);
+			update_user_meta($user_id, 'shipping_first_name', $firstname);
+			update_user_meta($user_id, 'first_name', $firstname);
+
+			update_user_meta($user_id, 'billing_last_name', $lastname);
+			update_user_meta($user_id, 'shipping_last_name', $lastname);
+			update_user_meta($user_id, 'last_name', $lastname);
+
+			update_user_meta($user_id, 'billing_phone', $phoneno);
+			update_user_meta($user_id, 'shipping_phone', $phoneno);
+
+			// set assigned agent
+			update_user_meta($user_id, 'salesking_parent_agent', $agent_id);
+			$parentaggroup = get_user_meta($agent_id, 'salesking_group', true);
+			update_user_meta($user_id, 'salesking_group', $parentaggroup);
+			update_user_meta($user_id, 'salesking_user_choice', 'agent');
+			update_user_meta($user_id, 'salesking_assigned_agent', 'none');
+
+			$userobj = new WP_User($user_id);
+			$userobj->set_role('customer');
+
+			$parent_agent_id = $agent_id;
+			do_action('salesking_after_subagent_created', $user_id, $parent_agent_id, $parentaggroup);
+
+			add_filter('wp_new_user_notification_email', 'edit_user_notification_email', 10, 3);
+
+			function edit_user_notification_email($wp_new_user_notification_email, $user, $blogname)
+			{
+
+				$message = sprintf(esc_html__("Your sales agent account for %s has been created! Here are your login details:", 'salesking'), $blogname) . "\r\n\r\n";
+				$message .= trailingslashit(get_page_link(apply_filters('wpml_object_id', get_option('salesking_agents_page_setting', 'disabled'), 'post', true))) . "\r\n";
+				$message .= sprintf(esc_html__('Username: %s', 'salesking'), $user->user_login) . "\r\n";
+				$message .= sprintf(esc_html__('Password: %s', 'salesking'), sanitize_text_field($_POST['password'])) . "\r\n\r\n";
+
+
+				$key = get_password_reset_key($user);
+				if (is_wp_error($key)) {
+					return $wp_new_user_notification_email;
+				}
+
+				$switched_locale = switch_to_locale(get_user_locale($user));
+
+				/* translators: %s: User login. */
+				if (apply_filters('salesking_allow_team_new_password', true)) {
+					$message .= esc_html__('To set a new password, visit the following address:', 'salesking') . "\r\n\r\n";
+					$message .= apply_filters('salesking_email_new_password_link', network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login') . "\r\n\r\n", $key, $user->user_login);
+				}
+
+
+				$wp_new_user_notification_email['message'] = $message;
+
+				$wp_new_user_notification_email = array(
+					'to' => $user->user_email,
+					/* translators: Login details notification email subject. %s: Site title. */
+					'subject' => __('Your %s sales agent account details'),
+					'message' => $message,
+					'headers' => '',
+				);
+
+				return $wp_new_user_notification_email;
+
+			}
+
+			// Sent email
+			wp_new_user_notification($user_id, null, 'user');
+
+
+			echo $user_id;
+			echo 'success';
+
+		} else {
+			echo 'error' . $user_id->get_error_message();
+		}
+
+
+		exit();
+	}
+
+	function saleskingaddcustomer()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		// wp armour / honeypot checks for spam
+		if (isset($GLOBALS['wpa_field_name'])) {
+			unset($GLOBALS['wpa_field_name']);
+		}
+		remove_filter('woocommerce_registration_errors', 'wpa_woocommerce_register_validation', 10, 3);
+		remove_filter('uwp_validate_result', 'wpae_userswp_extra_validation', 10, 3);
+
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		// remove google captcha
+		remove_action('woocommerce_register_post', 'advanced_google_recaptcha_check_woo_register_form', 10, 3);
+		remove_action('woocommerce_register_post', 'rcfwc_woo_register_check', 10, 3);
+
+		$firstname = sanitize_text_field($_POST['firstname']);
+		$lastname = sanitize_text_field($_POST['lastname']);
+		$companyname = sanitize_text_field($_POST['companyname']);
+		$country = sanitize_text_field($_POST['country']);
+		$state = sanitize_text_field($_POST['state']);
+		$streetaddress = sanitize_text_field($_POST['streetaddress']);
+		if (isset($_POST['streetaddress2'])) {
+			$streetaddress2 = sanitize_text_field($_POST['streetaddress2']);
+		}
+		$towncity = sanitize_text_field($_POST['towncity']);
+		$postcodezip = sanitize_text_field($_POST['postcodezip']);
+		$phoneno = sanitize_text_field($_POST['phoneno']);
+		$username = apply_filters('salesking_filter_newcustomer_username', sanitize_text_field($_POST['username']));
+		$emailaddress = apply_filters('salesking_filter_newcustomer_email', sanitize_text_field($_POST['emailaddress']));
+		$password = apply_filters('salesking_filter_newcustomer_password', sanitize_text_field($_POST['password']));
+		$agent_id = get_current_user_id();
+
+		if (apply_filters('salesking_agent_new_customer_remove_email', false)) {
+			add_filter('woocommerce_email_enabled_customer_new_account', '__return_false', 1000);
+			add_filter('wp_new_user_notification_email', 'my_new_user_notification_email', 1000, 3);
+
+			function my_new_user_notification_email($wp_new_user_notification_email, $user, $blogname)
+			{
+				$wp_new_user_notification_email['to'] = '';
+				$wp_new_user_notification_email['message'] = '';
+				$wp_new_user_notification_email['headers'] = '';
+				return $wp_new_user_notification_email;
+			}
+		}
+
+		$user_id = wc_create_new_customer($emailaddress, $username, $password);
+
+		if (apply_filters('salesking_agent_new_customer_remove_email', false)) {
+			remove_filter('woocommerce_email_enabled_customer_new_account', '__return_false', 1000);
+			remove_filter('wp_new_user_notification_email', 'my_new_user_notification_email', 10, 3);
+		}
+
+		if (!(is_wp_error($user_id))) {
+			// no errors, proceed
+
+			if (apply_filters('salesking_show_b2bking_groups_new_customer', true)) {
+				if (isset($_POST['b2bkinggroup'])) {
+					$b2bkinggroup = sanitize_text_field($_POST['b2bkinggroup']);
+					update_user_meta($user_id, 'b2bking_customergroup', $b2bkinggroup);
+
+					if ($b2bkinggroup === 'b2c') {
+						update_user_meta($user_id, 'b2bking_b2buser', 'no');
+						update_user_meta($user_id, 'b2bking_customergroup', 'no');
+					} else {
+						update_user_meta($user_id, 'b2bking_b2buser', 'yes');
+					}
+
+				}
+
+			}
+
+			if (apply_filters('salesking_show_b2bwhs_groups_new_customer', true)) {
+				if (isset($_POST['b2bwhsgroup'])) {
+					$b2bkinggroup = sanitize_text_field($_POST['b2bwhsgroup']);
+
+					update_user_meta($user_id, 'b2bwhs_customergroup', $b2bkinggroup);
+
+					if ($b2bkinggroup === 'b2c') {
+						update_user_meta($user_id, 'b2bwhs_b2buser', 'no');
+						update_user_meta($user_id, 'b2bwhs_customergroup', 'no');
+					} else {
+						update_user_meta($user_id, 'b2bwhs_b2buser', 'yes');
+					}
+				}
+
+			}
+
+			// set user meta
+			update_user_meta($user_id, 'billing_first_name', $firstname);
+			update_user_meta($user_id, 'first_name', $firstname);
+			update_user_meta($user_id, 'shipping_first_name', $firstname);
+
+			update_user_meta($user_id, 'billing_last_name', $lastname);
+			update_user_meta($user_id, 'last_name', $lastname);
+			update_user_meta($user_id, 'shipping_last_name', $lastname);
+
+			update_user_meta($user_id, 'billing_company', $companyname);
+			update_user_meta($user_id, 'shipping_company', $companyname);
+
+			update_user_meta($user_id, 'billing_country', $country);
+			update_user_meta($user_id, 'shipping_country', $country);
+
+			update_user_meta($user_id, 'billing_state', $state);
+			update_user_meta($user_id, 'shipping_state', $state);
+
+			update_user_meta($user_id, 'billing_address_1', $streetaddress);
+			update_user_meta($user_id, 'shipping_address_1', $streetaddress);
+
+			if (isset($_POST['streetaddress2'])) {
+				update_user_meta($user_id, 'billing_address_2', $streetaddress2);
+				update_user_meta($user_id, 'shipping_address_2', $streetaddress2);
+			}
+
+			update_user_meta($user_id, 'billing_city', $towncity);
+			update_user_meta($user_id, 'shipping_city', $towncity);
+
+			update_user_meta($user_id, 'billing_postcode', $postcodezip);
+			update_user_meta($user_id, 'shipping_postcode', $postcodezip);
+
+			update_user_meta($user_id, 'billing_phone', $phoneno);
+			update_user_meta($user_id, 'shipping_phone', $phoneno);
+
+			// custom fields from b2bking
+			if (isset($_POST['customfields'])) {
+				$customfields = sanitize_text_field($_POST['customfields']);
+				$fieldsarray = explode(',', $customfields);
+				foreach ($fieldsarray as $field_id) {
+					if (!empty($field_id)) {
+						$field_value = sanitize_text_field($_POST[$field_id]);
+						update_user_meta($user_id, 'b2bking_custom_field_' . $field_id, $field_value);
+						update_user_meta($user_id, 'b2bwhs_custom_field_' . $field_id, $field_value);
+
+						$afield_billing_connection = get_post_meta($field_id, 'b2bking_custom_field_billing_connection', true);
+						$bfield_billing_connection = get_post_meta($field_id, 'b2bwhs_custom_field_billing_connection', true);
+						if ($afield_billing_connection === 'custom_mapping') {
+							$mapping_key = get_post_meta($field_id, 'b2bking_custom_field_mapping', true);
+							update_user_meta($user_id, $mapping_key, $field_value);
+						}
+						if ($bfield_billing_connection === 'custom_mapping') {
+							$mapping_key = get_post_meta($field_id, 'b2bwhs_custom_field_mapping', true);
+							update_user_meta($user_id, $mapping_key, $field_value);
+						}
+
+					}
+				}
+			}
+
+			// set assigned agent
+			update_user_meta($user_id, 'salesking_assigned_agent', $agent_id);
+
+			$userobj = new WP_User($user_id);
+			$userobj->set_role('customer');
+
+			// Set b2bking role (after customer role is set, since set_role removes all existing roles)
+			if (apply_filters('salesking_show_b2bking_groups_new_customer', true)) {
+				if (isset($_POST['b2bkinggroup'])) {
+					$b2bkinggroup = sanitize_text_field($_POST['b2bkinggroup']);
+
+					if (apply_filters('b2bking_use_wp_roles', false)) {
+						// add role
+						$userobj->add_role('b2bking_role_' . $b2bkinggroup);
+
+						if (apply_filters('b2bking_use_wp_roles_only_b2b', false)) {
+							$userobj->set_role('b2bking_role_' . $b2bkinggroup);
+						}
+					}
+				}
+			}
+
+			do_action('salesking_after_customer_created', $user_id);
+
+			// Sent email
+			if (apply_filters('salesking_allow_customer_new_password', true)) {
+				wp_new_user_notification($user_id, null, 'user');
+			}
+
+			echo $user_id;
+		} else {
+			echo 'error' . $user_id->get_error_message();
+		}
+
+
+		echo 'success';
+		exit();
+	}
+
+
+	function saleskingcreatecart()
+	{
+
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+
+		$cartname = sanitize_text_field($_POST['name']);
+		// replace whitespaces with dashes
+		$cartname = preg_replace('/\s+/', '-', $cartname);
+		// if cartname exists, add characters until it does not exist
+		$confirmed_unique = 'no';
+		while ($confirmed_unique === 'no') {
+			$confirmed_unique = 'yes';
+			// check current cart names
+			$current_carts = get_user_meta(get_current_user_id(), 'salesking_agent_carts', true);
+			$carts_array = explode('AAAENDAAA', $current_carts);
+			foreach ($carts_array as $cart) {
+				$cartnametemp = explode('AAANAMEAAA', $cart)[0];
+				if ($cartname === $cartnametemp) {
+
+					// already exists, change cart name
+					$characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+					$cartname .= $characters[mt_rand(0, 61)];
+
+					$confirmed_unique = 'no';
+					break;
+				}
+			}
+		}
+
+		// Get new cart content
+		$cart_session = array();
+		$cart_session['cart'] = WC()->session->cart;
+		$cart_session['cart_totals'] = WC()->session->cart_totals;
+		$cart_session['applied_coupons'] = WC()->session->applied_coupons;
+		update_option('salesking_' . $cartname, $cart_session, false);
+		// get new finish
+
+
+		// Get Cart Contents
+		$items = WC()->cart->get_cart();
+		$cart_string = $cartname . 'AAANAMEAAA';
+
+		foreach ($items as $item => $values) {
+			$id = $values['data']->get_id();
+			$quantity = $values['quantity'];
+
+			if (!empty($values['variation'])) {
+				$variationdata = serialize($values['variation']);
+				$quantity = $quantity . '+++' . $variationdata;
+			}
+
+			$cart_string .= $id . ':::' . $quantity . ';;;';
+
+		}
+
+		$cart_string .= 'AAAENDAAA';
+
+		if (count($items) > 0) {
+			// Save Cart in User Meta
+			$current_value = get_user_meta(get_current_user_id(), 'salesking_agent_carts', true);
+			update_user_meta(get_current_user_id(), 'salesking_agent_carts', $current_value . $cart_string);
+		}
+
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingdeletecart()
+	{
+
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+
+		$cartname = sanitize_text_field($_POST['name']);
+
+		$current_value = get_user_meta(get_current_user_id(), 'salesking_agent_carts', true);
+		$carts = explode('AAAENDAAA', $current_value);
+		foreach ($carts as $index => $cart) {
+			$cart_string = explode('AAANAMEAAA', $cart);
+			$cartnametemp = $cart_string[0];
+			if ($cartnametemp === $cartname) {
+				// found it, must delete it
+				unset($carts[$index]);
+				break;
+			}
+		}
+		// rebuild string
+		$new_string = '';
+		foreach ($carts as $cart) {
+			$new_string .= $cart . 'AAAENDAAA';
+		}
+
+		update_user_meta(get_current_user_id(), 'salesking_agent_carts', $new_string);
+
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingsavecoupon()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+
+		$couponcode = sanitize_text_field($_POST['couponcode']);
+		$expirydate = sanitize_text_field($_POST['expirydate']);
+		$minspend = sanitize_text_field($_POST['minspend']);
+		$maxspend = sanitize_text_field($_POST['maxspend']);
+		$discount = sanitize_text_field($_POST['discount']);
+		$limit = sanitize_text_field($_POST['limit']);
+
+		// check if user didn't cheat discount amount
+		$user_id = get_current_user_id();
+		$agent_group = get_user_meta($user_id, 'salesking_group', true);
+		$allowed_discount = get_user_meta($user_id, 'salesking_group_max_discount', true);
+		if (empty($allowed_discount) || !($allowed_discount)) {
+			$group_discount = get_post_meta($agent_group, 'salesking_group_max_discount', true);
+			$allowed_discount = $group_discount;
+		}
+		if (empty($allowed_discount) || !($allowed_discount)) {
+			$allowed_discount = 1;
+		}
+		if ($discount > $allowed_discount) {
+			$discount = $allowed_discount;
+		}
+
+
+		// if coupon exists (is valid), add characters until is not valid
+		$coupon_exists = get_posts(
+			array(
+				'post_type' => 'shop_coupon', // only conversations
+				'post_status' => 'publish',
+				'numberposts' => -1,
+				'fields' => 'ids',
+				'title' => $couponcode,
+			)
+		);
+
+		while (!empty($coupon_exists)) {
+			$characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+			$couponcode .= $characters[mt_rand(0, 61)];
+			$coupon_exists = get_posts(
+				array(
+					'post_type' => 'shop_coupon', // only conversations
+					'post_status' => 'publish',
+					'numberposts' => -1,
+					'fields' => 'ids',
+					'title' => $couponcode,
+				)
+			);
+		}
+		;
+
+
+		$coupon = array(
+			'post_title' => $couponcode,
+			'post_content' => '',
+			'post_status' => 'publish',
+			'post_author' => 1,
+			'post_type' => 'shop_coupon'
+		);
+
+		$new_coupon_id = wp_insert_post($coupon);
+
+		// Add meta
+		update_post_meta($new_coupon_id, 'discount_type', 'percent');
+		update_post_meta($new_coupon_id, 'coupon_amount', $discount);
+		update_post_meta($new_coupon_id, 'individual_use', 'no');
+		update_post_meta($new_coupon_id, 'product_ids', '');
+		update_post_meta($new_coupon_id, 'exclude_product_ids', '');
+		if (!empty($limit)) {
+			update_post_meta($new_coupon_id, 'usage_limit', $limit);
+		}
+
+		update_post_meta($new_coupon_id, 'date_expires', strtotime($expirydate));
+		update_post_meta($new_coupon_id, 'apply_before_tax', 'yes');
+		update_post_meta($new_coupon_id, 'free_shipping', 'no');
+		if (!empty($minspend)) {
+			update_post_meta($new_coupon_id, 'minimum_amount', $minspend);
+		}
+		if (!empty($maxspend)) {
+			update_post_meta($new_coupon_id, 'maximum_amount', $maxspend);
+		}
+
+		$exclude = sanitize_text_field($_POST['exclude']);
+		$exclude = filter_var($exclude, FILTER_VALIDATE_BOOLEAN);
+
+		$allowfree = sanitize_text_field($_POST['allowfree']);
+		$allowfree = filter_var($allowfree, FILTER_VALIDATE_BOOLEAN);
+
+
+		if ($exclude === true) {
+			update_post_meta($new_coupon_id, 'exclude_sale_items', 'yes');
+		} else {
+			update_post_meta($new_coupon_id, 'exclude_sale_items', 'no');
+		}
+
+
+		if ($allowfree === true) {
+			update_post_meta($new_coupon_id, 'free_shipping', 'yes');
+		} else {
+			update_post_meta($new_coupon_id, 'free_shipping', 'no');
+		}
+
+
+		update_post_meta($new_coupon_id, 'salesking_agent', get_current_user_id());
+
+		do_action('salesking_created_agent_coupon', $new_coupon_id);
+
+
+		echo 'success';
+		exit();
+
+	}
+
+	function saleskingdeletecoupon()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+
+		// check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$coupon_id = sanitize_text_field($_POST['couponpostid']);
+
+		// verify that author has this coupon
+		$coupon_author = get_post_meta($coupon_id, 'salesking_agent', true);
+
+		if (empty($coupon_author)) {
+			$coupon_author = -1;
+		}
+
+		if (intval($coupon_author) === $agent_id) {
+			wp_delete_post($coupon_id);
+		}
+
+		echo 'success';
+		exit();
+
+	}
+
+	/**
+	 * Save order changes from frontend management
+	 */
+	function salesking_save_order()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+
+		// Check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$order_id = sanitize_text_field($_POST['order_id']);
+		$order_status = sanitize_text_field($_POST['order_status']);
+
+		$order = wc_get_order($order_id);
+		if (!$order) {
+			wp_send_json_error('Order not found');
+			wp_die();
+		}
+
+		// Check if current user is assigned to this order or can see all orders
+		$assigned_agent = $order->get_meta('salesking_assigned_agent');
+		if (apply_filters('salesking_check_order_access_on_edit', true)) {
+			if (intval($assigned_agent) !== intval($agent_id) && !apply_filters('salesking_agents_see_all_orders', false)) {
+				wp_send_json_error('Access denied');
+				wp_die();
+			}
+		}
+
+		// Update order status
+		$order->set_status($order_status);
+		$order->save();
+
+		// Add order note
+		if (apply_filters('salesking_add_agent_change_status_none', false)) {
+			$order->add_order_note(
+				sprintf(
+					esc_html__('Order status changed to %s by agent %s', 'salesking'),
+					wc_get_order_status_name($order_status),
+					get_userdata($agent_id)->display_name
+				)
+			);
+		}
+
+		do_action('salesking_order_updated_by_agent', $order_id, $order_status, $agent_id);
+
+		wp_send_json_success(array(
+			'message' => esc_html__('Order updated successfully', 'salesking'),
+			'redirect' => trailingslashit(get_page_link(get_option('salesking_agents_page_setting', 'disabled'))) . 'manage-order/' . $order_id . '?update=success'
+		));
+	}
+
+	/**
+	 * Add order note from frontend management - Simple custom implementation
+	 */
+	function salesking_add_order_note()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+
+		// Check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$order_id = sanitize_text_field($_POST['order_id']);
+		$note = sanitize_textarea_field($_POST['note']);
+		$note_type = sanitize_text_field($_POST['note_type']);
+
+		// Check if current user is assigned to this order or can see all orders
+		$assigned_agent = get_post_meta($order_id, 'salesking_assigned_agent', true);
+		if (intval($assigned_agent) !== intval($agent_id) && !apply_filters('salesking_agents_see_all_orders', false)) {
+			wp_send_json_error('Access denied');
+			wp_die();
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order) {
+			wp_send_json_error('Order not found');
+			wp_die();
+		}
+
+		// Add order note
+		$order->add_order_note($note, $note_type === 'customer');
+
+		do_action('salesking_order_note_added_by_agent', $order_id, $note, $agent_id);
+
+		wp_send_json_success(array(
+			'message' => esc_html__('Order note added successfully', 'salesking')
+		));
+	}
+
+	/**
+	 * Delete order note from frontend management
+	 */
+	function salesking_delete_order_note()
+	{
+		// Check security nonce. 
+		if (!check_ajax_referer('salesking_security_nonce', 'security')) {
+			wp_send_json_error('Invalid security token sent.');
+			wp_die();
+		}
+
+		$agent_id = get_current_user_id();
+
+		// Check that current user is agent
+		$agent_group = get_user_meta($agent_id, 'salesking_group', true);
+		if ($agent_group === 'none' && empty($agent_group)) {
+			wp_die();
+		}
+
+		$order_id = sanitize_text_field($_POST['order_id']);
+		$note_id = intval($_POST['note_id']);
+
+		// Check if current user is assigned to this order or can see all orders
+		$assigned_agent = get_post_meta($order_id, 'salesking_assigned_agent', true);
+		if (intval($assigned_agent) !== intval($agent_id) && !apply_filters('salesking_agents_see_all_orders', false)) {
+			wp_send_json_error('Access denied');
+			wp_die();
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order) {
+			wp_send_json_error('Order not found');
+			wp_die();
+		}
+
+		// Delete the order note using WooCommerce function
+		$deleted = wc_delete_order_note($note_id);
+
+		if (!$deleted) {
+			wp_send_json_error('Failed to delete note');
+			wp_die();
+		}
+
+		do_action('salesking_order_note_deleted_by_agent', $order_id, $note_id, $agent_id);
+
+		wp_send_json_success(array(
+			'message' => esc_html__('Order note deleted successfully', 'salesking')
+		));
+	}
+
+
+
+}
+
