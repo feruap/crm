@@ -29,6 +29,16 @@ interface Message {
     handled_by: 'bot' | 'human' | null;
 }
 
+type EscalationPriority = 'critical' | 'high' | 'medium' | 'low';
+
+interface EscalationAlertPayload {
+    conversationId: string;
+    priority: EscalationPriority;
+    customerName: string;
+    reason: string;
+    slaDeadline: string;
+}
+
 interface Conversation {
     id: string;
     customer_name: string;
@@ -45,6 +55,51 @@ interface Conversation {
     agent_name?: string | null;
     is_starred?: boolean;
     conversation_label?: string;
+    escalation_priority?: EscalationPriority | null;
+    sla_deadline?: string | null;
+    sla_breached?: boolean;
+}
+
+// ── Priority helpers ───────────────────────────────────────────────────────────
+const PRIORITY_LABEL: Record<EscalationPriority, string> = {
+    critical: 'CRÍTICO',
+    high: 'ALTO',
+    medium: 'MEDIO',
+    low: 'BAJO',
+};
+
+const PRIORITY_CLASSES: Record<EscalationPriority, string> = {
+    critical: 'bg-red-100 text-red-700 border border-red-300',
+    high: 'bg-orange-100 text-orange-700 border border-orange-300',
+    medium: 'bg-yellow-100 text-yellow-700 border border-yellow-300',
+    low: 'bg-slate-100 text-slate-600 border border-slate-200',
+};
+
+function SlaCountdown({ deadline, breached }: { deadline: string; breached?: boolean }) {
+    const [secsLeft, setSecsLeft] = React.useState(() =>
+        Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000))
+    );
+    useEffect(() => {
+        if (breached) return;
+        const id = setInterval(() => {
+            const left = Math.max(0, Math.floor((new Date(deadline).getTime() - Date.now()) / 1000));
+            setSecsLeft(left);
+        }, 1000);
+        return () => clearInterval(id);
+    }, [deadline, breached]);
+
+    if (breached || secsLeft === 0) {
+        return <span className="text-xs font-bold text-red-600 animate-pulse">⚠ SLA ROTO</span>;
+    }
+    const mins = Math.floor(secsLeft / 60);
+    const secs = secsLeft % 60;
+    const isUrgent = secsLeft < 60;
+    return (
+        <span className={`text-xs font-mono ${isUrgent ? 'text-red-600 font-bold animate-pulse' : 'text-orange-600'}`}>
+            <Clock className="w-3 h-3 inline mr-0.5" />
+            {mins}:{secs.toString().padStart(2, '0')}
+        </span>
+    );
 }
 
 // ── Filter state ──────────────────────────────────────────────────────────────
@@ -127,7 +182,8 @@ export default function InboxPage() {
     const assignDropdownRef = useRef<HTMLDivElement>(null);
 
     const bottomRef = useRef<HTMLDivElement>(null);
-    const { joinConversation, leaveConversation, onNewMessage, onConversationListUpdated } = useSocket();
+    const [escalationAlert, setEscalationAlert] = React.useState<EscalationAlertPayload | null>(null);
+    const { joinConversation, leaveConversation, onNewMessage, onConversationListUpdated, onEscalationAlert } = useSocket();
 
     // ── Load conversations when filters change ─────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -218,6 +274,17 @@ export default function InboxPage() {
             loadConversations();
         });
     }, [onConversationListUpdated, loadConversations]);
+
+    // ── High-priority escalation alerts ───────────────────────────────────────
+    useEffect(() => {
+        return onEscalationAlert((payload: EscalationAlertPayload) => {
+            setEscalationAlert(payload);
+            // Auto-dismiss after 30s
+            setTimeout(() => setEscalationAlert(a => a?.conversationId === payload.conversationId ? null : a), 30000);
+            // Update conversation list to refresh SLA data
+            loadConversations();
+        });
+    }, [onEscalationAlert, loadConversations]);
 
     // ── Scroll to bottom on new messages ──────────────────────────────────────
     useEffect(() => {
@@ -509,6 +576,29 @@ export default function InboxPage() {
 
     return (
         <div className="flex h-full relative">
+            {/* ── Escalation Alert Banner ── */}
+            {escalationAlert && (
+                <div className={`absolute top-0 left-0 right-0 z-50 flex items-center gap-3 px-4 py-2.5 shadow-lg
+                    ${escalationAlert.priority === 'critical'
+                        ? 'bg-red-600 text-white animate-pulse'
+                        : 'bg-orange-500 text-white'}`}>
+                    <Zap className="w-4 h-4 shrink-0" />
+                    <span className="font-bold text-sm uppercase">{PRIORITY_LABEL[escalationAlert.priority]}:</span>
+                    <span className="text-sm flex-1">
+                        {escalationAlert.customerName} — {escalationAlert.reason}
+                    </span>
+                    <button
+                        onClick={() => { setSelected(escalationAlert.conversationId); setEscalationAlert(null); }}
+                        className="text-xs underline font-semibold whitespace-nowrap hover:no-underline"
+                    >
+                        Ver ahora
+                    </button>
+                    <button onClick={() => setEscalationAlert(null)} className="ml-2 opacity-70 hover:opacity-100">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+
             {/* ── Column 1: Conversation list ── */}
             <div className="w-72 shrink-0 border-r bg-white flex flex-col">
                 {/* Header + search */}
@@ -600,15 +690,17 @@ export default function InboxPage() {
                             key={c.id}
                             onClick={() => setSelected(c.id)}
                             className={`w-full text-left px-4 py-3 border-b flex items-start gap-3 hover:bg-slate-50 transition-colors
-                                ${selected === c.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}
+                                ${selected === c.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}
+                                ${c.escalation_priority === 'critical' ? 'border-l-4 border-l-red-500 bg-red-50' : ''}
+                                ${c.escalation_priority === 'high' && selected !== c.id ? 'border-l-4 border-l-orange-400' : ''}`}
                         >
                             <div className={`w-9 h-9 rounded-full ${PROVIDER_COLOR[c.channel_provider] ?? 'bg-slate-400'} flex items-center justify-center text-white font-bold text-sm shrink-0`}>
                                 {c.customer_name?.[0] ?? '?'}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between gap-1">
                                     <span className="text-sm font-semibold text-slate-800 truncate">{c.customer_name}</span>
-                                    <span className="text-xs text-slate-400 shrink-0 ml-1">
+                                    <span className="text-xs text-slate-400 shrink-0">
                                         {c.last_message_at
                                             ? new Date(c.last_message_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })
                                             : ''}
@@ -621,11 +713,21 @@ export default function InboxPage() {
                                         {PLATFORM_EMOJI[c.campaign_platform ?? '']} {c.campaign_name}
                                     </p>
                                 )}
-                                <span className={`text-xs flex items-center gap-0.5 mt-0.5 ${(c as any).handled_by === 'bot' ? 'text-purple-500' : 'text-slate-400'}`}>
-                                    {(c as any).handled_by === 'bot'
-                                        ? <><Bot className="w-3 h-3" />Bot</>
-                                        : <><User className="w-3 h-3" />{c.agent_name ?? 'Agente'}</>}
-                                </span>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className={`text-xs flex items-center gap-0.5 ${(c as any).handled_by === 'bot' ? 'text-purple-500' : 'text-slate-400'}`}>
+                                        {(c as any).handled_by === 'bot'
+                                            ? <><Bot className="w-3 h-3" />Bot</>
+                                            : <><User className="w-3 h-3" />{c.agent_name ?? 'Agente'}</>}
+                                    </span>
+                                    {c.escalation_priority && (
+                                        <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${PRIORITY_CLASSES[c.escalation_priority]}`}>
+                                            {PRIORITY_LABEL[c.escalation_priority]}
+                                        </span>
+                                    )}
+                                    {c.sla_deadline && (
+                                        <SlaCountdown deadline={c.sla_deadline} breached={c.sla_breached} />
+                                    )}
+                                </div>
                                 {(c as any).is_starred && <Star className="w-3 h-3 text-amber-400 fill-amber-400 absolute right-4 bottom-3" />}
                             </div>
                             {c.unread_count > 0 && (
@@ -649,7 +751,17 @@ export default function InboxPage() {
 
                         {/* Name + meta */}
                         <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-800">{conv.customer_name}</p>
+                            <div className="flex items-center gap-2">
+                                <p className="font-semibold text-slate-800">{conv.customer_name}</p>
+                                {conv.escalation_priority && (
+                                    <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${PRIORITY_CLASSES[conv.escalation_priority]}`}>
+                                        {PRIORITY_LABEL[conv.escalation_priority]}
+                                    </span>
+                                )}
+                                {conv.sla_deadline && (
+                                    <SlaCountdown deadline={conv.sla_deadline} breached={conv.sla_breached} />
+                                )}
+                            </div>
                             <p className="text-xs text-slate-500 flex items-center gap-2 capitalize">
                                 {conv.channel_provider} · {conv.status}
                                 {conv.campaign_name && (
