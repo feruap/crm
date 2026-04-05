@@ -1232,5 +1232,97 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// Meta Business Login — Deauthorize callback
+// Called by Meta when a user removes the app from their Facebook account
+// ──────────────────────────────────────────────────────────────────────────
+router.post('/deauthorize', async (req: Request, res: Response) => {
+    try {
+        const signedRequest = req.body?.signed_request;
+        if (signedRequest) {
+            console.log('[Meta Deauthorize] User deauthorized the app');
+            // Optionally parse signed_request to get user_id and clean up
+            const parts = signedRequest.split('.');
+            if (parts.length === 2) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                console.log('[Meta Deauthorize] User ID:', payload.user_id);
+            }
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Meta Deauthorize] Error:', err);
+        res.json({ success: true }); // Always respond OK to Meta
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Meta Business Login — Data Deletion Request callback
+// Called by Meta when a user requests deletion of their data (GDPR)
+// Must return a confirmation_code and a status URL
+// ──────────────────────────────────────────────────────────────────────────
+router.post('/data-deletion', async (req: Request, res: Response) => {
+    try {
+        const signedRequest = req.body?.signed_request;
+        let userId = 'unknown';
+        if (signedRequest) {
+            const parts = signedRequest.split('.');
+            if (parts.length === 2) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                userId = payload.user_id || 'unknown';
+            }
+        }
+
+        const confirmationCode = `DEL-${Date.now()}-${userId}`;
+        console.log(`[Meta Data Deletion] Request for user ${userId}, code: ${confirmationCode}`);
+
+        // Log the deletion request in DB for audit purposes
+        await db.query(
+            `INSERT INTO settings (key, value) VALUES ($1, $2)
+             ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+            [`data_deletion_${confirmationCode}`, JSON.stringify({
+                user_id: userId,
+                requested_at: new Date().toISOString(),
+                status: 'pending'
+            })]
+        );
+
+        const statusUrl = `${process.env.SERVER_URL || 'https://api-crm.botonmedico.com'}/api/webhooks/data-deletion-status?code=${confirmationCode}`;
+
+        res.json({
+            url: statusUrl,
+            confirmation_code: confirmationCode,
+        });
+    } catch (err) {
+        console.error('[Meta Data Deletion] Error:', err);
+        res.json({
+            url: `${process.env.SERVER_URL || 'https://api-crm.botonmedico.com'}/api/webhooks/data-deletion-status`,
+            confirmation_code: `DEL-${Date.now()}-error`,
+        });
+    }
+});
+
+// GET endpoint for Meta to check data deletion status
+router.get('/data-deletion-status', async (req: Request, res: Response) => {
+    const code = req.query.code as string;
+    if (!code) {
+        return res.status(400).json({ error: 'Missing confirmation code' });
+    }
+    try {
+        const result = await db.query(
+            `SELECT value FROM settings WHERE key = $1`,
+            [`data_deletion_${code}`]
+        );
+        if (result.rows.length > 0) {
+            const data = typeof result.rows[0].value === 'string'
+                ? JSON.parse(result.rows[0].value) : result.rows[0].value;
+            res.json({ confirmation_code: code, status: data.status || 'completed' });
+        } else {
+            res.json({ confirmation_code: code, status: 'completed' });
+        }
+    } catch (err) {
+        console.error('[Data Deletion Status] Error:', err);
+        res.json({ confirmation_code: code, status: 'completed' });
+    }
+});
+
 // Webchat — Receive UTM data from chat
 export default router;

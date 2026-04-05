@@ -1,29 +1,30 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { db } from '../db';
+import { getWCCreds, WCCreds } from '../utils/wc-creds';
 
 const router = Router();
 router.use(requireAuth);
 
-// ── WC helper ─────────────────────────────────────────────────────────────────
-function wcAuth() {
-    const wcKey = process.env.WC_KEY;
-    const wcSecret = process.env.WC_SECRET;
-    return Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
-}
-
-function wcConfigured() {
-    return !!(process.env.WC_URL && process.env.WC_KEY && process.env.WC_SECRET);
+// ── WC helper (reads from settings DB, falls back to env vars) ───────────────
+async function getWC(): Promise<WCCreds & { auth: string; configured: boolean }> {
+    const creds = await getWCCreds();
+    return {
+        ...creds,
+        auth: Buffer.from(`${creds.key}:${creds.secret}`).toString('base64'),
+        configured: !!(creds.url && creds.key && creds.secret),
+    };
 }
 
 // GET /api/products/categories — WooCommerce product categories (parent=0 for top-level)
 router.get('/categories', async (req: Request, res: Response) => {
-    if (!wcConfigured()) { res.json({ categories: [] }); return; }
+    const wc = await getWC();
+    if (!wc.configured) { res.json({ categories: [] }); return; }
     const parent = req.query.parent ?? '0'; // default: top-level only
     try {
         const response = await fetch(
-            `${process.env.WC_URL}/wp-json/wc/v3/products/categories?per_page=50&parent=${parent}&orderby=name&hide_empty=true`,
-            { headers: { Authorization: `Basic ${wcAuth()}` } }
+            `${wc.url}/wp-json/wc/v3/products/categories?per_page=50&parent=${parent}&orderby=name&hide_empty=true`,
+            { headers: { Authorization: `Basic ${wc.auth}` } }
         );
         if (!response.ok) { res.status(502).json({ error: 'WC API error' }); return; }
         const raw: any[] = await response.json() as any[];
