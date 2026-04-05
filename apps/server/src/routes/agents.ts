@@ -34,7 +34,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /api/agents  — admin crea agente
-router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     const { name, email, password, role = 'agent', salesking_agent_code } = req.body;
     if (!name || !email || !password) {
         res.status(400).json({ error: 'name, email y password son requeridos' });
@@ -59,7 +59,7 @@ router.post('/', requireRole('admin'), async (req: Request, res: Response) => {
 });
 
 // POST /api/agents/sync-salesking — import agents from SalesKing into CRM
-router.post('/sync-salesking', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/sync-salesking', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     try {
         // 1. Fetch all SalesKing agents from WordPress
         const wpAgents = await listSalesKingAgents();
@@ -161,7 +161,7 @@ router.post('/sync-salesking', requireRole('admin'), async (req: Request, res: R
 });
 
 // POST /api/agents/push-to-wp — push a CRM agent to WordPress/SalesKing
-router.post('/push-to-wp', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/push-to-wp', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     const { agent_id, salesking_group_id, parent_agent_id } = req.body;
     if (!agent_id) {
         res.status(400).json({ error: 'agent_id is required' });
@@ -235,7 +235,7 @@ router.get('/salesking-groups', requireRole('admin', 'supervisor'), async (_req:
 });
 
 // PUT /api/agents/:id  — admin actualiza agente completo
-router.put('/:id', requireRole('admin'), async (req: Request, res: Response) => {
+router.put('/:id', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     const { name, email, role, is_active, salesking_agent_code, avatar_url } = req.body;
     const { id } = req.params;
 
@@ -284,7 +284,7 @@ router.patch('/:id', requireRole('admin', 'supervisor'), async (req: Request, re
 
 // DELETE /api/agents/:id  — admin desactiva agente (soft delete)
 // Reasigna sus conversaciones abiertas a null
-router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     const { id } = req.params;
     const { reassign_to } = req.body; // UUID del agente que recibirá las convs, o null
 
@@ -316,7 +316,7 @@ router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) 
 });
 
 // POST /api/agents/:id/reset-password  — admin resetea contraseña
-router.post('/:id/reset-password', requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/:id/reset-password', requireRole('admin', 'superadmin'), async (req: Request, res: Response) => {
     const { new_password } = req.body;
     if (!new_password || new_password.length < 6) {
         res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });

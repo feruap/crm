@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 export interface AuthPayload {
     agentId: string;
     email: string;
-    role: 'admin' | 'supervisor' | 'agent';
+    role: 'superadmin' | 'admin' | 'supervisor' | 'agent';
 }
 
 declare global {
