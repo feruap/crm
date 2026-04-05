@@ -31,48 +31,71 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes (reduced WC fetch frequency)
 // Semantic search against knowledge_base
 // Returns the best matching answer and its confidence
 // ─────────────────────────────────────────────
+export interface KnowledgeHit {
+    answer: string;
+    question: string;
+    confidence: number;
+    knowledgeId: any;
+    metadata: any;
+}
+
 export async function findBestAnswer(
     text: string,
     embedding: number[]
-): Promise<{ answer: string; question: string; confidence: number; knowledgeId: any; metadata: any } | null> {
+): Promise<KnowledgeHit | null> {
+    const hits = await findTopKnowledgeHits(text, embedding, 1);
+    return hits.length > 0 ? hits[0] : null;
+}
+
+/**
+ * Return up to `limit` relevant KB entries (semantic + textual fallback).
+ * Used to build richer context for the LLM with multiple product matches.
+ */
+export async function findTopKnowledgeHits(
+    text: string,
+    embedding: number[],
+    limit: number = 3
+): Promise<KnowledgeHit[]> {
     const isZeroVector = embedding.every(v => v === 0);
     const vectorLiteral = `[${embedding.join(',')}]`;
 
     // 1. Semantic search (only if not zero vector)
-    let semanticResult: any[] = [];
+    let semanticResults: any[] = [];
     if (!isZeroVector) {
         const res = await db.query(
             `SELECT id, question, answer, metadata, 1 - (embedding <=> $1::vector) as confidence
              FROM knowledge_base
-             WHERE 1 - (embedding <=> $1::vector) > 0.4
-             ORDER BY confidence DESC LIMIT 1`,
-            [vectorLiteral]
+             WHERE 1 - (embedding <=> $1::vector) > 0.35
+             ORDER BY confidence DESC LIMIT $2`,
+            [vectorLiteral, limit]
         );
-        semanticResult = res.rows;
+        semanticResults = res.rows;
     }
 
-    // 2. Textual search (fallback/combination)
-    const textRes = await db.query(
-        `SELECT id, question, answer, metadata, 0.85 as confidence
-         FROM knowledge_base
-         WHERE question ILIKE $1 OR answer ILIKE $1
-         LIMIT 1`,
-        [`%${text}%`]
-    );
-
-    const hit = semanticResult[0] || textRes.rows[0];
-
-    if (hit) {
-        return {
-            answer: hit.answer,
-            question: hit.question,
-            confidence: hit.confidence || 0.5,
-            knowledgeId: hit.id,
-            metadata: hit.metadata || {}
-        };
+    // 2. Textual search (fallback/complement) — only if we need more results
+    const needed = limit - semanticResults.length;
+    let textResults: any[] = [];
+    if (needed > 0) {
+        const existingIds = semanticResults.map(r => r.id);
+        const textRes = await db.query(
+            `SELECT id, question, answer, metadata, 0.65 as confidence
+             FROM knowledge_base
+             WHERE (question ILIKE $1 OR answer ILIKE $1)
+             ${existingIds.length > 0 ? `AND id != ALL($3)` : ''}
+             LIMIT $2`,
+            existingIds.length > 0 ? [`%${text}%`, needed, existingIds] : [`%${text}%`, needed]
+        );
+        textResults = textRes.rows;
     }
 
-    return null;
+    const combined = [...semanticResults, ...textResults];
+    return combined.map(hit => ({
+        answer: hit.answer,
+        question: hit.question,
+        confidence: hit.confidence || 0.5,
+        knowledgeId: hit.id,
+        metadata: hit.metadata || {}
+    }));
 }
 
 // ─────────────────────────────────────────────
@@ -232,7 +255,10 @@ export async function getAIResponse(
 4. Después de las opciones, UNA pregunta corta en línea aparte: "¿Cuál le interesa?" o "¿Le envío cotización?"
 5. NUNCA uses ** ni negritas. NUNCA hagas párrafos de más de 2 líneas.
 6. Responde como un vendedor experto por WhatsApp: corto, directo, cálido.
-7. CROSS-SELL: Cuando el cliente confirme un pedido, sugiere UN producto complementario del catalogo con nombre y precio. Usa SOLO productos que existan en el catalogo de arriba. Si en la base de conocimiento hay info de cross-sells o productos complementarios, usala. No inventes productos que no esten en el catalogo.`;
+7. CROSS-SELL: Cuando el cliente confirme interés en un producto, sugiere UN producto complementario del catalogo. Usa la información de cross-sells de la base de conocimiento si está disponible. No inventes productos que no existan en el catalogo.
+8. OBJECIONES: Si el cliente duda, usa los argumentos clínicos de la base de conocimiento (sensibilidad, especificidad, certificaciones) para dar confianza. Sé breve.
+9. ESCALACIÓN: Cuando el cliente confirme que quiere comprar, hacer un pedido o pedir cotización formal, responde: "Con gusto, te conecto con un asesor para procesar tu pedido." NO intentes generar links de pago ni tomar pedidos directamente.
+10. PRECIOS: Solo menciona precios que aparezcan en el catálogo de abajo. Si no tienes el precio, di "te confirmo el precio con un asesor".`;
 
     // Inject customer name for personalized responses
     if (customerName) {
@@ -272,11 +298,7 @@ export async function getAIResponse(
     finalSystemPrompt += `1. Si NO se ha inyectado información de rastreo más abajo, solicita amablemente su Número de Pedido (ID) o su correo electrónico.\n`;
     finalSystemPrompt += `2. Si ya aparece "INFORMACIÓN DE RASTREO ENCONTRADA" abajo, úsala directamente para informar al cliente sin pedir más datos.\n`;
 
-    // Inject Agent ID for attribution
-    const agentId = process.env.WC_AGENT_ID || '9201153';
-    finalSystemPrompt += `\n\n=== INFORMACIÓN DEL AGENTE ===\n`;
-    finalSystemPrompt += `Tu ID de Agente SalesKing es: ${agentId}.\n`;
-    finalSystemPrompt += `Cuando el cliente decida comprar un producto, menciónale que le puedes generar un link de pago o que puede usar tu código de afiliado si compra directamente.\n`;
+    // Note: SalesKing agent attribution is handled by the human agent when creating orders in WooCommerce, not by the bot.
 
     if (catalog.length > 0) {
         finalSystemPrompt += `\n\n=== CATÁLOGO DE PRODUCTOS DISPONIBLES ===\n`;
@@ -291,7 +313,7 @@ export async function getAIResponse(
             }
         });
 
-        finalSystemPrompt += `\nRECUERDA: Ofrece 2-3 productos relevantes con precio. Máximo 2 líneas por mensaje. Código de afiliado: ${agentId}. Solo menciona productos del catálogo anterior.\n`;
+        finalSystemPrompt += `\nRECUERDA: Ofrece 2-3 productos relevantes con precio. Máximo 2 líneas por mensaje. Solo menciona productos del catálogo anterior. Cuando el cliente quiera comprar, escálalo a un asesor.\n`;
     }
 
     // 4. Intent Detection for Tracking (Heuristic/Hardcoded for now as Z.ai doesn't support complex tool calling easily here)

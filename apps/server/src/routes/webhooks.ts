@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import axios from 'axios';
 import { db } from '../db';
-import { findBestAnswer, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
+import { findBestAnswer, findTopKnowledgeHits, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
 import { findMatchingFlow, isWithinBusinessHours } from './flows';
 import { assignFromGroup } from './agent-groups';
 import { emitNewMessage, getIO } from '../socket';
@@ -454,22 +454,30 @@ export async function handleBotResponse(
         } catch { /* non-fatal */ }
 
         const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
-        const knowledgeHit = await findBestAnswer(messageText, embedding);
+        // Fetch up to 3 relevant KB entries for richer context
+        const knowledgeHits = await findTopKnowledgeHits(messageText, embedding, 3);
+        const topHit = knowledgeHits.length > 0 ? knowledgeHits[0] : null;
 
         let botReply: string;
         let confidence: number;
         let knowledgeContext: string | undefined = undefined;
 
-        if (knowledgeHit && knowledgeHit.confidence > 0.90) {
-            botReply = knowledgeHit.answer;
-            confidence = knowledgeHit.confidence;
-            await recordKnowledgeUse(knowledgeHit.knowledgeId as any);
-        } else {
-            if (knowledgeHit && knowledgeHit.confidence > 0.30) {
-                knowledgeContext = `Información relacionada encontrada en la base de datos:\n- Pregunta/Contexto: ${knowledgeHit.question}\n- Respuesta base: ${knowledgeHit.answer}`;
-                await recordKnowledgeUse(knowledgeHit.knowledgeId as any);
+        // Always pass through LLM to maintain WhatsApp conversational style
+        // Build rich context from all matching KB entries
+        if (knowledgeHits.length > 0) {
+            const contextParts = knowledgeHits
+                .filter(h => h.confidence > 0.30)
+                .map((h, i) => `--- Resultado ${i + 1} (confianza: ${(h.confidence * 100).toFixed(0)}%) ---\nProducto/Tema: ${h.question}\nInfo: ${h.answer}`);
+            if (contextParts.length > 0) {
+                knowledgeContext = `Información relevante de la base de conocimiento:\n${contextParts.join('\n\n')}`;
             }
+            // Record usage for all hits
+            for (const h of knowledgeHits.filter(h => h.confidence > 0.30)) {
+                await recordKnowledgeUse(h.knowledgeId as any);
+            }
+        }
 
+        {
             let finalSystemPrompt = system_prompt || '';
             if (brandName && brandName !== 'Amunet') {
                 finalSystemPrompt = `Eres el asistente de ${brandName}. ` + finalSystemPrompt;
@@ -490,24 +498,33 @@ export async function handleBotResponse(
                 knowledgeContext,
                 conversationId
             );
-            confidence = knowledgeHit ? knowledgeHit.confidence : 0.5;
+            confidence = topHit ? topHit.confidence : 0.5;
         }
 
         // Check escalation rules before sending bot reply
         const msgCountRes = await db.query(`SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`, [conversationId]);
         const inboundCount = parseInt(msgCountRes.rows[0].count, 10);
         const esc = await shouldEscalate(messageText, botReply, confidence, inboundCount);
-        if (esc.escalate) {
-            // Escalate: send handoff message instead of bot reply, assign to available agent
-            botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
+
+        // Also detect if the bot itself decided to escalate (prompt rule #9 tells it to say "te conecto con un asesor")
+        const botSelfEscalated = /te conecto con (un asesor|un ejecutivo|nuestro equipo)/i.test(botReply);
+
+        if (esc.escalate || botSelfEscalated) {
+            if (botSelfEscalated && !esc.escalate) {
+                // Bot decided to escalate on its own — keep its reply but update conversation status
+                console.log(`[Escalation] Conv ${conversationId}: Bot self-escalated (purchase intent detected)`);
+            } else {
+                // Rule-based escalation — override with standard message
+                botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
+                console.log(`[Escalation] Conv ${conversationId}: ${esc.reason}`);
+            }
             await db.query(`UPDATE conversations SET status = 'waiting', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`, [conversationId]);
-            console.log(`[Escalation] Conv ${conversationId}: ${esc.reason}`);
         }
 
         const result = await db.query(
             `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
              VALUES ($1, $2, $3, 'outbound', $4, $5, $6) RETURNING *`,
-            [conversationId, channelId, customerId, botReply, esc.escalate ? 'escalation' : 'bot', confidence]
+            [conversationId, channelId, customerId, botReply, (esc.escalate || botSelfEscalated) ? 'escalation' : 'bot', confidence]
         );
 
         const insertedMessage = result.rows[0];
