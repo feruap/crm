@@ -41,6 +41,7 @@ import knowledgeRouter from './routes/knowledge';
 import medicalProductsRouter from './routes/medical-products';
 import './workers/bulkSender'; // Start worker
 import './queues/scheduledMessageQueue'; // Start scheduled messages worker
+import './workers/wcWebhookWorker'; // Start WC webhook queue worker
 
 dotenv.config();
 
