@@ -13,8 +13,8 @@
  */
 
 import { db } from '../db';
+import { getWCCreds } from '../utils/wc-creds';
 import {
-  getAgentMaxDiscount,
   getSalesKingAgent,
   getB2BKingPricing,
   getB2BKingCustomer,
@@ -85,6 +85,14 @@ export interface DiscountResponse {
   requestId: string;
   status: string;
   message: string;
+  error?: string;
+}
+
+export interface CreateOrderResult {
+  success: boolean;
+  wc_order_id?: number;
+  payment_url?: string;
+  total?: string;
   error?: string;
 }
 
@@ -174,56 +182,81 @@ const KANBAN_STATUS_MAP: { [key: string]: KanbanStatus } = {
 };
 
 // ─────────────────────────────────────────────
-// Cart Link Generation
+// Order Creation (Multi-product, Pending WC Order)
 // ─────────────────────────────────────────────
 
 /**
- * Generate a personalized WooCommerce cart link with attribution + agent tracking.
- * Customer completes purchase on WC, order webhook syncs back to CRM.
- *
- * Example output:
- * https://testamunet.local/cart/?add-to-cart=123&quantity=20&utm_source=crm_bot&utm_medium=whatsapp&utm_campaign=hba1c_marzo_2026&salesking_agent=5
+ * Create a pending WooCommerce order with ALL products and return the checkout payment URL.
+ * Injects SalesKing attribution metadata so the agent gets commission credit.
+ * Applies any pre-approved coupon to the order.
  */
-export function generateWCCartLink(params: CartLinkParams): string {
-  const WC_STORE_URL = process.env.WC_STORE_URL || 'http://testamunet.local';
-  const url = new URL(`${WC_STORE_URL}/cart/`);
-
-  // Add products to cart
-  if (params.productIds.length === 1) {
-    // Single product: use add-to-cart syntax
-    const prod = params.productIds[0];
-    url.searchParams.append('add-to-cart', String(prod.wcProductId));
-    url.searchParams.append('quantity', String(prod.quantity));
-  } else {
-    // Multiple products: add each separately
-    for (const prod of params.productIds) {
-      // WC requires separate requests for multiple items
-      // For now, use first product and note limitation
-      if (params.productIds.indexOf(prod) === 0) {
-        url.searchParams.append('add-to-cart', String(prod.wcProductId));
-        url.searchParams.append('quantity', String(prod.quantity));
-      }
+export async function createWCOrder(params: CartLinkParams): Promise<CreateOrderResult> {
+  try {
+    const creds = await getWCCreds();
+    if (!creds.url || !creds.key || !creds.secret) {
+      return { success: false, error: 'WooCommerce not configured' };
     }
-  }
 
-  // UTM Attribution
-  url.searchParams.append('utm_source', 'crm_bot');
-  url.searchParams.append('utm_medium', 'whatsapp'); // or other channel
-  if (params.campaignId) {
-    url.searchParams.append('utm_campaign', params.campaignId);
-  }
+    const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
 
-  // SalesKing agent tracking
-  if (params.agentId) {
-    url.searchParams.append('salesking_agent', params.agentId);
-  }
+    const meta_data: Array<{ key: string; value: string }> = [
+      { key: '_myalice_source', value: 'crm_bot' },
+    ];
 
-  // Coupon code if applicable
-  if (params.couponCode) {
-    url.searchParams.append('coupon', params.couponCode);
-  }
+    if (params.agentId) {
+      meta_data.push(
+        { key: 'salesking_order_placed_by', value: params.agentId },
+        { key: 'salesking_order_placed_type', value: 'placed_by_agent' },
+        { key: 'salesking_assigned_agent', value: params.agentId }
+      );
+    }
 
-  return url.toString();
+    if (params.campaignId) {
+      meta_data.push(
+        { key: '_myalice_campaign_id', value: params.campaignId },
+        { key: '_utm_campaign', value: params.campaignId }
+      );
+    }
+
+    const orderBody: any = {
+      status: 'pending',
+      line_items: params.productIds.map(p => ({
+        product_id: p.wcProductId,
+        quantity: p.quantity,
+      })),
+      meta_data,
+    };
+
+    if (params.couponCode) {
+      orderBody.coupon_lines = [{ code: params.couponCode }];
+    }
+
+    const response = await fetch(`${creds.url}/wp-json/wc/v3/orders`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(orderBody),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return { success: false, error: `WC order creation failed: ${errText}` };
+    }
+
+    const order: any = await response.json();
+
+    return {
+      success: true,
+      wc_order_id: order.id,
+      payment_url: order.payment_url || order.checkout_payment_url,
+      total: order.total,
+    };
+  } catch (err) {
+    console.error('[Create WC Order Error]', err);
+    return { success: false, error: String(err) };
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -415,56 +448,63 @@ export function mapWCStatusToKanban(wcStatus: string): KanbanStatus {
 // ─────────────────────────────────────────────
 
 /**
- * Request discount via SalesKing Custom Discounts plugin.
- * Checks agent's max discount and approver hierarchy.
+ * Request discount via the SalesKing Custom Discounts plugin bridge.
+ * Delegates to the bridge (POST /wp-json/myalice-crm/v1/discount-request) which
+ * creates the sk_discount_req CPT and routes to the correct approver.
+ * Max-discount enforcement is handled by WordPress class-routing.php — no local check needed.
  */
 export async function requestSKDiscount(
   params: DiscountRequestParams
 ): Promise<DiscountResponse> {
   try {
-    const { agentId, customerId, discountPercent, reason } = params;
+    const { agentId, customerId, discountPercent, reason, cartItems } = params;
 
-    // Get agent's real max discount from SalesKing via CRM Bridge
-    let maxDiscount = 0;
-    try {
-      maxDiscount = await getAgentMaxDiscount(agentId);
-      console.log(`[SalesKing] Agent ${agentId} max discount: ${maxDiscount}%`);
-    } catch (err) {
-      console.warn(`[SalesKing] Could not fetch agent max discount, using 0:`, err);
-    }
-
-    if (discountPercent > maxDiscount) {
-      // Needs approver - route to parent agent
-      const requestId = `sk_discount_req_${customerId}_${Date.now()}`;
-
-      // Record in discount_requests table
-      try {
-        await db
-          .query(
-            `INSERT INTO discount_requests (customer_id, agent_id, discount_percent, reason, status)
-             VALUES ($1, $2, $3, $4, 'pending')
-             ON CONFLICT DO NOTHING`,
-            [customerId, agentId, discountPercent, reason]
-          )
-          .catch(() => null);
-      } catch {
-        // Table may not exist
-      }
-
+    const creds = await getWCCreds();
+    if (!creds.url || !creds.key || !creds.secret) {
       return {
-        success: true,
-        requestId,
-        status: 'pending_approval',
-        message: `Solicitud de descuento del ${discountPercent}% está pendiente de aprobación por tu gerente (tu límite es ${maxDiscount}%). Te notificaremos cuando se apruebe.`,
+        success: false,
+        requestId: '',
+        status: 'error',
+        message: 'WooCommerce not configured',
+        error: 'Missing WC credentials',
       };
     }
 
-    // Discount within agent limit - can apply immediately
+    const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
+    const bridgeRes = await fetch(`${creds.url}/wp-json/myalice-crm/v1/discount-request`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        agent_id: agentId,
+        customer_id: customerId,
+        discount_pct: discountPercent,
+        reason: reason || `Descuento ${discountPercent}% solicitado desde CRM`,
+        cart_items: Array.isArray(cartItems) ? cartItems : [],
+      }),
+    });
+
+    const data: any = await bridgeRes.json();
+
+    if (!bridgeRes.ok) {
+      return {
+        success: false,
+        requestId: '',
+        status: 'error',
+        message: data.message || data.error || 'Bridge error',
+        error: String(data.message || data.error),
+      };
+    }
+
     return {
       success: true,
-      requestId: `sk_discount_${customerId}_${Date.now()}`,
-      status: 'approved',
-      message: `Descuento del ${discountPercent}% aplicado (dentro de tu límite de ${maxDiscount}%).`,
+      requestId: String(data.request_id),
+      status: 'pending',
+      message: data.approver_name
+        ? `Solicitud enviada al aprobador: ${data.approver_name}`
+        : `Solicitud de descuento del ${discountPercent}% enviada para aprobación.`,
     };
   } catch (err) {
     console.error('[Discount Request Error]', err);
