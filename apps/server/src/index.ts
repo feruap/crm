@@ -499,7 +499,8 @@ cron.schedule('*/30 * * * * *', async () => {
             WHERE c.sla_deadline < NOW()
               AND c.sla_breached = FALSE
               AND c.escalation_priority IS NOT NULL
-              AND c.status NOT IN ('resolved', 'archived')
+              AND c.status NOT IN ('resolved')
+              AND c.is_archived = FALSE
         `);
         for (const conv of breached.rows) {
             await db.query(`UPDATE conversations SET sla_breached = TRUE WHERE id = $1`, [conv.id]);

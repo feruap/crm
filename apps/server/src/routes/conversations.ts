@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { learnFromConversation } from '../ai.service';
 import { getWCCreds } from '../utils/wc-creds';
+import { sendOutboundReply } from './webhooks';
 
 const router = Router();
 
@@ -572,6 +573,11 @@ router.post('/:id/messages', async (req: Request, res: Response) => {
          VALUES ($1, $2, $3, 'outbound', $4, $5, 'human')
          RETURNING *`,
         [req.params.id, channel_id, customer_id, content, message_type]
+    );
+
+    // Deliver message via WhatsApp/Meta API
+    sendOutboundReply(channel_id, customer_id, content).catch((err: unknown) =>
+        console.error('[conversations] sendOutboundReply failed:', err)
     );
 
     res.status(201).json(msg.rows[0]);
