@@ -266,11 +266,11 @@ router.get('/salesking-pricing', async (req: Request, res: Response) => {
         // Fetch agent-specific rules from the bridge plugin
         const [agentRes, settingsRes] = await Promise.all([
             fetch(
-                `${wc.url}/wp-json/myalice-crm/v1/salesking-agent/${wcAgentId}`,
+                `${wc.url}/wp-json/amunet-crm/v1/salesking-agent/${wcAgentId}`,
                 { headers: { Authorization: `Basic ${wc.auth}` } }
             ),
             fetch(
-                `${wc.url}/wp-json/myalice-crm/v1/salesking-settings`,
+                `${wc.url}/wp-json/amunet-crm/v1/salesking-settings`,
                 { headers: { Authorization: `Basic ${wc.auth}` } }
             ),
         ]);

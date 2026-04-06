@@ -333,7 +333,7 @@ router.patch('/:id/takeover', async (req: Request, res: Response) => {
 // sends the payment link as a message in the conversation.
 // Flow: Agent builds cart → WC draft order → customer receives payment URL → pays → SalesKing calculates commission
 router.post('/:id/cart-link', async (req: Request, res: Response) => {
-    const { items, billing: billingOverride, campaign_id } = req.body as {
+    const { items, billing: billingOverride, campaign_id, coupon_code } = req.body as {
         items: {
             product_id: number; variation_id?: number; quantity: number;
             name: string; price: string; variation_label?: string;
@@ -347,6 +347,7 @@ router.post('/:id/cart-link', async (req: Request, res: Response) => {
             email?: string; phone?: string;
         };
         campaign_id?: string;
+        coupon_code?: string;
     };
 
     if (!items || items.length === 0) {
@@ -480,19 +481,24 @@ router.post('/:id/cart-link', async (req: Request, res: Response) => {
     const wcCustIdAttr = attrMap['wc_customer_id'] ? parseInt(attrMap['wc_customer_id']) : 0;
 
     try {
+        const wcOrderPayload: Record<string, any> = {
+            status: 'pending',
+            customer_id: wcCustIdAttr,
+            line_items,
+            billing,
+            shipping,
+            customer_note: `Pedido creado por agente ${agentName} desde CRM`,
+            meta_data,
+            set_paid: false,
+        };
+        if (coupon_code) {
+            wcOrderPayload.coupon_lines = [{ code: coupon_code }];
+        }
+
         const wcResponse = await fetch(`${wcUrl}/wp-json/wc/v3/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Basic ${wcAuth}` },
-            body: JSON.stringify({
-                status: 'pending',
-                customer_id: wcCustIdAttr,
-                line_items,
-                billing,
-                shipping,
-                customer_note: `Pedido creado por agente ${agentName} desde CRM`,
-                meta_data,
-                set_paid: false,
-            }),
+            body: JSON.stringify(wcOrderPayload),
         });
 
         if (!wcResponse.ok) {

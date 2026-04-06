@@ -371,6 +371,17 @@ export async function handleBotResponse(
     try {
         const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
 
+        // ── 0. Skip bot if conversation is already handled by a human agent ───
+        const convStatus = await db.query(
+            `SELECT status FROM conversations WHERE id = $1`,
+            [conversationId]
+        );
+        const status = convStatus.rows[0]?.status;
+        if (status === 'escalated' || status === 'assigned' || status === 'in_progress') {
+            console.log(`[Bot] Conv ${conversationId} skipped — status is '${status}'`);
+            return;
+        }
+
         // ── 1. Check for matching bot_flow ────────────────────────────────────
         try {
             // Determine context for flow matching

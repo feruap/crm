@@ -16,10 +16,10 @@ async function fetchAgentRulesFromBridge(wcAgentId: string): Promise<any> {
     const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
 
     const [agentRes, settingsRes] = await Promise.all([
-        fetch(`${creds.url}/wp-json/myalice-crm/v1/salesking-agent/${wcAgentId}`, {
+        fetch(`${creds.url}/wp-json/amunet-crm/v1/salesking-agent/${wcAgentId}`, {
             headers: { Authorization: `Basic ${auth}` },
         }),
-        fetch(`${creds.url}/wp-json/myalice-crm/v1/salesking-settings`, {
+        fetch(`${creds.url}/wp-json/amunet-crm/v1/salesking-settings`, {
             headers: { Authorization: `Basic ${auth}` },
         }),
     ]);
@@ -138,7 +138,7 @@ router.post('/discount-request', async (req: Request, res: Response) => {
         }
 
         const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
-        const bridgeRes = await fetch(`${creds.url}/wp-json/myalice-crm/v1/discount-request`, {
+        const bridgeRes = await fetch(`${creds.url}/wp-json/amunet-crm/v1/discount-request`, {
             method: 'POST',
             headers: {
                 'Authorization': `Basic ${auth}`,
