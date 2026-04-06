@@ -15,7 +15,7 @@ import { receiveStatusFromWC } from '../services/woocommerce';
 // ─────────────────────────────────────────────
 // Send outbound reply via the channel's native API (WhatsApp, Messenger, etc.)
 // ─────────────────────────────────────────────
-export async function sendOutboundReply(
+export export async function sendOutboundReply(
     channelId: string,
     customerId: string,
     replyText: string
