@@ -449,7 +449,7 @@ export function mapWCStatusToKanban(wcStatus: string): KanbanStatus {
 
 /**
  * Request discount via the SalesKing Custom Discounts plugin bridge.
- * Delegates to the bridge (POST /wp-json/myalice-crm/v1/discount-request) which
+ * Delegates to the bridge (POST /wp-json/amunet-crm/v1/discount-request) which
  * creates the sk_discount_req CPT and routes to the correct approver.
  * Max-discount enforcement is handled by WordPress class-routing.php — no local check needed.
  */
@@ -471,7 +471,7 @@ export async function requestSKDiscount(
     }
 
     const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
-    const bridgeRes = await fetch(`${creds.url}/wp-json/myalice-crm/v1/discount-request`, {
+    const bridgeRes = await fetch(`${creds.url}/wp-json/amunet-crm/v1/discount-request`, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${auth}`,
