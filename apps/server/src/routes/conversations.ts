@@ -541,6 +541,11 @@ router.post('/:id/cart-link', async (req: Request, res: Response) => {
             [req.params.id, channel_id, customer_id, messageContent]
         );
 
+        // Deliver cart-link message via WhatsApp/Meta API
+        sendOutboundReply(channel_id, customer_id, messageContent).catch((err: unknown) =>
+            console.error('[cart-link] sendOutboundReply failed:', err)
+        );
+
         res.status(201).json({
             message: msg.rows[0],
             payment_url: paymentUrl,
