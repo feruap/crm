@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
 import { getWCCreds } from '../utils/wc-creds';
-import { requireRole } from '../middleware/auth';
 import { getIO } from '../socket';
 
 const router = Router();
@@ -95,181 +94,121 @@ router.get('/agent-rules', async (req: Request, res: Response) => {
 });
 
 // POST /api/salesking/discount-request
-// Agent requests a special discount that exceeds their limit.
+// Proxies the discount request to the WordPress bridge (salesking-custom-discount plugin).
+// The bridge creates the sk_discount_req CPT, routes to the correct approver, and
+// fires a webhook back to /api/salesking/webhook/discount when approved/rejected.
 router.post('/discount-request', async (req: Request, res: Response) => {
-    const { conversation_id, product_id, product_name, original_price, requested_price } = req.body;
+    const { conversation_id, discount_pct, reason, cart_items } = req.body;
     const agentId = req.agent!.agentId;
 
-    if (!product_id || !product_name || original_price == null || requested_price == null) {
-        res.status(400).json({ error: 'Missing required fields: product_id, product_name, original_price, requested_price' });
+    if (!discount_pct) {
+        res.status(400).json({ error: 'Missing required field: discount_pct' });
         return;
     }
-
-    const origNum = Number(original_price);
-    const reqNum = Number(requested_price);
-
-    if (reqNum <= 0 || reqNum >= origNum) {
-        res.status(400).json({ error: 'requested_price must be positive and less than original_price' });
-        return;
-    }
-
-    const discount_pct = ((1 - reqNum / origNum) * 100).toFixed(2);
 
     try {
-        const result = await db.query(
-            `INSERT INTO discount_requests
-               (agent_id, conversation_id, product_id, product_name, original_price, requested_price, discount_pct)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING *`,
-            [agentId, conversation_id ?? null, product_id, product_name, origNum, reqNum, discount_pct]
+        const creds = await getWCCreds();
+        if (!creds.url || !creds.key || !creds.secret) {
+            res.status(503).json({ error: 'WooCommerce not configured' });
+            return;
+        }
+
+        // Resolve WC user ID for the CRM agent
+        const agentRow = await db.query(
+            'SELECT wc_agent_id FROM agents WHERE id = $1',
+            [agentId]
         );
-        const dr = result.rows[0];
+        const wcAgentId = agentRow.rows[0]?.wc_agent_id;
+        if (!wcAgentId) {
+            res.status(400).json({ error: 'Agent has no WC User ID linked' });
+            return;
+        }
 
-        const agentRow = await db.query('SELECT name FROM agents WHERE id = $1', [agentId]);
-        const agentName = agentRow.rows[0]?.name || 'Agente';
+        // Resolve WC customer ID from conversation
+        let wcCustomerId = 0;
+        if (conversation_id) {
+            const custRow = await db.query(
+                `SELECT ca.attr_value
+                 FROM conversations conv
+                 JOIN customer_attributes ca ON ca.customer_id = conv.customer_id
+                 WHERE conv.id = $1 AND ca.attr_key = 'wc_customer_id'`,
+                [conversation_id]
+            );
+            wcCustomerId = parseInt(custRow.rows[0]?.attr_value || '0', 10) || 0;
+        }
 
-        // Notify all supervisors/admins via their personal Socket.IO rooms
-        const supervisors = await db.query(
-            `SELECT id FROM agents WHERE role IN ('supervisor', 'admin', 'superadmin')`
-        );
-        try {
-            const io = getIO();
-            for (const sup of supervisors.rows) {
-                io.to(`agent:${sup.id}`).emit('discount_request', {
-                    id: dr.id,
-                    agent_id: agentId,
-                    agent_name: agentName,
-                    product_name,
-                    original_price: origNum,
-                    requested_price: reqNum,
-                    discount_pct: Number(discount_pct),
-                    conversation_id: conversation_id ?? null,
-                    created_at: dr.created_at,
-                });
-            }
-        } catch { /* socket not initialized in tests */ }
+        const auth = Buffer.from(`${creds.key}:${creds.secret}`).toString('base64');
+        const bridgeRes = await fetch(`${creds.url}/wp-json/myalice-crm/v1/discount-request`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                agent_id:     wcAgentId,
+                customer_id:  wcCustomerId,
+                discount_pct: Number(discount_pct),
+                reason:       reason || `Descuento ${discount_pct}% solicitado desde CRM`,
+                cart_items:   Array.isArray(cart_items) ? cart_items : [],
+            }),
+        });
 
-        res.status(201).json({ id: dr.id, status: 'pending' });
+        const data: any = await bridgeRes.json();
+        if (!bridgeRes.ok) {
+            res.status(bridgeRes.status).json({ error: data.message || data.error || 'Bridge error' });
+            return;
+        }
+
+        res.status(201).json({
+            id:                  String(data.request_id),
+            request_id:          data.request_id,
+            approver_name:       data.approver_name,
+            agent_max_discount:  data.agent_max_discount,
+            status:              'pending',
+        });
     } catch (err) {
+        console.error('SalesKing discount-request error:', err);
         res.status(500).json({ error: String(err) });
     }
 });
 
-// GET /api/salesking/discount-requests/pending
-// Supervisors/admins list pending discount approval requests.
-router.get(
-    '/discount-requests/pending',
-    requireRole('supervisor', 'admin', 'superadmin'),
-    async (_req: Request, res: Response) => {
-        try {
-            const result = await db.query(
-                `SELECT dr.*, a.name AS agent_name
-                 FROM discount_requests dr
-                 JOIN agents a ON dr.agent_id = a.id
-                 WHERE dr.status = 'pending'
-                 ORDER BY dr.created_at DESC`
-            );
-            res.json({ requests: result.rows });
-        } catch (err) {
-            res.status(500).json({ error: String(err) });
-        }
+// POST /api/salesking/webhook/discount
+// Receives approval/rejection webhook from the WordPress bridge.
+// This route is intentionally public (no JWT auth) — mounted separately in index.ts.
+// Emits a Socket.IO 'discount_response' event to the specific agent.
+router.post('/webhook/discount', async (req: Request, res: Response) => {
+    const { event, request_id, agent_id, amount, coupon_code } = req.body;
+
+    if (!event || !request_id) {
+        res.status(400).json({ error: 'Missing event or request_id' });
+        return;
     }
-);
 
-// PUT /api/salesking/discount-request/:id/approve
-router.put(
-    '/discount-request/:id/approve',
-    requireRole('supervisor', 'admin', 'superadmin'),
-    async (req: Request, res: Response) => {
-        const { id } = req.params;
-        const { approved_price, note } = req.body;
-        const supervisorId = req.agent!.agentId;
+    try {
+        // Find CRM agent by their WC user ID
+        const agentRow = await db.query(
+            'SELECT id FROM agents WHERE wc_agent_id = $1',
+            [String(agent_id)]
+        );
+        const crmAgentId = agentRow.rows[0]?.id;
 
-        try {
-            const result = await db.query(
-                `UPDATE discount_requests
-                 SET status = 'approved',
-                     approved_price = COALESCE($1::numeric, requested_price),
-                     supervisor_id = $2,
-                     supervisor_note = $3,
-                     updated_at = NOW()
-                 WHERE id = $4 AND status = 'pending'
-                 RETURNING *`,
-                [approved_price ?? null, supervisorId, note ?? null, id]
-            );
-
-            if (result.rowCount === 0) {
-                res.status(404).json({ error: 'Request not found or already processed' });
-                return;
-            }
-            const dr = result.rows[0];
-            const finalPrice = Number(dr.approved_price);
-
-            const supRow = await db.query('SELECT name FROM agents WHERE id = $1', [supervisorId]);
+        if (crmAgentId) {
+            const approved = event === 'discount_approved';
             try {
-                getIO().to(`agent:${dr.agent_id}`).emit('discount_approved', {
-                    request_id: dr.id,
-                    product_id: dr.product_id,
-                    product_name: dr.product_name,
-                    approved_price: finalPrice,
-                    original_price: Number(dr.original_price),
-                    supervisor_name: supRow.rows[0]?.name || 'Supervisor',
-                    note: note ?? null,
+                getIO().to(`agent:${crmAgentId}`).emit('discount_response', {
+                    approved,
+                    coupon_code: coupon_code || null,
+                    amount:      Number(amount),
+                    request_id:  String(request_id),
                 });
             } catch { /* socket not ready */ }
-
-            res.json({ ok: true, approved_price: finalPrice });
-        } catch (err) {
-            res.status(500).json({ error: String(err) });
         }
+
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('SalesKing discount webhook error:', err);
+        res.status(500).json({ error: String(err) });
     }
-);
-
-// PUT /api/salesking/discount-request/:id/reject
-router.put(
-    '/discount-request/:id/reject',
-    requireRole('supervisor', 'admin', 'superadmin'),
-    async (req: Request, res: Response) => {
-        const { id } = req.params;
-        const { note } = req.body;
-        const supervisorId = req.agent!.agentId;
-
-        try {
-            const result = await db.query(
-                `UPDATE discount_requests
-                 SET status = 'rejected',
-                     supervisor_id = $1,
-                     supervisor_note = $2,
-                     updated_at = NOW()
-                 WHERE id = $3 AND status = 'pending'
-                 RETURNING *`,
-                [supervisorId, note ?? null, id]
-            );
-
-            if (result.rowCount === 0) {
-                res.status(404).json({ error: 'Request not found or already processed' });
-                return;
-            }
-            const dr = result.rows[0];
-
-            const supRow = await db.query('SELECT name FROM agents WHERE id = $1', [supervisorId]);
-            try {
-                getIO().to(`agent:${dr.agent_id}`).emit('discount_rejected', {
-                    request_id: dr.id,
-                    product_id: dr.product_id,
-                    product_name: dr.product_name,
-                    original_price: Number(dr.original_price),
-                    requested_price: Number(dr.requested_price),
-                    supervisor_name: supRow.rows[0]?.name || 'Supervisor',
-                    note: note ?? null,
-                });
-            } catch { /* socket not ready */ }
-
-            res.json({ ok: true });
-        } catch (err) {
-            res.status(500).json({ error: String(err) });
-        }
-    }
-);
+});
 
 export default router;

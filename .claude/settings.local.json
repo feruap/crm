@@ -111,7 +111,8 @@
       "Bash(tasklist /fi \"imagename eq node.exe\" /v)",
       "Bash(ss -tlnp)",
       "Bash(wmic process where \"ProcessId=70432\" get ProcessId,CommandLine)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(wc -l /c/Users/admin/ai/myalice/.claude/worktrees/competent-cannon/woocommercecurrentplugins/amunet-crm-bridge/*.php)"
     ]
   }
 }

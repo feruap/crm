@@ -116,7 +116,11 @@ app.use('/api/automations', requireAuth, automationsRouter);
 app.use('/api/agent-groups', requireAuth, agentGroupsRouter);
 app.use('/api/knowledge', requireAuth, knowledgeRouter);
 app.use('/api/medical-products', requireAuth, medicalProductsRouter);
-app.use('/api/salesking', requireAuth, saleskingRouter);
+// /api/salesking/webhook/discount is called by WordPress (no JWT) — bypass auth for that path only
+app.use('/api/salesking', (req, res, next) => {
+    if (req.path === '/webhook/discount' && req.method === 'POST') return next();
+    return requireAuth(req, res, next);
+}, saleskingRouter);
 
 // ─── WooCommerce Settings ─────────────────────────────────────────────────────
 // Reads/writes wc_url, wc_key, wc_secret, wc_webhook_secret from the settings table.
@@ -689,28 +693,6 @@ async function runMigrations() {
     await safeIdx(`CREATE INDEX IF NOT EXISTS idx_msg_conv_dir ON messages (conversation_id, direction, created_at DESC)`);
     await safeIdx(`CREATE INDEX IF NOT EXISTS idx_sched_msg_pending ON scheduled_messages (scheduled_at) WHERE status = 'pending'`);
 
-    // Discount approval requests (SalesKing escalation)
-    try {
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS discount_requests (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                agent_id UUID NOT NULL REFERENCES agents(id),
-                conversation_id UUID REFERENCES conversations(id),
-                product_id INTEGER NOT NULL,
-                product_name TEXT NOT NULL,
-                original_price NUMERIC(12,2) NOT NULL,
-                requested_price NUMERIC(12,2) NOT NULL,
-                discount_pct NUMERIC(5,2) NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'approved', 'rejected')),
-                approved_price NUMERIC(12,2),
-                supervisor_id UUID REFERENCES agents(id),
-                supervisor_note TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            )
-        `);
-    } catch (_) { /* already exists */ }
 
     // Ensure automations table exists (was missing from Fase 7)
     try {

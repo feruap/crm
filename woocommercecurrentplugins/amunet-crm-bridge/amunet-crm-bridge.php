@@ -233,6 +233,21 @@ add_action('rest_api_init', function () {
         'permission_callback' => 'amunet_crm_check_wc_or_nonce',
     ]);
 
+    // ── SalesKing Discount Request Endpoints ─────────────────────────────
+
+    register_rest_route($ns, '/discount-request', [
+        'methods'             => 'POST',
+        'callback'            => 'amunet_create_discount_request',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+    ]);
+
+    register_rest_route($ns, '/discount-request/(?P<id>\d+)', [
+        'methods'             => 'GET',
+        'callback'            => 'amunet_get_discount_request',
+        'permission_callback' => 'amunet_crm_check_wc_auth',
+        'args'                => ['id' => ['required' => true, 'validate_callback' => function ($v) { return is_numeric($v); }]],
+    ]);
+
     // ── Health Check ────────────────────────────────────────────────────
 
     register_rest_route($ns, '/health', [
@@ -1280,6 +1295,176 @@ function amunet_process_webhook_queue_batch() {
             }
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALESKING DISCOUNT REQUEST REST CALLBACKS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /wp-json/amunet-crm/v1/discount-request
+ * Creates a sk_discount_req CPT, routes to the correct approver via hierarchy.
+ */
+function amunet_create_discount_request(WP_REST_Request $request) {
+    if (!class_exists('SK_CD_Routing')) {
+        return new WP_Error('plugin_missing', 'SalesKing Custom Discounts plugin not active', ['status' => 503]);
+    }
+
+    $agent_id     = intval($request->get_param('agent_id'));
+    $customer_id  = intval($request->get_param('customer_id'));
+    $discount_pct = floatval($request->get_param('discount_pct'));
+    $reason       = sanitize_textarea_field((string) ($request->get_param('reason') ?? ''));
+    $cart_items   = $request->get_param('cart_items');
+
+    if (!$agent_id || !get_userdata($agent_id)) {
+        return new WP_Error('invalid_agent', 'Agent not found', ['status' => 400]);
+    }
+    if ($discount_pct <= 0 || $discount_pct > 100) {
+        return new WP_Error('invalid_discount', 'discount_pct must be between 0 and 100', ['status' => 400]);
+    }
+
+    $own_limit = SK_CD_Routing::get_agent_max_discount($agent_id);
+    if ($discount_pct <= $own_limit) {
+        return new WP_Error('within_limit',
+            sprintf('Discount %.1f%% is within agent limit (%.1f%%)', $discount_pct, $own_limit),
+            ['status' => 422]);
+    }
+
+    $approver      = SK_CD_Routing::get_approver_for_discount($agent_id, $discount_pct);
+    $approver_user = ($approver !== 'admin') ? get_userdata(intval($approver)) : null;
+    $approver_name = $approver_user ? $approver_user->display_name : 'Administrador';
+
+    $cart_items_clean = [];
+    $cart_subtotal    = 0;
+    if (is_array($cart_items)) {
+        foreach ($cart_items as $item) {
+            $total              = floatval($item['total'] ?? 0);
+            $cart_items_clean[] = [
+                'product_id' => intval($item['product_id'] ?? 0),
+                'name'       => sanitize_text_field((string) ($item['name'] ?? '')),
+                'qty'        => intval($item['qty'] ?? 1),
+                'price'      => floatval($item['price'] ?? 0),
+                'total'      => $total,
+            ];
+            $cart_subtotal += $total;
+        }
+    }
+    $savings = round($cart_subtotal * ($discount_pct / 100), 2);
+
+    $post_id = wp_insert_post([
+        'post_title'  => sprintf('Desc. %s%% - Cliente #%d - Agente #%d', $discount_pct, $customer_id, $agent_id),
+        'post_type'   => 'sk_discount_req',
+        'post_status' => 'publish',
+    ]);
+    if (is_wp_error($post_id) || !$post_id) {
+        return new WP_Error('insert_failed', 'Failed to create discount request', ['status' => 500]);
+    }
+
+    update_post_meta($post_id, 'sk_req_amount',        $discount_pct);
+    update_post_meta($post_id, 'sk_req_agent_id',      $agent_id);
+    update_post_meta($post_id, 'sk_req_customer_id',   $customer_id);
+    update_post_meta($post_id, 'sk_req_approver_id',   $approver);
+    update_post_meta($post_id, 'sk_req_status',        'pending');
+    update_post_meta($post_id, 'sk_req_reason',        $reason);
+    update_post_meta($post_id, 'sk_req_cart_items',    $cart_items_clean);
+    update_post_meta($post_id, 'sk_req_cart_subtotal', $cart_subtotal);
+    update_post_meta($post_id, 'sk_req_savings',       $savings);
+
+    return rest_ensure_response([
+        'request_id'         => $post_id,
+        'approver_name'      => $approver_name,
+        'agent_max_discount' => $own_limit,
+        'status'             => 'pending',
+    ]);
+}
+
+/**
+ * GET /wp-json/amunet-crm/v1/discount-request/{id}
+ * Returns status, coupon_code (if approved), approver, amount, reason.
+ */
+function amunet_get_discount_request(WP_REST_Request $request) {
+    $id   = intval($request->get_param('id'));
+    $post = get_post($id);
+    if (!$post || $post->post_type !== 'sk_discount_req') {
+        return new WP_Error('not_found', 'Discount request not found', ['status' => 404]);
+    }
+
+    $status      = get_post_meta($id, 'sk_req_status', true);
+    $coupon      = get_post_meta($id, 'sk_req_coupon', true);
+    $approver_id = get_post_meta($id, 'sk_req_approver_id', true);
+    $amount      = get_post_meta($id, 'sk_req_amount', true);
+    $reason      = get_post_meta($id, 'sk_req_reason', true);
+
+    $approver_user = ($approver_id && $approver_id !== 'admin') ? get_userdata(intval($approver_id)) : null;
+    $approver_name = $approver_user ? $approver_user->display_name : 'Administrador';
+
+    return rest_ensure_response([
+        'id'          => $id,
+        'status'      => $status,
+        'coupon_code' => $coupon ?: null,
+        'approver'    => $approver_name,
+        'amount'      => floatval($amount),
+        'reason'      => $reason,
+    ]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SALESKING DISCOUNT APPROVAL/REJECTION WEBHOOK NOTIFICATIONS
+// Fires a webhook to the CRM backend after approve or reject.
+// Webhook URL: wp_options key 'amunet_crm_webhook_url'.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ajax_approve() sets sk_req_approved_by last — fire on that.
+// ajax_reject() only sets sk_req_status to 'rejected' — fire on that.
+add_action('added_post_meta',   'amunet_sk_discount_meta_changed', 10, 4);
+add_action('updated_post_meta', 'amunet_sk_discount_meta_changed', 10, 4);
+
+function amunet_sk_discount_meta_changed($meta_id, $post_id, $meta_key, $meta_value) {
+    $is_approval  = ($meta_key === 'sk_req_approved_by');
+    $is_rejection = ($meta_key === 'sk_req_status' && $meta_value === 'rejected');
+    if (!$is_approval && !$is_rejection) return;
+    if (get_post_type($post_id) !== 'sk_discount_req') return;
+
+    $event = $is_approval ? 'discount_approved' : 'discount_rejected';
+
+    // Deduplicate: both added_ and updated_ hooks may fire for the same post/event.
+    static $fired = [];
+    $fkey = $post_id . ':' . $event;
+    if (isset($fired[$fkey])) return;
+    $fired[$fkey] = true;
+
+    // Run on shutdown so all meta (coupon code, approved_by) is persisted first.
+    $pid = $post_id;
+    $ev  = $event;
+    add_action('shutdown', function () use ($pid, $ev) {
+        amunet_fire_discount_webhook($pid, $ev);
+    });
+}
+
+function amunet_fire_discount_webhook(int $post_id, string $event): void {
+    $webhook_url = get_option('amunet_crm_webhook_url', '');
+    if (empty($webhook_url)) return;
+
+    $agent_id    = get_post_meta($post_id, 'sk_req_agent_id', true);
+    $customer_id = get_post_meta($post_id, 'sk_req_customer_id', true);
+    $amount      = get_post_meta($post_id, 'sk_req_amount', true);
+    $approver_id = get_post_meta($post_id, 'sk_req_approved_by', true);
+    $coupon_code = get_post_meta($post_id, 'sk_req_coupon', true);
+
+    wp_remote_post(rtrim($webhook_url, '/') . '/api/salesking/webhook/discount', [
+        'timeout'  => 5,
+        'blocking' => false,
+        'headers'  => ['Content-Type' => 'application/json'],
+        'body'     => wp_json_encode([
+            'event'       => $event,
+            'request_id'  => $post_id,
+            'agent_id'    => intval($agent_id),
+            'customer_id' => intval($customer_id),
+            'amount'      => floatval($amount),
+            'coupon_code' => $coupon_code ?: null,
+            'approver_id' => intval($approver_id),
+        ]),
+    ]);
 }
 
 /**
