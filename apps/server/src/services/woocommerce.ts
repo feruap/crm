@@ -45,13 +45,6 @@ interface CreateWCOrderRequest {
   meta_data?: Array<{ key: string; value: string }>;
 }
 
-interface DiscountRequest {
-  order_id: number;
-  requested_discount_pct: number;
-  reason: string;
-  agent_id?: string;
-}
-
 interface SyncResult {
   ok: boolean;
   error?: string;
@@ -401,42 +394,6 @@ export async function createWCOrder(request: CreateWCOrderRequest): Promise<Crea
     await logSync(null, String(result.id), null, result.status, 'crm', 'crm_to_wc');
 
     return { ok: true, wc_order_id: result.id, total: result.total };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
-
-/**
- * Create a discount request by adding a pending coupon/meta to the WC order.
- * Uses WC order meta to flag it for supervisor approval.
- *
- * SK Custom Discounts plugin reads _discount_request meta on orders.
- */
-export async function createDiscountRequest(request: DiscountRequest): Promise<SyncResult> {
-  try {
-    if (!request.order_id) {
-      return { ok: false, error: 'order_id is required for discount request' };
-    }
-
-    // Add discount request metadata to the WC order
-    await wcFetch(`/orders/${request.order_id}`, 'PUT', {
-      meta_data: [
-        { key: '_discount_request_status', value: 'pending' },
-        { key: '_discount_request_pct', value: String(request.requested_discount_pct) },
-        { key: '_discount_request_reason', value: request.reason },
-        { key: '_discount_request_agent', value: request.agent_id },
-        { key: '_discount_request_date', value: new Date().toISOString() },
-      ],
-    });
-
-    // Record in CRM database
-    await db.query(
-      `INSERT INTO order_sync_log (external_order_id, previous_status, new_status, source, sync_direction)
-       VALUES ($1, 'discount_requested', 'pending_approval', 'crm', 'crm_to_wc')`,
-      [String(request.order_id)]
-    );
-
-    return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
