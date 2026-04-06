@@ -69,9 +69,9 @@ interface SalesKingRules {
 interface DiscountRequestState {
     requestId: string;
     status: 'pending' | 'approved' | 'rejected';
-    approvedPrice?: number;
-    supervisorName?: string;
-    note?: string;
+    couponCode?: string;
+    approvedPct?: number;
+    approverName?: string;
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────
@@ -170,6 +170,7 @@ export default function CatalogPanel({
     // Discount escalation state: cartKey → request state
     const [discountRequests, setDiscountRequests] = useState<Record<string, DiscountRequestState>>({});
     const [escalating, setEscalating] = useState<string | null>(null); // cartKey currently being escalated
+    const [approvalToast, setApprovalToast] = useState<string | null>(null);
 
     // ── Fetch SalesKing rules once ──────────────────────────────────────────
     useEffect(() => {
@@ -181,14 +182,15 @@ export default function CatalogPanel({
             .catch(() => setSkRules({ available: false, reason: 'Error al cargar reglas' }));
     }, []);
 
-    // ── Socket listeners for discount approvals/rejections ──────────────────
+    // ── Socket listener for discount approval/rejection from WordPress ──────
     useEffect(() => {
         const socket = getSocket();
 
-        const handleApproved = (data: {
-            request_id: string; product_id: number; product_name: string;
-            approved_price: number; original_price: number;
-            supervisor_name: string; note: string | null;
+        const handleDiscountResponse = (data: {
+            approved: boolean;
+            coupon_code: string | null;
+            amount: number;
+            request_id: string;
         }) => {
             setDiscountRequests(prev => {
                 const updated = { ...prev };
@@ -196,51 +198,22 @@ export default function CatalogPanel({
                     if (prev[key].requestId === data.request_id) {
                         updated[key] = {
                             ...prev[key],
-                            status: 'approved',
-                            approvedPrice: data.approved_price,
-                            supervisorName: data.supervisor_name,
-                            note: data.note ?? undefined,
-                        };
-                        // Auto-apply approved price to cart
-                        setCart(c => c.map(i =>
-                            (i.variation ? `v-${i.variation.id}` : `p-${i.product.id}`) === key
-                                ? { ...i, customPrice: String(data.approved_price) }
-                                : i
-                        ));
-                    }
-                }
-                return updated;
-            });
-        };
-
-        const handleRejected = (data: {
-            request_id: string; product_id: number; product_name: string;
-            original_price: number; requested_price: number;
-            supervisor_name: string; note: string | null;
-        }) => {
-            setDiscountRequests(prev => {
-                const updated = { ...prev };
-                for (const key of Object.keys(prev)) {
-                    if (prev[key].requestId === data.request_id) {
-                        updated[key] = {
-                            ...prev[key],
-                            status: 'rejected',
-                            supervisorName: data.supervisor_name,
-                            note: data.note ?? undefined,
+                            status: data.approved ? 'approved' : 'rejected',
+                            couponCode: data.coupon_code ?? undefined,
+                            approvedPct: data.approved ? data.amount : undefined,
                         };
                     }
                 }
                 return updated;
             });
+            if (data.approved && data.coupon_code) {
+                setApprovalToast(`Descuento ${data.amount}% aprobado. Cupón: ${data.coupon_code}`);
+                setTimeout(() => setApprovalToast(null), 8000);
+            }
         };
 
-        socket.on('discount_approved', handleApproved);
-        socket.on('discount_rejected', handleRejected);
-
-        return () => {
-            socket.off('discount_approved', handleApproved);
-            socket.off('discount_rejected', handleRejected);
-        };
+        socket.on('discount_response', handleDiscountResponse);
+        return () => { socket.off('discount_response', handleDiscountResponse); };
     }, []);
 
     // ── Customer profile ────────────────────────────────────────────────────
@@ -393,6 +366,16 @@ export default function CatalogPanel({
         const key = cartKey(item);
         const origPrice = item.variation?.price || item.product.price || '0';
         const requestedPrice = item.customPrice!;
+        const discountPct = parseFloat(((1 - parseFloat(requestedPrice) / parseFloat(origPrice)) * 100).toFixed(2));
+
+        // Build full cart snapshot for the WordPress plugin
+        const cartItems = cart.map(i => ({
+            product_id: i.variation?.id || i.product.id,
+            name:       i.product.name,
+            qty:        i.quantity,
+            price:      parseFloat(i.variation?.price || i.product.price || '0'),
+            total:      parseFloat(i.customPrice || i.variation?.price || i.product.price || '0') * i.quantity,
+        }));
 
         setEscalating(key);
         setError(null);
@@ -401,16 +384,16 @@ export default function CatalogPanel({
                 method: 'POST',
                 body: JSON.stringify({
                     conversation_id: conversationId,
-                    product_id: item.variation?.id || item.product.id,
-                    product_name: item.product.name,
-                    original_price: parseFloat(origPrice),
-                    requested_price: parseFloat(requestedPrice),
+                    discount_pct:    discountPct,
+                    reason:          `${item.product.name}: $${origPrice} → $${requestedPrice} (${discountPct}% dto.)`,
+                    cart_items:      cartItems,
                 }),
             });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al enviar solicitud');
             setDiscountRequests(prev => ({
                 ...prev,
-                [key]: { requestId: data.id, status: 'pending' },
+                [key]: { requestId: String(data.request_id || data.id), status: 'pending' },
             }));
         } catch (err: any) {
             setError(err.message || 'Error al enviar solicitud');
@@ -447,9 +430,15 @@ export default function CatalogPanel({
             const firstName = nameParts[0] || '';
             const lastName = nameParts.slice(1).join(' ') || '';
 
-            const res = await apiFetch(`/api/conversations/${conversationId}/cart-link`, {
+            // Collect any approved coupon from escalated items
+        const approvedCoupon = Object.values(discountRequests).find(
+            r => r.status === 'approved' && r.couponCode
+        )?.couponCode;
+
+        const res = await apiFetch(`/api/conversations/${conversationId}/cart-link`, {
                 method: 'POST',
                 body: JSON.stringify({
+                    coupon_code: approvedCoupon || undefined,
                     items: cart.map(i => {
                         const origPrice = i.variation?.price || i.product.price;
                         return {
@@ -535,6 +524,12 @@ export default function CatalogPanel({
                     <X className="w-4 h-4" />
                 </button>
             </div>
+
+            {approvalToast && (
+                <div className="mx-3 mt-2 px-3 py-2 text-xs flex items-center gap-2 text-green-800 bg-green-50 border border-green-300 rounded-lg shrink-0 font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-green-600" /><span>{approvalToast}</span>
+                </div>
+            )}
 
             {error && (
                 <div className="mx-3 mt-2 px-3 py-1.5 text-xs flex items-center gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-lg shrink-0">
@@ -808,10 +803,12 @@ export default function CatalogPanel({
                                             <div className="mt-1 space-y-0.5">
                                                 <p className="text-[10px] text-green-700 flex items-center gap-1">
                                                     <CheckCircle2 className="w-3 h-3" />
-                                                    Aprobado por {discReq.supervisorName} — ${discReq.approvedPrice?.toFixed(2)}
+                                                    Descuento {discReq.approvedPct}% aprobado
                                                 </p>
-                                                {discReq.note && (
-                                                    <p className="text-[10px] text-green-600 italic">"{discReq.note}"</p>
+                                                {discReq.couponCode && (
+                                                    <p className="text-[10px] text-green-800 font-bold bg-green-100 px-1.5 py-0.5 rounded">
+                                                        Cupón: {discReq.couponCode}
+                                                    </p>
                                                 )}
                                             </div>
                                         )}
@@ -821,11 +818,8 @@ export default function CatalogPanel({
                                             <div className="mt-1 space-y-0.5">
                                                 <p className="text-[10px] text-red-700 flex items-center gap-1">
                                                     <XCircle className="w-3 h-3" />
-                                                    Rechazado por {discReq.supervisorName}
+                                                    Descuento rechazado por supervisor
                                                 </p>
-                                                {discReq.note && (
-                                                    <p className="text-[10px] text-red-600 italic">"{discReq.note}"</p>
-                                                )}
                                                 <p className="text-[10px] text-slate-500">Ajusta el precio para re-escalar.</p>
                                             </div>
                                         )}
