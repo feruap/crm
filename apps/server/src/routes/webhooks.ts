@@ -2,11 +2,9 @@
 import crypto from 'crypto';
 import axios from 'axios';
 import { db } from '../db';
-import { findBestAnswer, findTopKnowledgeHits, generateEmbedding, getAIResponse, recordKnowledgeUse } from '../ai.service';
-import { findMatchingFlow, isWithinBusinessHours } from './flows';
-import { assignFromGroup } from './agent-groups';
+import { isWithinBusinessHours } from './flows';
 import { emitNewMessage, getIO } from '../socket';
-import { handleIncomingMessage } from '../services/smart-bot-engine';
+import { orchestrateMessage } from '../services/message-orchestrator';
 import { executeHandoff } from '../services/escalation-engine';
 import { recordTouchpoint, findCampaignMapping, sendCampaignAutoReply, recordUTMTouchpoint } from '../services/campaign-responder';
 import { deliverMessage } from '../services/message-sender';
@@ -408,164 +406,115 @@ export async function handleBotResponse(
             return;
         }
 
-        // ── 1. Check for matching bot_flow ────────────────────────────────────
-        try {
-            // Determine context for flow matching
-            const channel = await db.query(`SELECT provider, provider_config->>'brand_name' AS brand_name FROM channels WHERE id = $1`, [channelId]);
-            const provider = channel.rows[0]?.provider || 'whatsapp';
-            // channelBrandName moved to outer scope as brandName
+        // ── 1. Gather context needed for flow matching ────────────────────────
+        const channel = await db.query(
+            `SELECT provider, api_key_encrypted FROM channels WHERE id = $1`,
+            [channelId]
+        );
+        const channelProvider: string = channel.rows[0]?.provider || 'whatsapp';
 
-            const msgCount = await db.query(
-                `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
-                [conversationId]
-            );
-            const isFirstMessage = parseInt(msgCount.rows[0].count) <= 1;
+        const msgCountRow = await db.query(
+            `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
+            [conversationId]
+        );
+        const isFirstMessage = parseInt(msgCountRow.rows[0].count, 10) <= 1;
 
-            // Check campaign attribution
-            const attribution = await db.query(
-                `SELECT campaign_id FROM attributions WHERE conversation_id = $1 LIMIT 1`,
-                [conversationId]
-            );
-            const campaignId = attribution.rows[0]?.campaign_id || null;
+        const attribution = await db.query(
+            `SELECT campaign_id FROM attributions WHERE conversation_id = $1 LIMIT 1`,
+            [conversationId]
+        );
+        const campaignId: string | null = attribution.rows[0]?.campaign_id || null;
 
-            const afterHours = !(await isWithinBusinessHours());
-
-            const matchedFlow = await findMatchingFlow({
-                provider,
-                messageText,
-                isFirstMessage,
-                campaignId,
-                isAfterHours: afterHours,
-            });
-
-            if (matchedFlow) {
-                console.log(`[BotFlow] Matched flow "${matchedFlow.name}" (${matchedFlow.flow_type}) for conv ${conversationId}`);
-
-                if (matchedFlow.flow_type === 'visual' && matchedFlow.nodes) {
-                    await executeVisualFlow(matchedFlow, conversationId, channelId, customerId, messageText);
-                    return;
-                }
-                // For simple flows, we could use the steps field — for now fall through to RAG+AI
-            }
-        } catch (flowErr) {
-            console.error('[BotFlow] Error matching flow:', flowErr);
-            // Fall through to RAG+AI
-        }
-
-        // ── 2. Fallback: RAG + AI response (original behavior) ───────────────
+        // ── 2. Get AI settings (needed by Smart Bot fallback) ─────────────────
         const settings = await db.query(
             `SELECT provider, api_key_encrypted, system_prompt, model_name
              FROM ai_settings WHERE is_default = TRUE LIMIT 1`
         );
         if (settings.rows.length === 0) return;
+        const { provider: aiProvider, api_key_encrypted, model_name } = settings.rows[0];
 
-        const { provider: aiProvider, api_key_encrypted, system_prompt: rawPrompt, model_name } = settings.rows[0];
+        // ── 3. Build the sendMessage callback ─────────────────────────────────
+        // Used by the orchestrator to deliver messages that originate from visual
+        // flow nodes (send_message, menu_buttons, ai_response, etc.)
 
-        // Inject channel brand name into system prompt
-        const chBrand = await db.query(`SELECT brand_name, name, provider_config->>'custom_prompt' as custom_prompt FROM channels WHERE id = $1`, [channelId]);
-        const brandName = chBrand.rows[0]?.brand_name || chBrand.rows[0]?.name || 'Amunet';
-        const customPrompt = chBrand.rows[0]?.custom_prompt || '';
-        const system_prompt = rawPrompt ? rawPrompt.replace(/Amunet/gi, brandName) : rawPrompt;
-
-        // Visitor tracking: fetch browsing context from WordPress (first message only)
-        let visitorContext = '';
-        try {
-            const msgCount = await db.query('SELECT COUNT(*) as c FROM messages WHERE conversation_id=$1', [conversationId]);
-            if (parseInt(msgCount.rows[0]?.c) <= 1) {
-                const phone = await db.query('SELECT display_name FROM customers WHERE id=$1', [customerId]);
-                const customerPhone = phone.rows[0]?.display_name || '';
-                if (customerPhone && /^\d{10,15}$/.test(customerPhone)) {
-                    const wcUrl = process.env.WC_URL || 'https://tst.amunet.com.mx';
-                    const vRes = await fetch(`${wcUrl}/wp-json/amunet-tracker/v1/visitor/${customerPhone}`, { signal: AbortSignal.timeout(3000) }).catch(() => null);
-                    if (vRes?.ok) {
-                        const vData: any = await vRes.json();
-                        if (vData.found && vData.products_visited) {
-                            const tpl = await db.query("SELECT value FROM settings WHERE key='visitor_greeting_template'");
-                            const template = tpl.rows[0]?.value || 'El cliente visitó estos productos en la web: {productos_visitados}. Salúdalo mencionando su interés en esos productos y ofrece ayuda personalizada.';
-                            visitorContext = template.replace('{productos_visitados}', vData.products_visited);
-                            if (vData.utm_source) visitorContext += ` Llegó desde: ${vData.utm_source}.`;
-                        }
-                    }
-                }
-            }
-        } catch { /* non-fatal */ }
-
-        const embedding = await generateEmbedding(messageText, aiProvider, api_key_encrypted);
-        // Fetch up to 3 relevant KB entries for richer context
-        const knowledgeHits = await findTopKnowledgeHits(messageText, embedding, 3);
-        const topHit = knowledgeHits.length > 0 ? knowledgeHits[0] : null;
-
-        let botReply: string;
-        let confidence: number;
-        let knowledgeContext: string | undefined = undefined;
-
-        // Always pass through LLM to maintain WhatsApp conversational style
-        // Build rich context from all matching KB entries
-        if (knowledgeHits.length > 0) {
-            const contextParts = knowledgeHits
-                .filter(h => h.confidence > 0.30)
-                .map((h, i) => `--- Resultado ${i + 1} (confianza: ${(h.confidence * 100).toFixed(0)}%) ---\nProducto/Tema: ${h.question}\nInfo: ${h.answer}`);
-            if (contextParts.length > 0) {
-                knowledgeContext = `Información relevante de la base de conocimiento:\n${contextParts.join('\n\n')}`;
-            }
-            // Record usage for all hits
-            for (const h of knowledgeHits.filter(h => h.confidence > 0.30)) {
-                await recordKnowledgeUse(h.knowledgeId as any);
-            }
-        }
-
-        {
-            let finalSystemPrompt = system_prompt || '';
-            if (brandName && brandName !== 'Amunet') {
-                finalSystemPrompt = `Eres el asistente de ${brandName}. ` + finalSystemPrompt;
-            }
-            if (customPrompt) {
-                finalSystemPrompt += '\n\nInstrucciones adicionales para este canal:\n' + customPrompt;
-            }
-            if (visitorContext) {
-                finalSystemPrompt += '\n\nContexto de navegación del cliente:\n' + visitorContext;
-            }
-            botReply = await getAIResponse(
-                aiProvider as any,
-                finalSystemPrompt,
-                messageText,
-                api_key_encrypted,
-                model_name,
-                customerId,
-                knowledgeContext,
-                conversationId
+        async function sendBotMessage(content: string): Promise<void> {
+            const ins = await db.query(
+                `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
+                 VALUES ($1, $2, $3, 'outbound', $4, 'bot', 1.0) RETURNING *`,
+                [conversationId, channelId, customerId, content]
             );
-            confidence = topHit ? topHit.confidence : 0.5;
+            const msg = ins.rows[0];
+            emitNewMessage(conversationId, msg);
+            emitConversationUpdated(conversationId, {
+                last_message: content,
+                last_message_at: msg.created_at,
+            });
+            getIO().emit('conversation_list_updated', { conversation_id: conversationId });
+            await sendOutboundReply(channelId, customerId, content);
         }
 
-        // Check escalation rules before sending bot reply
-        const msgCountRes = await db.query(`SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`, [conversationId]);
-        const inboundCount = parseInt(msgCountRes.rows[0].count, 10);
+        // ── 4. Orchestrate: visual flow → Smart Bot fallback ─────────────────
+        const orchResult = await orchestrateMessage({
+            conversationId,
+            channelId,
+            customerId,
+            messageText,
+            channelProvider,
+            isFirstMessage,
+            campaignId,
+            referralData: referral,
+            aiProvider,
+            apiKey: api_key_encrypted,
+            modelName: model_name,
+            sendMessage: sendBotMessage,
+        });
+
+        // Visual flow messages were already sent via the sendMessage callback; we're done.
+        if (orchResult.path === 'visual_flow') {
+            return;
+        }
+
+        // ── 5. Handle Smart Bot Engine response ───────────────────────────────
+        // (paths: smart_bot_fallback or visual_flow_pass_to_ai)
+        const smartBotResp = orchResult.smartBotResponse;
+        if (!smartBotResp) return;
+
+        let botReply: string = smartBotResp.message;
+        const confidence: number = smartBotResp.confidence ?? 0.5;
+
+        // Apply escalation checks on top of Smart Bot's own routing decision
+        const inboundCountRes = await db.query(
+            `SELECT COUNT(*) FROM messages WHERE conversation_id = $1 AND direction = 'inbound'`,
+            [conversationId]
+        );
+        const inboundCount = parseInt(inboundCountRes.rows[0].count, 10);
         const esc = await shouldEscalate(messageText, botReply, confidence, inboundCount);
 
-        // Also detect if the bot itself decided to escalate (prompt rule #9 tells it to say "te conecto con un asesor")
-        // Wider regex to catch LLM variations: "te conecto", "te paso", "te atiendo", "un momento" + asesor/ejecutivo/equipo
         const botSelfEscalated = /te (conecto|paso|comunico|transfiero) con (un asesor|un ejecutivo|nuestro equipo|un agente)/i.test(botReply)
             || (/un momento.*te (atiendo|conecto|paso)/i.test(botReply));
 
-        // Detect purchase intent directly from customer message as fallback
         const customerLower = messageText.toLowerCase();
         const purchaseIntent = /\b(quiero comprar|quiero pedir|quiero ordenar|hacer (un |el )?pedido|hacer (una |la )?orden|me los llevo|los quiero|c[oó]mo (hago el pedido|compro|pago|ordeno)|quiero cotizar|env[ií](a|e)me? (la )?cotizaci[oó]n)\b/i.test(customerLower);
 
-        if (esc.escalate || botSelfEscalated || purchaseIntent) {
+        // Also escalate if Smart Bot itself decided to escalate
+        const smartBotEscalated = smartBotResp.action_type === 'escalate';
+
+        if (esc.escalate || botSelfEscalated || purchaseIntent || smartBotEscalated) {
             if (botSelfEscalated && !esc.escalate && !purchaseIntent) {
-                // Bot decided to escalate on its own — keep its reply but update conversation status
-                console.log(`[Escalation] Conv ${conversationId}: Bot self-escalated (purchase intent detected)`);
+                console.log(`[Escalation] Conv ${conversationId}: Bot self-escalated`);
             } else if (purchaseIntent && !esc.escalate) {
-                // Customer expressed purchase intent — bot might not have escalated, force it
                 botReply = `Con gusto, te conecto con un asesor para procesar tu pedido. Un momento por favor. 🙂`;
-                console.log(`[Escalation] Conv ${conversationId}: Purchase intent detected in customer message`);
+                console.log(`[Escalation] Conv ${conversationId}: Purchase intent detected`);
+            } else if (smartBotEscalated && !esc.escalate && !purchaseIntent) {
+                console.log(`[Escalation] Conv ${conversationId}: Smart Bot escalated — intent=${smartBotResp.intent_type}`);
             } else {
-                // Rule-based escalation — override with standard message
                 botReply = `Te conecto con un asesor especializado. Un momento por favor. 🙂`;
                 console.log(`[Escalation] Conv ${conversationId}: ${esc.reason}`);
             }
-            await db.query(`UPDATE conversations SET status = 'escalated', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`, [conversationId]);
+            await db.query(
+                `UPDATE conversations SET status = 'escalated', assigned_agent_id = NULL, updated_at = NOW() WHERE id = $1`,
+                [conversationId]
+            );
         }
 
         const result = await db.query(
@@ -582,7 +531,6 @@ export async function handleBotResponse(
         });
         getIO().emit('conversation_list_updated', { conversation_id: conversationId });
 
-        // ── Send the reply back via the channel's native API (WhatsApp, Messenger, etc.) ──
         await sendOutboundReply(channelId, customerId, botReply);
     } catch (err: any) {
         console.error('🤖 Bot Error:', err.message, err.stack?.split('\n').slice(0,3).join('\n'));
@@ -611,158 +559,6 @@ export async function handleBotResponse(
             getIO().emit('conversation_list_updated', { conversation_id: conversationId });
         } catch (dbErr) {
             console.error('🤖 Bot Error: Failed to save fallback message:', dbErr);
-        }
-    }
-}
-
-// ── Visual Flow Executor ─────────────────────────────────────────────────────
-// Walks through nodes following edges from the trigger, executing each action.
-
-async function executeVisualFlow(
-    flow: any,
-    conversationId: string,
-    channelId: string,
-    customerId: string,
-    messageText: string
-): Promise<void> {
-    const { emitNewMessage, emitConversationUpdated, getIO } = require('../socket');
-    const nodes: any[] = flow.nodes || [];
-    const edges: any[] = flow.edges || [];
-
-    // Find trigger node
-    const triggerNode = nodes.find((n: any) => n.type === 'trigger');
-    if (!triggerNode) return;
-
-    // Walk the graph starting from the trigger
-    const visited = new Set<string>();
-    let currentNodeId = triggerNode.id;
-
-    // Find next node(s) connected from a given node
-    function getNextNodes(nodeId: string): string[] {
-        return edges
-            .filter((e: any) => e.source === nodeId)
-            .map((e: any) => e.target);
-    }
-
-    // Helper to emit a bot message
-    async function sendBotMessage(content: string): Promise<void> {
-        const result = await db.query(
-            `INSERT INTO messages (conversation_id, channel_id, customer_id, direction, content, handled_by, bot_confidence)
-             VALUES ($1, $2, $3, 'outbound', $4, 'bot', 1.0) RETURNING *`,
-            [conversationId, channelId, customerId, content]
-        );
-        const msg = result.rows[0];
-        emitNewMessage(conversationId, msg);
-        emitConversationUpdated(conversationId, {
-            last_message: content,
-            last_message_at: msg.created_at,
-        });
-        getIO().emit('conversation_list_updated', { conversation_id: conversationId });
-    }
-
-    // Walk the flow — process first connected node after trigger, then follow edges
-    const queue = getNextNodes(currentNodeId);
-
-    while (queue.length > 0) {
-        const nodeId = queue.shift()!;
-        if (visited.has(nodeId)) continue;
-        visited.add(nodeId);
-
-        const node = nodes.find((n: any) => n.id === nodeId);
-        if (!node) continue;
-
-        switch (node.type) {
-            case 'send_message': {
-                if (node.data.message) {
-                    await sendBotMessage(node.data.message);
-                }
-                // Continue to next nodes
-                queue.push(...getNextNodes(nodeId));
-                break;
-            }
-
-            case 'menu_buttons': {
-                // Send the menu text with buttons listed
-                const buttons = node.data.buttons || [];
-                let menuText = node.data.message || '';
-                if (buttons.length > 0) {
-                    menuText += '\n\n' + buttons.map((b: any, i: number) => `${i + 1}. ${b.text}`).join('\n');
-                }
-                if (menuText.trim()) {
-                    await sendBotMessage(menuText);
-                }
-                // Menu is a pause point — we don't continue automatically
-                // The next message from the customer will re-trigger handleBotResponse
-                // which will try to match the flow again. For now, stop here.
-                break;
-            }
-
-            case 'conditional': {
-                const condition = (node.data.condition || '').toLowerCase();
-                const text = messageText.toLowerCase();
-                // Simple condition evaluation: check if message contains the condition text
-                const conditionMet = condition.split('|').some((part: string) => text.includes(part.trim()));
-
-                const nextNodes = getNextNodes(nodeId);
-                if (conditionMet && nextNodes.length > 0) {
-                    queue.push(nextNodes[0]); // True branch = first connection
-                } else if (nextNodes.length > 1) {
-                    queue.push(nextNodes[1]); // False branch = second connection
-                }
-                break;
-            }
-
-            case 'transfer_to_group': {
-                if (node.data.group_id) {
-                    const agentId = await assignFromGroup(node.data.group_id, conversationId);
-                    if (agentId) {
-                        await sendBotMessage('Te estamos conectando con un agente. Un momento por favor...');
-                    }
-                }
-                // Stop flow — agent takes over
-                break;
-            }
-
-            case 'ai_response': {
-                // Use RAG + AI with optional custom prompt
-                try {
-                    const settings = await db.query(
-                        `SELECT provider, api_key_encrypted, system_prompt, model_name
-                         FROM ai_settings WHERE is_default = TRUE LIMIT 1`
-                    );
-                    if (settings.rows.length > 0) {
-                        const { provider, api_key_encrypted, system_prompt, model_name } = settings.rows[0];
-                        const prompt = node.data.custom_prompt || system_prompt || '';
-                        const embedding = await generateEmbedding(messageText, provider, api_key_encrypted);
-                        const hit = await findBestAnswer(messageText, embedding);
-
-                        let context: string | undefined;
-                        if (hit && hit.confidence > 0.30) {
-                            context = `Info: ${hit.question} → ${hit.answer}`;
-                        }
-
-                        const reply = await getAIResponse(
-                            provider as any, prompt, messageText,
-                            api_key_encrypted, model_name, customerId, context, conversationId
-                        );
-                        await sendBotMessage(reply);
-                    }
-                } catch (aiErr) {
-                    console.error('[VisualFlow] AI Response error:', aiErr);
-                    await sendBotMessage('Lo siento, hubo un error al procesar tu solicitud.');
-                }
-                queue.push(...getNextNodes(nodeId));
-                break;
-            }
-
-            case 'wait_response': {
-                // Pause — stop flow execution. Next customer message will re-enter handleBotResponse
-                break;
-            }
-
-            default:
-                queue.push(...getNextNodes(nodeId));
-                break;
         }
     }
 }
