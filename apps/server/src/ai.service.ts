@@ -472,6 +472,7 @@ export async function learnFromConversation(
     const messages = await db.query(
         `SELECT direction, content FROM messages
          WHERE conversation_id = $1 AND content IS NOT NULL
+           AND (direction = 'inbound' OR handled_by = 'human')
          ORDER BY created_at ASC`,
         [conversationId]
     );
