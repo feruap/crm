@@ -10,19 +10,19 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string): SocketSe
         cors: { origin: corsOrigin, methods: ['GET', 'POST'] },
     });
 
-    // JWT auth middleware — backward compatible: no token still allowed
+    // JWT auth middleware — token required; reject connections without a valid token
     io.use((socket, next) => {
         const token = (socket.handshake.auth as any)?.token
             || (socket.handshake.headers?.authorization || '').replace('Bearer ', '');
-        if (!token) return next(); // allow unauthenticated for legacy clients
+        if (!token) return next(new Error('Authentication required'));
         try {
             const secret = process.env.JWT_SECRET || 'secret';
             const payload = jwt.verify(token, secret) as any;
             (socket as any).agentId = payload.agentId || payload.id || null;
+            next();
         } catch {
-            // invalid token — still allow but without identity
+            return next(new Error('Invalid or expired token'));
         }
-        next();
     });
 
     io.on('connection', (socket) => {
