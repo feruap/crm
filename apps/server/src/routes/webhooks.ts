@@ -1072,7 +1072,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             }
             const expected = crypto
                 .createHmac('sha256', appSecret)
-                .update(JSON.stringify(req.body))
+                .update((req as any).rawBody || JSON.stringify(req.body))
                 .digest('hex');
             if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
                 console.warn('TikTok webhook: signature mismatch — dropping');
