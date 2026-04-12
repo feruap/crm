@@ -53,20 +53,50 @@ export interface NavItem {
     minRole?: UserRole;
 }
 
-export const NAV_ITEMS: NavItem[] = [
-    { href: '/inbox',              label: 'Inbox',            icon: 'MessageSquare' },
-    { href: '/kanban',             label: 'Seguimiento',      icon: 'LayoutDashboard' },
-    { href: '/campaigns',          label: 'Campanas',        icon: 'Megaphone',        minRole: 'gerente' },
-    { href: '/campaign-mappings',  label: 'Auto-Respuestas',  icon: 'Zap',              minRole: 'gerente' },
-    { href: '/orders',             label: 'Ordenes',          icon: 'ShoppingCart' },
-    { href: '/medical-products',   label: 'Productos Med.',   icon: 'Beaker',           minRole: 'gerente' },
-    { href: '/escalation-rules',   label: 'Escalacion',       icon: 'ArrowRightLeft',   minRole: 'gerente' },
-    { href: '/analytics',          label: 'Atribucion',       icon: 'BarChart3',         minRole: 'director' },
-    { href: '/commissions',        label: 'Comisiones',       icon: 'DollarSign' },
-    { href: '/agents',             label: 'Agentes',          icon: 'Users',            minRole: 'gerente' },
-    { href: '/bot',                label: 'Base de IA',       icon: 'Bot',              minRole: 'gerente' },
-    { href: '/settings',           label: 'Settings',         icon: 'Settings',         minRole: 'director' },
+export interface NavSection {
+    title: string;
+    items: NavItem[];
+}
+
+export const NAV_SECTIONS: NavSection[] = [
+    {
+        title: 'OPERACIÓN',
+        items: [
+            { href: '/inbox',            label: 'Inbox',             icon: 'MessageSquare' },
+            { href: '/kanban',           label: 'Seguimiento',       icon: 'LayoutDashboard' },
+            { href: '/agenda',           label: 'Agenda',            icon: 'Calendar' },
+            { href: '/contacts',         label: 'Directorio',        icon: 'Users' },
+        ],
+    },
+    {
+        title: 'GROWTH & MARKETING',
+        items: [
+            { href: '/analytics',        label: 'Atribución & ROAS', icon: 'BarChart3',      minRole: 'gerente' },
+            { href: '/campaigns',        label: 'Campañas',          icon: 'Megaphone',      minRole: 'gerente' },
+            { href: '/medical-products', label: 'Catálogo Médico',   icon: 'Beaker',         minRole: 'gerente' },
+            { href: '/widget',           label: 'Web Widget',        icon: 'Globe',          minRole: 'gerente' },
+        ],
+    },
+    {
+        title: 'STUDIO IA',
+        items: [
+            { href: '/automations',      label: 'Flujos & Reglas',   icon: 'Zap',            minRole: 'gerente' },
+            { href: '/bot',              label: 'Base de Conocimiento', icon: 'Bot',          minRole: 'gerente' },
+            { href: '/simulator',        label: 'Simulador',         icon: 'Sparkles',       minRole: 'gerente' },
+        ],
+    },
+    {
+        title: 'ADMIN',
+        items: [
+            { href: '/supervisor',       label: 'Control Room',      icon: 'Activity',       minRole: 'gerente' },
+            { href: '/gamification',     label: 'Gamificación',      icon: 'Trophy' },
+            { href: '/settings',         label: 'Configuración',     icon: 'Settings',       minRole: 'director' },
+        ],
+    },
 ];
+
+// Flat list for backwards compatibility
+export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap(s => s.items);
 
 // ─────────────────────────────────────────────
 // Provider
