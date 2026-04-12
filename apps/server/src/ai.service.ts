@@ -502,7 +502,7 @@ export async function learnFromConversation(
 ): Promise<void> {
     const messages = await db.query(
         `SELECT direction, content FROM messages
-         WHERE conversation_id = $1 AND content IS NOT NULL
+         WHERE conversation_id = $1 AND content IS NOT NULL AND handled_by = 'human'
          ORDER BY created_at ASC`,
         [conversationId]
     );
