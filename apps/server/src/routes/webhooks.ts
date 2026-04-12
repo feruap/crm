@@ -23,9 +23,11 @@ const router = Router();
 function validateMetaSignature(req: Request, secret: string): boolean {
     const signature = req.headers['x-hub-signature-256'] as string;
     if (!signature) return false;
+    const rawBody: Buffer | undefined = (req as any).rawBody;
+    if (!rawBody) return false;
     const expected = 'sha256=' + crypto
         .createHmac('sha256', secret)
-        .update(JSON.stringify(req.body))
+        .update(rawBody)
         .digest('hex');
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
@@ -431,9 +433,14 @@ router.post('/woocommerce-status', async (req: Request, res: Response) => {
     if (wcWebhookSecret) {
         const signature = req.headers['x-wc-webhook-signature'] as string;
         if (signature) {
+            const rawBody: Buffer | undefined = (req as any).rawBody;
+            if (!rawBody) {
+                res.sendStatus(401);
+                return;
+            }
             const expected = crypto
                 .createHmac('sha256', wcWebhookSecret)
-                .update(JSON.stringify(req.body))
+                .update(rawBody)
                 .digest('base64');
             if (signature !== expected) {
                 console.warn('WooCommerce webhook signature mismatch — dropping');
