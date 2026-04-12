@@ -138,51 +138,71 @@ const KANBAN_STATUS_MAP: Record<string, KanbanColumnInfo> = {
 // ─────────────────────────────────────────────
 
 /**
- * Generate a personalized WooCommerce cart link with attribution + agent tracking.
- * Customer completes purchase on WC, order webhook syncs back to CRM.
+ * Generate a WooCommerce checkout link for one or more products.
  *
- * Example output:
- * https://testamunet.local/cart/?add-to-cart=123&quantity=20&utm_source=crm_bot&utm_medium=whatsapp&utm_campaign=hba1c_marzo_2026&salesking_agent=5
+ * Single product: uses the ?add-to-cart= URL shortcut (no API call needed).
+ * Multiple products: creates a Draft/Pending order via the WC REST API and
+ * returns the order's payment_url so the customer lands directly on checkout.
+ *
+ * Falls back to the single-product URL format if WC credentials are missing.
  */
-export function generateWCCartLink(params: GenerateCartLinkParams): string {
+export async function generateWCCartLink(params: GenerateCartLinkParams): Promise<string> {
     const WC_STORE_URL = process.env.WC_STORE_URL || 'http://testamunet.local';
+    const wcUrl   = process.env.WC_URL   || WC_STORE_URL;
+    const wcKey   = process.env.WC_KEY;
+    const wcSecret = process.env.WC_SECRET;
 
-    const url = new URL(`${WC_STORE_URL}/cart/`);
+    // ── Multi-product: create a Draft order via REST API ──────────────────────
+    if (params.productIds.length > 1 && wcKey && wcSecret) {
+        const auth = Buffer.from(`${wcKey}:${wcSecret}`).toString('base64');
 
-    // Add products to cart
-    if (params.productIds.length === 1) {
-        // Single product: use add-to-cart syntax
-        const prod = params.productIds[0];
-        url.searchParams.append('add-to-cart', String(prod.wcProductId));
-        url.searchParams.append('quantity', String(prod.quantity));
-    } else {
-        // Multiple products: add each separately
-        for (const prod of params.productIds) {
-            // WC requires separate requests for multiple items
-            // For now, use first product and note limitation
-            if (params.productIds.indexOf(prod) === 0) {
-                url.searchParams.append('add-to-cart', String(prod.wcProductId));
-                url.searchParams.append('quantity', String(prod.quantity));
-            }
+        const meta_data: Array<{ key: string; value: string }> = [
+            { key: '_crm_source', value: 'crm_bot' },
+        ];
+        if (params.agentId)   meta_data.push({ key: 'salesking_assigned_agent', value: params.agentId });
+        if (params.campaignId) meta_data.push({ key: 'utm_campaign', value: params.campaignId });
+        if (params.customerId) meta_data.push({ key: '_myalice_customer_id', value: params.customerId });
+
+        const line_items = params.productIds.map(p => ({
+            product_id: p.wcProductId,
+            quantity: p.quantity,
+        }));
+
+        const resp = await fetch(`${wcUrl}/wp-json/wc/v3/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${auth}`,
+            },
+            body: JSON.stringify({
+                status: 'pending',
+                line_items,
+                meta_data,
+                ...(params.couponCode ? { coupon_lines: [{ code: params.couponCode }] } : {}),
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.text();
+            console.error(`[WC Cart] Order creation failed ${resp.status}: ${err.substring(0, 200)}`);
+            // Fall through to single-product URL fallback
+        } else {
+            const order: any = await resp.json();
+            const paymentUrl: string = order.payment_url || order.checkout_payment_url;
+            if (paymentUrl) return paymentUrl;
         }
     }
 
-    // UTM Attribution
+    // ── Single product (or fallback): add-to-cart URL ─────────────────────────
+    const url = new URL(`${WC_STORE_URL}/cart/`);
+    const prod = params.productIds[0];
+    url.searchParams.append('add-to-cart', String(prod.wcProductId));
+    url.searchParams.append('quantity', String(prod.quantity));
     url.searchParams.append('utm_source', 'crm_bot');
-    url.searchParams.append('utm_medium', 'whatsapp'); // or other channel
-    if (params.campaignId) {
-        url.searchParams.append('utm_campaign', params.campaignId);
-    }
-
-    // SalesKing agent tracking
-    if (params.agentId) {
-        url.searchParams.append('salesking_agent', params.agentId);
-    }
-
-    // Coupon code if applicable
-    if (params.couponCode) {
-        url.searchParams.append('coupon', params.couponCode);
-    }
+    url.searchParams.append('utm_medium', 'whatsapp');
+    if (params.campaignId) url.searchParams.append('utm_campaign', params.campaignId);
+    if (params.agentId)    url.searchParams.append('salesking_agent', params.agentId);
+    if (params.couponCode) url.searchParams.append('coupon', params.couponCode);
 
     return url.toString();
 }
