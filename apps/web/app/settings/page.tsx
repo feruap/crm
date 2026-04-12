@@ -610,13 +610,9 @@ export default function SettingsPage() {
                         { key: 'equipos', label: 'Equipos', icon: <Users className="w-4 h-4" /> },
                         { key: 'canales', label: 'Canales & Webhooks', icon: <Share2 className="w-4 h-4" /> },
                         { key: 'horarios', label: 'Horarios', icon: <Clock className="w-4 h-4" /> },
-                        { key: 'ai', label: 'Configuración IA', icon: <Brain className="w-4 h-4" /> },
-                        { key: 'asignacion', label: 'Reglas de Asignación', icon: <ArrowRightLeft className="w-4 h-4" /> },
                         { key: 'respuestas', label: 'Respuestas Rápidas', icon: <Zap className="w-4 h-4" /> },
                         { key: 'integraciones', label: 'Integraciones', icon: <Link className="w-4 h-4" /> },
-                        { key: 'bot_knowledge', label: 'Base de Conocimiento', icon: <Brain className="w-4 h-4" /> },
                         { key: 'llamadas', label: 'WhatsApp Llamadas', icon: <Phone className="w-4 h-4" /> },
-                        { key: 'escalacion', label: 'Escalación', icon: <AlertCircle className="w-4 h-4" /> },
                     ].map(t => (
                         <button
                             key={t.key}
@@ -639,13 +635,9 @@ export default function SettingsPage() {
                 {activeTab === 'equipos' && <EquiposTab />}
                 {activeTab === 'canales' && <CanalesTab />}
                 {activeTab === 'horarios' && <HorariosTab />}
-                {activeTab === 'ai' && <AITab />}
-                {activeTab === 'bot_knowledge' && <KnowledgeBaseTab />}
-                {activeTab === 'asignacion' && <AssignmentRulesPage />}
                 {activeTab === 'respuestas' && <QuickRepliesTab />}
                 {activeTab === 'integraciones' && <IntegrationsTab />}
                 {activeTab === 'llamadas' && <LlamadasTab />}
-                {activeTab === 'escalacion' && <EscalacionTab />}
             </div>
         </div>
     );

@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import * as Lucide from 'lucide-react';
 const {
-    Bot, Search, Trash2, Edit2, Check, TrendingUp, Plus, Loader2, Zap, X, Users, GitBranch
+    Bot, Search, Trash2, Edit2, Check, TrendingUp, Plus, Loader2, Zap, X, Users, GitBranch,
+    AlertCircle, Save, Megaphone, MessageSquare
 } = Lucide as any;
 import { apiFetch } from '../../hooks/useAuth';
 import Link from 'next/link';
@@ -19,18 +21,26 @@ interface KnowledgeEntry {
     created_at: string;
 }
 
+const VALID_TABS = ['flujos', 'campanas', 'escalacion', 'enrutamiento'] as const;
+type AutomationTab = typeof VALID_TABS[number];
+
 export default function AutomationsPage() {
-    const [tab, setTab] = useState<'flujos' | 'conocimiento' | 'enrutamiento'>('flujos');
+    const searchParams = useSearchParams();
+    const rawTab = searchParams.get('tab') ?? 'flujos';
+    const [tab, setTab] = useState<AutomationTab>(
+        (VALID_TABS as readonly string[]).includes(rawTab) ? rawTab as AutomationTab : 'flujos'
+    );
 
     return (
         <div>
             <div className="border-b bg-white px-6 flex gap-1 pt-4 sticky top-0 z-10">
                 {[
-                    { key: 'flujos', label: 'Reglas de Flujo Automático', icon: <Zap className="w-4 h-4" /> },
-                    { key: 'conocimiento', label: 'Base de Conocimiento (RAG)', icon: <Bot className="w-4 h-4" /> },
-                    { key: 'enrutamiento', label: 'Enrutamiento de Agentes', icon: <Users className="w-4 h-4" /> },
+                    { key: 'flujos',       label: 'Flujos Visuales',            icon: <GitBranch className="w-4 h-4" /> },
+                    { key: 'campanas',     label: 'Auto-Respuestas de Campaña', icon: <Megaphone className="w-4 h-4" /> },
+                    { key: 'escalacion',   label: 'Reglas de Escalación',       icon: <AlertCircle className="w-4 h-4" /> },
+                    { key: 'enrutamiento', label: 'Grupos de Agentes',          icon: <Users className="w-4 h-4" /> },
                 ].map(t => (
-                    <button key={t.key} onClick={() => setTab(t.key as any)}
+                    <button key={t.key} onClick={() => setTab(t.key as AutomationTab)}
                         className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors
                             ${tab === t.key
                                 ? 'border-blue-600 text-blue-600 bg-blue-50/50'
@@ -40,8 +50,9 @@ export default function AutomationsPage() {
                 ))}
             </div>
 
-            {tab === 'flujos' && <FlujosTab />}
-            {tab === 'conocimiento' && <ConocimientoTab />}
+            {tab === 'flujos'       && <FlujosTab />}
+            {tab === 'campanas'     && <CampanasTab />}
+            {tab === 'escalacion'   && <EscalacionTab />}
             {tab === 'enrutamiento' && <GruposAgentesTab />}
         </div>
     );
@@ -827,3 +838,431 @@ function ConocimientoTab() {
     );
 }
 
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+    return (
+        <button
+            onClick={onChange}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-200'}`}
+        >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+        </button>
+    );
+}
+
+// ── Reglas de Escalacion Tab ──────────────────────────────────────────────────
+
+interface EscalationRules {
+    low_confidence: boolean;
+    confidence_threshold: number;
+    customer_requests_human: boolean;
+    human_keywords: string[];
+    shipping_questions: boolean;
+    shipping_keywords: string[];
+    max_messages: boolean;
+    max_message_count: number;
+    frustrated_customer: boolean;
+    frustration_keywords: string[];
+    bot_24_7: boolean;
+    after_hours_bot_only: boolean;
+}
+
+const DEFAULT_ESCALATION_RULES: EscalationRules = {
+    low_confidence: true, confidence_threshold: 0.5,
+    customer_requests_human: true, human_keywords: ['agente', 'humano', 'persona', 'representante', 'asesor'],
+    shipping_questions: true, shipping_keywords: ['envio', 'enviar', 'guia', 'paquete', 'entrega', 'rastreo'],
+    max_messages: true, max_message_count: 5,
+    frustrated_customer: true, frustration_keywords: ['molesto', 'enojado', 'furioso', 'terrible', 'pesimo'],
+    bot_24_7: true, after_hours_bot_only: true,
+};
+
+function EscalacionTab() {
+    const [rules, setRules] = useState<EscalationRules>(DEFAULT_ESCALATION_RULES);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [error, setError] = useState('');
+    const [humanKwInput, setHumanKwInput] = useState('');
+    const [shippingKwInput, setShippingKwInput] = useState('');
+    const [frustrationKwInput, setFrustrationKwInput] = useState('');
+
+    useEffect(() => {
+        apiFetch('/api/settings/escalation-rules')
+            .then(r => r.json())
+            .then((data: EscalationRules) => {
+                setRules({ ...DEFAULT_ESCALATION_RULES, ...data });
+                setHumanKwInput((data.human_keywords || DEFAULT_ESCALATION_RULES.human_keywords).join(', '));
+                setShippingKwInput((data.shipping_keywords || DEFAULT_ESCALATION_RULES.shipping_keywords).join(', '));
+                setFrustrationKwInput((data.frustration_keywords || DEFAULT_ESCALATION_RULES.frustration_keywords).join(', '));
+            })
+            .catch(() => {
+                setHumanKwInput(DEFAULT_ESCALATION_RULES.human_keywords.join(', '));
+                setShippingKwInput(DEFAULT_ESCALATION_RULES.shipping_keywords.join(', '));
+                setFrustrationKwInput(DEFAULT_ESCALATION_RULES.frustration_keywords.join(', '));
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const set = (field: keyof EscalationRules, value: any) =>
+        setRules(r => ({ ...r, [field]: value }));
+
+    const save = async () => {
+        setSaving(true); setError('');
+        const payload: EscalationRules = {
+            ...rules,
+            human_keywords: humanKwInput.split(',').map(s => s.trim()).filter(Boolean),
+            shipping_keywords: shippingKwInput.split(',').map(s => s.trim()).filter(Boolean),
+            frustration_keywords: frustrationKwInput.split(',').map(s => s.trim()).filter(Boolean),
+        };
+        try {
+            const r = await apiFetch('/api/settings/escalation-rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!r.ok) throw new Error('Error al guardar');
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (e: any) {
+            setError(e.message || 'Error al guardar');
+        } finally { setSaving(false); }
+    };
+
+    if (loading) return (
+        <div className="p-8 flex items-center gap-2 text-slate-500">
+            <Loader2 className="w-5 h-5 animate-spin" /> Cargando reglas...
+        </div>
+    );
+
+    return (
+        <div className="p-8 max-w-2xl">
+            <h2 className="text-2xl font-bold text-slate-800 mb-1">Reglas de Escalacion</h2>
+            <p className="text-slate-500 text-sm mb-8">Define cuando el bot debe transferir la conversacion a un agente humano</p>
+            <div className="space-y-4">
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Confianza baja del bot</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando la confianza en la respuesta este por debajo del umbral</p>
+                        </div>
+                        <Toggle checked={rules.low_confidence} onChange={() => set('low_confidence', !rules.low_confidence)} />
+                    </div>
+                    {rules.low_confidence && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Umbral de confianza: <span className="text-blue-600 font-semibold">{rules.confidence_threshold.toFixed(2)}</span>
+                            </label>
+                            <input type="range" min={0} max={1} step={0.05} value={rules.confidence_threshold}
+                                onChange={e => set('confidence_threshold', parseFloat(e.target.value))}
+                                className="w-full accent-blue-600" />
+                            <div className="flex justify-between text-xs text-slate-400 mt-1">
+                                <span>0.00 (siempre escala)</span><span>1.00 (nunca escala)</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Cliente solicita agente humano</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente use palabras clave para pedir atencion humana</p>
+                        </div>
+                        <Toggle checked={rules.customer_requests_human} onChange={() => set('customer_requests_human', !rules.customer_requests_human)} />
+                    </div>
+                    {rules.customer_requests_human && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras clave (separadas por coma)</label>
+                            <input type="text" value={humanKwInput} onChange={e => setHumanKwInput(e.target.value)}
+                                placeholder="agente, humano, persona, representante"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Preguntas de envio</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente pregunte sobre envios o paquetes</p>
+                        </div>
+                        <Toggle checked={rules.shipping_questions} onChange={() => set('shipping_questions', !rules.shipping_questions)} />
+                    </div>
+                    {rules.shipping_questions && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras clave de envio (separadas por coma)</label>
+                            <input type="text" value={shippingKwInput} onChange={e => setShippingKwInput(e.target.value)}
+                                placeholder="envio, guia, paquete, entrega, rastreo"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Limite de mensajes del bot</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar tras N mensajes sin resolver el problema</p>
+                        </div>
+                        <Toggle checked={rules.max_messages} onChange={() => set('max_messages', !rules.max_messages)} />
+                    </div>
+                    {rules.max_messages && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Numero maximo de mensajes del bot</label>
+                            <input type="number" min={1} max={50} value={rules.max_message_count}
+                                onChange={e => set('max_message_count', parseInt(e.target.value) || 1)}
+                                className="w-32 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Cliente frustrado</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Escalar cuando el cliente exprese frustracion o enojo</p>
+                        </div>
+                        <Toggle checked={rules.frustrated_customer} onChange={() => set('frustrated_customer', !rules.frustrated_customer)} />
+                    </div>
+                    {rules.frustrated_customer && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Palabras de frustracion (separadas por coma)</label>
+                            <input type="text" value={frustrationKwInput} onChange={e => setFrustrationKwInput(e.target.value)}
+                                placeholder="molesto, enojado, furioso, terrible, pesimo"
+                                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                        </div>
+                    )}
+                </div>
+                <div className="bg-white rounded-xl border shadow-sm p-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Bot activo 24/7</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">El bot responde siempre, incluso fuera de horario de atencion</p>
+                        </div>
+                        <Toggle checked={rules.bot_24_7} onChange={() => set('bot_24_7', !rules.bot_24_7)} />
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                        <div>
+                            <h4 className="font-semibold text-slate-800">Solo bot fuera de horario</h4>
+                            <p className="text-sm text-slate-500 mt-0.5">Fuera de horario laboral, no escalar a agentes humanos</p>
+                        </div>
+                        <Toggle checked={rules.after_hours_bot_only} onChange={() => set('after_hours_bot_only', !rules.after_hours_bot_only)} />
+                    </div>
+                </div>
+                {error && (
+                    <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                    </div>
+                )}
+                <button onClick={save} disabled={saving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    {saved ? 'Guardado' : 'Guardar cambios'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── Auto-Respuestas de Campana Tab ────────────────────────────────────────────
+
+interface CampaignMapping {
+    id: string;
+    campaign_id: string;
+    campaign_name: string;
+    product_name: string;
+    welcome_message: string;
+    auto_send: boolean;
+    priority: number;
+    is_active: boolean;
+}
+
+interface Campaign {
+    id: string;
+    name: string;
+    platform: string;
+}
+
+const defaultMappingForm = {
+    campaign_id: '',
+    product_name: '',
+    welcome_message: '',
+    auto_send: true,
+    priority: 1,
+    is_active: true,
+};
+
+function CampanasTab() {
+    const [mappings, setMappings] = useState<CampaignMapping[]>([]);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isAdding, setIsAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [form, setForm] = useState(defaultMappingForm);
+    const [saving, setSaving] = useState(false);
+
+    const fetchAll = async () => {
+        try {
+            const [mRes, cRes] = await Promise.all([
+                apiFetch('/api/campaign-mappings'),
+                apiFetch('/api/campaigns'),
+            ]);
+            if (mRes.ok) setMappings(await mRes.json());
+            if (cRes.ok) {
+                const data = await cRes.json();
+                setCampaigns(Array.isArray(data) ? data : data.campaigns ?? []);
+            }
+        } catch { /* ignore */ } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchAll(); }, []);
+
+    const handleSave = async () => {
+        if (!form.campaign_id || !form.welcome_message.trim()) {
+            alert('Selecciona una campana y escribe el mensaje de bienvenida');
+            return;
+        }
+        setSaving(true);
+        try {
+            const url = editingId ? `/api/campaign-mappings/${editingId}` : '/api/campaign-mappings';
+            const method = editingId ? 'PUT' : 'POST';
+            const res = await apiFetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form),
+            });
+            if (!res.ok) throw new Error('Error al guardar');
+            setIsAdding(false);
+            setEditingId(null);
+            setForm(defaultMappingForm);
+            fetchAll();
+        } catch (e: any) {
+            alert(e.message || 'Error al guardar');
+        } finally { setSaving(false); }
+    };
+
+    const handleEdit = (m: CampaignMapping) => {
+        setForm({ campaign_id: m.campaign_id, product_name: m.product_name, welcome_message: m.welcome_message, auto_send: m.auto_send, priority: m.priority, is_active: m.is_active });
+        setEditingId(m.id);
+        setIsAdding(true);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Eliminar esta auto-respuesta?')) return;
+        await apiFetch(`/api/campaign-mappings/${id}`, { method: 'DELETE' });
+        fetchAll();
+    };
+
+    const cancel = () => { setForm(defaultMappingForm); setEditingId(null); setIsAdding(false); };
+
+    return (
+        <div style={{ padding: '3rem', maxWidth: '1200px', margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <div>
+                    <h1 style={{ fontSize: '2rem', margin: '0 0 0.5rem 0', fontWeight: '800' }}>Auto-Respuestas de Campana</h1>
+                    <p style={{ color: '#64748b', margin: 0 }}>Cuando un cliente llega desde un anuncio (Click-to-DM), el bot envia automaticamente este mensaje.</p>
+                </div>
+                <button onClick={() => { setForm(defaultMappingForm); setEditingId(null); setIsAdding(true); }}
+                    style={{ background: '#2563eb', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.75rem', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Plus size={16} /> Nueva Auto-Respuesta
+                </button>
+            </div>
+
+            {isAdding && (
+                <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
+                    <h3 style={{ marginTop: 0 }}>{editingId ? 'Editar Auto-Respuesta' : 'Nueva Auto-Respuesta de Campana'}</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Campana</label>
+                            <select value={form.campaign_id} onChange={e => setForm({ ...form, campaign_id: e.target.value })}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }}>
+                                <option value="">Seleccionar campana...</option>
+                                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.platform})</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Producto relacionado</label>
+                            <input value={form.product_name} onChange={e => setForm({ ...form, product_name: e.target.value })}
+                                placeholder="Ej. Prueba rapida de glucosa"
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Prioridad</label>
+                            <input type="number" min={1} max={99} value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 1 })}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1' }} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <input type="checkbox" checked={form.auto_send} onChange={e => setForm({ ...form, auto_send: e.target.checked })} />
+                                Enviar automaticamente al detectar el anuncio
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} />
+                                Auto-respuesta activa
+                            </label>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Mensaje de bienvenida</label>
+                            <textarea value={form.welcome_message} onChange={e => setForm({ ...form, welcome_message: e.target.value })}
+                                rows={4} placeholder="Ej. Hola! Gracias por tu interes en nuestra prueba de glucosa..."
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', resize: 'vertical', fontSize: '0.9rem' }} />
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                        <button onClick={handleSave} disabled={saving}
+                            style={{ background: '#10b981', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontWeight: 'bold', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {saving ? <Loader2 size={16} /> : <Check size={16} />} {editingId ? 'Guardar cambios' : 'Crear auto-respuesta'}
+                        </button>
+                        <button onClick={cancel}
+                            style={{ background: '#e2e8f0', color: '#475569', padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {isLoading ? <div className="p-10 flex"><Loader2 className="w-5 h-5 animate-spin" /></div> : (
+                <>
+                    {mappings.length === 0 && !isAdding && (
+                        <div style={{ background: '#fefce8', border: '1px dashed #fbbf24', borderRadius: '1rem', padding: '2rem', textAlign: 'center' }}>
+                            <MessageSquare size={32} style={{ color: '#f59e0b', margin: '0 auto 0.5rem' }} />
+                            <p style={{ fontWeight: 'bold', color: '#92400e', marginBottom: '0.25rem' }}>Sin auto-respuestas configuradas</p>
+                            <p style={{ color: '#b45309', fontSize: '0.85rem' }}>Crea una para que el bot envie un mensaje personalizado cuando alguien llega desde un anuncio de Meta o Google.</p>
+                        </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
+                        {mappings.map(m => (
+                            <div key={m.id} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>{m.campaign_name}</h3>
+                                    <span style={{ background: m.is_active ? '#dcfce7' : '#fee2e2', color: m.is_active ? '#166534' : '#991b1b', padding: '0.2rem 0.5rem', borderRadius: '0.5rem', fontSize: '0.7rem', fontWeight: 'bold', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
+                                        {m.is_active ? 'ACTIVA' : 'INACTIVA'}
+                                    </span>
+                                </div>
+                                {m.product_name && (
+                                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.5rem' }}>Producto: {m.product_name}</div>
+                                )}
+                                <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', color: '#475569', flex: 1, marginBottom: '0.75rem' }}>
+                                    {m.welcome_message.length > 120 ? m.welcome_message.slice(0, 120) + '...' : m.welcome_message}
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '1rem' }}>
+                                    <span>Prioridad: {m.priority}</span>
+                                    <span>-</span>
+                                    <span>{m.auto_send ? 'Envio automatico' : 'Manual'}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                                    <button onClick={() => handleEdit(m)} style={{ background: '#f1f5f9', color: '#334155', border: 'none', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.5rem', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' }}>
+                                        <Edit2 size={16} /> Editar
+                                    </button>
+                                    <button onClick={() => handleDelete(m.id)} style={{ background: '#fef2f2', color: '#ef4444', border: 'none', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.5rem', fontWeight: '600', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center' }}>
+                                        <Trash2 size={16} /> Eliminar
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+}
