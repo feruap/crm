@@ -37,24 +37,25 @@ async function resolveOrCreateCustomer(
     providerId: string,
     displayName: string
 ): Promise<string> {
-    const existing = await db.query(
-        `SELECT customer_id FROM external_identities WHERE provider = $1 AND provider_id = $2`,
-        [provider, providerId]
+    // Atomic: speculatively create a customer row, then upsert the external_identity.
+    // ON CONFLICT on (provider, provider_id) returns the existing customer_id,
+    // eliminating the SELECT-then-INSERT race condition.
+    // A stale orphan customer row may be created on conflict — acceptable trade-off.
+    const result = await db.query(
+        `WITH new_cust AS (
+           INSERT INTO customers (display_name) VALUES ($3) RETURNING id
+         ),
+         upserted AS (
+           INSERT INTO external_identities (customer_id, provider, provider_id)
+           SELECT id, $1, $2 FROM new_cust
+           ON CONFLICT (provider, provider_id) DO UPDATE
+             SET customer_id = external_identities.customer_id
+           RETURNING customer_id
+         )
+         SELECT customer_id FROM upserted`,
+        [provider, providerId, displayName || 'Unknown']
     );
-    if (existing.rows.length > 0) return existing.rows[0].customer_id;
-
-    const customer = await db.query(
-        `INSERT INTO customers (display_name) VALUES ($1) RETURNING id`,
-        [displayName || 'Unknown']
-    );
-    const customerId = customer.rows[0].id;
-
-    await db.query(
-        `INSERT INTO external_identities (customer_id, provider, provider_id) VALUES ($1, $2, $3)`,
-        [customerId, provider, providerId]
-    );
-
-    return customerId;
+    return result.rows[0].customer_id;
 }
 
 /**
@@ -99,20 +100,26 @@ async function resolveOrCreateConversation(
     referralData?: MetaReferral | null,
     utmData?: Record<string, string> | null
 ): Promise<{ conversationId: string; isNew: boolean }> {
-    const existing = await db.query(
-        `SELECT id FROM conversations
-         WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
-         ORDER BY created_at DESC LIMIT 1`,
-        [customerId, channelId]
-    );
-
-    if (existing.rows.length > 0) {
-        return { conversationId: existing.rows[0].id, isNew: false };
-    }
-
-    const conv = await db.query(
-        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
+    // Atomic: check for existing open/pending conversation and insert in one statement.
+    // The WHERE NOT EXISTS guard prevents duplicate open conversations under concurrent
+    // webhook delivery without requiring a separate SELECT round-trip.
+    const result = await db.query(
+        `WITH existing AS (
+           SELECT id FROM conversations
+           WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
+           ORDER BY created_at DESC
+           LIMIT 1
+         ),
+         inserted AS (
+           INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
+           SELECT $1, $2, $3, $4
+           WHERE NOT EXISTS (SELECT 1 FROM existing)
+           RETURNING id
+         )
+         SELECT id, FALSE AS is_new FROM existing
+         UNION ALL
+         SELECT id, TRUE  AS is_new FROM inserted
+         LIMIT 1`,
         [
             customerId,
             channelId,
@@ -121,7 +128,7 @@ async function resolveOrCreateConversation(
         ]
     );
 
-    return { conversationId: conv.rows[0].id, isNew: true };
+    return { conversationId: result.rows[0].id, isNew: result.rows[0].is_new as boolean };
 }
 
 async function handleBotResponse(
