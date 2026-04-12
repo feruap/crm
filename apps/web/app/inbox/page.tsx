@@ -183,7 +183,7 @@ export default function InboxPage() {
 
     const bottomRef = useRef<HTMLDivElement>(null);
     const [escalationAlert, setEscalationAlert] = React.useState<EscalationAlertPayload | null>(null);
-    const { joinConversation, leaveConversation, onNewMessage, onConversationListUpdated, onEscalationAlert } = useSocket();
+    const { joinConversation, leaveConversation, onNewMessage, onConversationUpdated, onConversationListUpdated, onEscalationAlert } = useSocket();
 
     // ── Load conversations when filters change ─────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -241,15 +241,31 @@ export default function InboxPage() {
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
+    // Track IDs of messages already rendered to deduplicate socket events vs HTTP load
+    const seenMsgIdsRef = useRef<Set<string>>(new Set());
+    // Track the created_at of the last message received so socket events know where to start
+    const lastMsgTimestampRef = useRef<string | null>(null);
+
     // ── Load messages when conversation changes ────────────────────────────────
     useEffect(() => {
         if (!selected) return;
+        // Reset dedup state for the new conversation
+        seenMsgIdsRef.current = new Set();
+        lastMsgTimestampRef.current = null;
         setLoadingMsgs(true);
         apiFetch(`/api/conversations/${selected}/messages`)
             .then(r => r.json())
             .then(data => {
-                if (Array.isArray(data)) setMessages(data);
-                else setMessages([]);
+                if (Array.isArray(data)) {
+                    setMessages(data);
+                    // Seed the seen-IDs set so arriving socket events are not double-added
+                    data.forEach((m: Message) => { if (m.id) seenMsgIdsRef.current.add(m.id); });
+                    if (data.length > 0) {
+                        lastMsgTimestampRef.current = data[data.length - 1].created_at;
+                    }
+                } else {
+                    setMessages([]);
+                }
             })
             .catch(err => {
                 console.error('Error loading messages:', err);
@@ -261,14 +277,34 @@ export default function InboxPage() {
         return () => leaveConversation(selected);
     }, [selected]);
 
-    // ── Real-time new messages via Socket.io ───────────────────────────────────
+    // ── Real-time new messages via Socket.io (no setInterval polling) ──────────
     useEffect(() => {
-        return onNewMessage((msg: Message) => {
+        return onNewMessage((msg: Message & { conversation_id?: string }) => {
+            // Skip messages already loaded via HTTP to avoid duplicates
+            if (msg.id && seenMsgIdsRef.current.has(msg.id)) return;
+            if (msg.id) seenMsgIdsRef.current.add(msg.id);
+            lastMsgTimestampRef.current = msg.created_at;
             setMessages(prev => [...prev, msg]);
+            // Update the conversation's last_message in the sidebar in-place
+            const convId = msg.conversation_id || selected;
+            if (convId) {
+                setConversations(prev => prev.map(c =>
+                    c.id === convId
+                        ? { ...c, last_message: msg.content, last_message_at: msg.created_at }
+                        : c
+                ));
+            }
         });
-    }, [onNewMessage]);
+    }, [onNewMessage, selected]);
 
-    // ── Auto-refresh conversation list when webhooks create/update conversations ─
+    // ── In-place conversation updates (status, agent, label changes) ───────────
+    useEffect(() => {
+        return onConversationUpdated((data: Partial<Conversation> & { id: string }) => {
+            setConversations(prev => prev.map(c => c.id === data.id ? { ...c, ...data } : c));
+        });
+    }, [onConversationUpdated]);
+
+    // ── Full list refresh when a new conversation is created ───────────────────
     useEffect(() => {
         return onConversationListUpdated(() => {
             loadConversations();

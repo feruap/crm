@@ -219,7 +219,7 @@ export async function createWCOrder(params: CartLinkParams): Promise<CreateOrder
     }
 
     const orderBody: any = {
-      status: 'pending',
+      status: 'checkout-draft',
       line_items: params.productIds.map(p => ({
         product_id: p.wcProductId,
         quantity: p.quantity,
@@ -257,6 +257,26 @@ export async function createWCOrder(params: CartLinkParams): Promise<CreateOrder
     console.error('[Create WC Order Error]', err);
     return { success: false, error: String(err) };
   }
+}
+
+// ─────────────────────────────────────────────
+// Cart Link Generation
+// ─────────────────────────────────────────────
+
+/**
+ * Generate a WooCommerce checkout link for a set of products.
+ *
+ * Previously this returned a simple `?add-to-cart=X,Y` URL which is
+ * unreliable (no stock reservation, no coupon support, no attribution).
+ * Now it creates a real pending WC order via the REST API and returns
+ * the hosted `payment_url` so the customer lands directly on checkout.
+ */
+export async function generateWCCartLink(params: CartLinkParams): Promise<string> {
+  const result = await createWCOrder(params);
+  if (!result.success || !result.payment_url) {
+    throw new Error(result.error || 'WooCommerce order creation returned no payment_url');
+  }
+  return result.payment_url;
 }
 
 // ─────────────────────────────────────────────

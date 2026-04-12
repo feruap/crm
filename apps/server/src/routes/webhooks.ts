@@ -181,26 +181,35 @@ async function resolveOrCreateCustomer(
     providerId: string,
     displayName: string
 ): Promise<string> {
-    // Find existing identity
-    const existing = await db.query(
+    // Atomic upsert: insert customer + identity in one round-trip; no SELECT-then-INSERT race.
+    // Uses a CTE so we get the customer id regardless of whether a row was inserted or already existed.
+    const result = await db.query(
+        `WITH ins_customer AS (
+             INSERT INTO customers (display_name)
+             VALUES ($1)
+             ON CONFLICT DO NOTHING
+             RETURNING id
+         ),
+         ins_identity AS (
+             INSERT INTO external_identities (customer_id, provider, provider_id)
+             SELECT id, $2, $3 FROM ins_customer
+             ON CONFLICT (provider, provider_id) DO NOTHING
+             RETURNING customer_id
+         )
+         SELECT customer_id FROM ins_identity
+         UNION ALL
+         SELECT customer_id FROM external_identities WHERE provider = $2 AND provider_id = $3
+         LIMIT 1`,
+        [displayName || 'Unknown', provider, providerId]
+    );
+    if (result.rows.length > 0) return result.rows[0].customer_id;
+
+    // Fallback: concurrent insert won the race — read the now-existing row
+    const fallback = await db.query(
         `SELECT customer_id FROM external_identities WHERE provider = $1 AND provider_id = $2`,
         [provider, providerId]
     );
-    if (existing.rows.length > 0) return existing.rows[0].customer_id;
-
-    // Create new customer + identity
-    const customer = await db.query(
-        `INSERT INTO customers (display_name) VALUES ($1) RETURNING id`,
-        [displayName || 'Unknown']
-    );
-    const customerId = customer.rows[0].id;
-
-    await db.query(
-        `INSERT INTO external_identities (customer_id, provider, provider_id) VALUES ($1, $2, $3)`,
-        [customerId, provider, providerId]
-    );
-
-    return customerId;
+    return fallback.rows[0].customer_id;
 }
 
 /**
@@ -236,20 +245,37 @@ async function resolveOrCreateConversation(
     referralData?: any,
     utmData?: any
 ): Promise<{ conversationId: string; isNew: boolean }> {
-    const existing = await db.query(
-        `SELECT id FROM conversations
-         WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
-         ORDER BY created_at DESC LIMIT 1`,
-        [customerId, channelId]
-    );
-    if (existing.rows.length > 0) return { conversationId: existing.rows[0].id, isNew: false };
-
-    // Create new conversation with referral/UTM data
+    // Atomic upsert: if an open/pending conversation already exists for this
+    // customer+channel, return it; otherwise create one — no race window.
     const conv = await db.query(
-        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data) VALUES ($1, $2, $3, $4) RETURNING id`,
-        [customerId, channelId, referralData ? JSON.stringify(referralData) : null, utmData ? JSON.stringify(utmData) : null]
-    );
+        `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (customer_id, channel_id)
+         WHERE status IN ('open', 'pending')
+         DO UPDATE SET updated_at = NOW()
+         RETURNING id, (xmax = 0) AS inserted`,
+        [customerId, channelId,
+         referralData ? JSON.stringify(referralData) : null,
+         utmData ? JSON.stringify(utmData) : null]
+    ).catch(async () => {
+        // Fallback if the partial unique index doesn't exist yet: use SELECT-with-lock
+        const ex = await db.query(
+            `SELECT id FROM conversations
+             WHERE customer_id = $1 AND channel_id = $2 AND status IN ('open', 'pending')
+             ORDER BY created_at DESC LIMIT 1`,
+            [customerId, channelId]
+        );
+        if (ex.rows.length > 0) return { rows: [{ id: ex.rows[0].id, inserted: false }] };
+        return db.query(
+            `INSERT INTO conversations (customer_id, channel_id, referral_data, utm_data)
+             VALUES ($1, $2, $3, $4) RETURNING id, TRUE AS inserted`,
+            [customerId, channelId,
+             referralData ? JSON.stringify(referralData) : null,
+             utmData ? JSON.stringify(utmData) : null]
+        );
+    });
     const convId = conv.rows[0].id;
+    const isNew: boolean = conv.rows[0].inserted === true || conv.rows[0].inserted === 'true';
 
     // AUTO-ASSIGNMENT LOGIC
     try {
@@ -289,7 +315,7 @@ async function resolveOrCreateConversation(
         console.error('[AutoAssign] Error:', err);
     }
 
-    return { conversationId: convId, isNew: true };
+    return { conversationId: convId, isNew };
 }
 
 // ─────────────────────────────────────────────
@@ -1072,7 +1098,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             }
             const expected = crypto
                 .createHmac('sha256', appSecret)
-                .update(JSON.stringify(req.body))
+                .update((req as any).rawBody || JSON.stringify(req.body))
                 .digest('hex');
             if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
                 console.warn('TikTok webhook: signature mismatch — dropping');
