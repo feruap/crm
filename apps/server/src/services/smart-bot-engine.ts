@@ -1040,67 +1040,7 @@ async function generateAIResponse(
   provider: string,
   apiKey: string
 ): Promise<string> {
-  try {
-    if (provider === 'deepseek') {
-      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error(`[AI DeepSeek] Error ${resp.status}: ${errText.substring(0, 200)}`);
-        throw new Error(`DeepSeek API error: ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
-    }
-
-    if (provider === 'z_ai') {
-      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'glm-4-flash',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error(`[AI Z.ai] Error ${resp.status}: ${errText.substring(0, 200)}`);
-        throw new Error(`Z.ai API error: ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
-    }
-
-    console.warn(`[AI] Provider ${provider} not implemented, using template`);
-    return `Gracias por tu consulta. Te recomendamos contactar a un asesor especializado para más información sobre nuestras pruebas de diagnóstico.`;
-  } catch (err) {
-    console.error(`[AI Response Error] ${(err as Error).message}`);
-    throw err;
-  }
+  // Delegate to the unified getAIResponse in ai.service.ts which handles all
+  // providers (deepseek, z_ai, gemini, claude) with retries and full context.
+  return getAIResponse(provider as any, systemPrompt, userMessage, apiKey);
 }

@@ -110,6 +110,22 @@ async function getGeminiApiKey(): Promise<string | null> {
     return process.env.GEMINI_API_KEY || null;
 }
 
+// Helper: cascade through available embedding providers; throws if all fail
+async function embeddingWithFallback(text: string, preferredProvider: AIProvider, preferredKey: string): Promise<number[]> {
+    // 1. Gemini (best quality, 768→1536 padded)
+    const gKey = await getGeminiApiKey();
+    if (gKey) return generateGeminiEmbedding(text, gKey);
+
+    // 2. Z.ai / Zhipu (if ZAI_API_KEY env var is set)
+    const zaiKey = process.env.ZAI_API_KEY;
+    if (zaiKey) return generateZaiEmbedding(text, zaiKey);
+
+    // 3. If preferred provider itself can embed (z_ai passed as preferred)
+    if (preferredProvider === 'z_ai' && preferredKey) return generateZaiEmbedding(text, preferredKey);
+
+    throw new Error(`No embedding provider available. Set GEMINI_API_KEY or ZAI_API_KEY.`);
+}
+
 export async function generateEmbedding(
     text: string,
     provider: AIProvider,
@@ -118,50 +134,38 @@ export async function generateEmbedding(
     switch (provider) {
         case 'gemini':
             return generateGeminiEmbedding(text, apiKey);
-        case 'deepseek': {
-            // DeepSeek does not offer embeddings; use Gemini if key is available
-            const gKey = await getGeminiApiKey();
-            if (gKey) return generateGeminiEmbedding(text, gKey);
-            return new Array(1536).fill(0);
-        }
-        case 'claude': {
-            // Anthropic does not offer embeddings; use Gemini if key is available
-            const gKey = await getGeminiApiKey();
-            if (gKey) return generateGeminiEmbedding(text, gKey);
-            return new Array(1536).fill(0);
-        }
+        case 'deepseek':
+        case 'claude':
+            // DeepSeek and Anthropic have no embedding API; delegate to available provider
+            return embeddingWithFallback(text, provider, apiKey);
         case 'z_ai':
-            // Z.ai/Zhipu — use their embedding API
-            return generateZaiEmbedding(text, apiKey);
+            // Z.ai/Zhipu — use their embedding API; fall back if it fails
+            try {
+                return await generateZaiEmbedding(text, apiKey);
+            } catch {
+                return embeddingWithFallback(text, provider, apiKey);
+            }
         default:
-            return new Array(1536).fill(0);
+            return embeddingWithFallback(text, provider, apiKey);
     }
 }
 
 async function generateZaiEmbedding(text: string, apiKey: string): Promise<number[]> {
-    try {
-        const res = await fetch('https://open.bigmodel.cn/api/paas/v4/embeddings', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${generateZaiJWT(apiKey)}`,
-            },
-            body: JSON.stringify({
-                model: 'text_embedding',
-                input: text,
-            }),
-        });
-        if (!res.ok) {
-            const txt = await res.text();
-            console.error(`Z.ai Embedding failed: ${res.status} ${txt}`);
-            return new Array(1536).fill(0);
-        }
-        const data: any = await res.json();
-        return data.data[0].embedding;
-    } catch (e) {
-        console.error("Z.ai embedding connection failed:", e);
-        return new Array(1536).fill(0);
+    // Must throw on failure so callers can cascade to the next provider
+    const res = await fetch('https://open.bigmodel.cn/api/paas/v4/embeddings', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${generateZaiJWT(apiKey)}`,
+        },
+        body: JSON.stringify({ model: 'text_embedding', input: text }),
+    });
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Z.ai Embedding failed: ${res.status} ${txt}`);
     }
+    const data: any = await res.json();
+    return data.data[0].embedding;
 }
 
 async function generateGeminiEmbedding(text: string, apiKey: string): Promise<number[]> {
