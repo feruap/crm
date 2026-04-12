@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { io as socketIO, Socket } from 'socket.io-client';
 import { useAuth } from '../../components/AuthProvider';
 import {
     Search, Send, Phone, Mail, User, ShoppingCart, Tag, Clock,
@@ -130,7 +131,8 @@ export default function ConversationsPage() {
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const lastMsgTsRef = useRef<string | undefined>(undefined);
+    const socketRef = useRef<Socket | null>(null);
 
     // Context panel
     const [context, setContext] = useState<CustomerContext | null>(null);
@@ -170,9 +172,14 @@ export default function ConversationsPage() {
             if (res.ok) {
                 const data: Message[] = await res.json();
                 if (afterTs && data.length > 0) {
-                    setMessages(prev => [...prev, ...data]);
+                    setMessages(prev => {
+                        const updated = [...prev, ...data];
+                        lastMsgTsRef.current = updated[updated.length - 1]?.created_at;
+                        return updated;
+                    });
                 } else if (!afterTs) {
                     setMessages(data);
+                    lastMsgTsRef.current = data[data.length - 1]?.created_at;
                 }
             }
         } catch {
@@ -180,41 +187,50 @@ export default function ConversationsPage() {
         }
     }, [authFetch]);
 
+    // ─── Socket.io connection (replaces 5-second polling) ───
+    useEffect(() => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('crm_token') : null;
+        if (!token) return;
+
+        const socket = socketIO(API, { auth: { token }, transports: ['websocket'] });
+        socketRef.current = socket;
+
+        socket.on('new_message', (msg: Message) => {
+            setMessages(prev => {
+                // Deduplicate by id
+                if (prev.some(m => m.id === msg.id)) return prev;
+                const updated = [...prev, msg];
+                lastMsgTsRef.current = updated[updated.length - 1]?.created_at;
+                return updated;
+            });
+        });
+
+        return () => {
+            socket.disconnect();
+            socketRef.current = null;
+        };
+    }, []);  // only once on mount; token read from localStorage
+
     // ─── Select a conversation ───────────────────────────────
     const selectConversation = useCallback(async (conv: Conversation) => {
         setSelectedId(conv.id);
         setSelectedConv(conv);
         setLoadingMessages(true);
         setMessages([]);
+        lastMsgTsRef.current = undefined;
         setContext(null);
         setShowContext(false);
 
         // Mark as read
         authFetch(`${API}/api/conversations/${conv.id}/read`, { method: 'POST' }).catch(() => {});
 
-        // Fetch messages
+        // Fetch full message history
         await fetchMessages(conv.id);
         setLoadingMessages(false);
 
-        // Start polling
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => {
-            setMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                if (lastMsg) {
-                    fetchMessages(conv.id, lastMsg.created_at);
-                }
-                return prev;
-            });
-        }, 5000);
+        // Join the conversation room so socket.io delivers new_message events
+        socketRef.current?.emit('join_conversation', conv.id);
     }, [authFetch, fetchMessages]);
-
-    // Cleanup polling on unmount
-    useEffect(() => {
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
-    }, []);
 
     // Auto-scroll to bottom on new messages
     useEffect(() => {
