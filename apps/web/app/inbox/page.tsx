@@ -183,7 +183,7 @@ export default function InboxPage() {
 
     const bottomRef = useRef<HTMLDivElement>(null);
     const [escalationAlert, setEscalationAlert] = React.useState<EscalationAlertPayload | null>(null);
-    const { joinConversation, leaveConversation, onNewMessage, onConversationListUpdated, onEscalationAlert } = useSocket();
+    const { joinConversation, leaveConversation, onNewMessage, onConversationUpdated, onConversationListUpdated, onEscalationAlert } = useSocket();
 
     // ── Load conversations when filters change ─────────────────────────────────
     const loadConversations = useCallback(async () => {
@@ -263,12 +263,28 @@ export default function InboxPage() {
 
     // ── Real-time new messages via Socket.io ───────────────────────────────────
     useEffect(() => {
-        return onNewMessage((msg: Message) => {
+        return onNewMessage((msg: Message & { conversation_id?: string }) => {
             setMessages(prev => [...prev, msg]);
+            // Update the conversation's last_message in the sidebar in-place
+            const convId = msg.conversation_id || selected;
+            if (convId) {
+                setConversations(prev => prev.map(c =>
+                    c.id === convId
+                        ? { ...c, last_message: msg.content, last_message_at: msg.created_at }
+                        : c
+                ));
+            }
         });
-    }, [onNewMessage]);
+    }, [onNewMessage, selected]);
 
-    // ── Auto-refresh conversation list when webhooks create/update conversations ─
+    // ── In-place conversation updates (status, agent, label changes) ───────────
+    useEffect(() => {
+        return onConversationUpdated((data: Partial<Conversation> & { id: string }) => {
+            setConversations(prev => prev.map(c => c.id === data.id ? { ...c, ...data } : c));
+        });
+    }, [onConversationUpdated]);
+
+    // ── Full list refresh when a new conversation is created ───────────────────
     useEffect(() => {
         return onConversationListUpdated(() => {
             loadConversations();
