@@ -231,28 +231,74 @@ export async function generateEmbedding(
     provider: AIProvider,
     apiKey: string
 ): Promise<number[]> {
-    // Each provider has its own embedding endpoint.
-    // For now returns a zero vector as placeholder until real API keys are wired.
-    // Replace each case with the actual SDK call.
     switch (provider) {
+        case 'gemini': {
+            const resp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: 'models/text-embedding-004',
+                        content: { parts: [{ text }] },
+                    }),
+                }
+            );
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(`Gemini embedding error ${resp.status}: ${err.substring(0, 200)}`);
+            }
+            const data: any = await resp.json();
+            return data.embedding.values as number[];
+        }
+
+        case 'deepseek': {
+            // DeepSeek uses an OpenAI-compatible embeddings endpoint
+            const resp = await fetch('https://api.deepseek.com/v1/embeddings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({ model: 'text-embedding-ada-002', input: text }),
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(`DeepSeek embedding error ${resp.status}: ${err.substring(0, 200)}`);
+            }
+            const data: any = await resp.json();
+            return data.data[0].embedding as number[];
+        }
+
+        case 'z_ai': {
+            const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/embeddings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({ model: 'embedding-3', input: text }),
+            });
+            if (!resp.ok) {
+                const err = await resp.text();
+                throw new Error(`Z.ai embedding error ${resp.status}: ${err.substring(0, 200)}`);
+            }
+            const data: any = await resp.json();
+            return data.data[0].embedding as number[];
+        }
+
         case 'claude':
-            // Anthropic does not currently expose embeddings; use voyage-ai or openai
-            return new Array(1536).fill(0);
-        case 'gemini':
-            // POST https://generativelanguage.googleapis.com/v1/models/embedding-001:embedContent
-            return new Array(1536).fill(0);
-        case 'deepseek':
-            // DeepSeek: POST https://api.deepseek.com/v1/embeddings
-            return new Array(1536).fill(0);
-        case 'z_ai':
-            return new Array(1536).fill(0);
+            // Anthropic does not expose an embeddings API; use gemini or deepseek provider instead
+            throw new Error('Claude provider does not support embeddings. Configure gemini or deepseek for RAG.');
+
         default:
-            return new Array(1536).fill(0);
+            throw new Error(`Unknown provider for embeddings: ${provider}`);
     }
 }
 
 // ─────────────────────────────────────────────
 // Generate a chat response from the AI provider
+// Delegates to real HTTP API calls (same logic as smart-bot-engine.ts generateAIResponse)
 // ─────────────────────────────────────────────
 export async function getAIResponse(
     provider: AIProvider,
@@ -260,19 +306,95 @@ export async function getAIResponse(
     userMessage: string,
     apiKey: string
 ): Promise<string> {
-    // Replace each case with the real SDK/HTTP call once API keys are available
-    switch (provider) {
-        case 'deepseek':
-            return `[DeepSeek] ${userMessage}`;
-        case 'z_ai':
-            return `[Z.ai] ${userMessage}`;
-        case 'claude':
-            return `[Claude] ${userMessage}`;
-        case 'gemini':
-            return `[Gemini] ${userMessage}`;
-        default:
-            throw new Error(`Provider not supported: ${provider}`);
+    if (provider === 'deepseek') {
+        const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: 'deepseek-chat',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessage },
+                ],
+                temperature: 0.7,
+                max_tokens: 300,
+            }),
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`DeepSeek API error ${resp.status}: ${err.substring(0, 200)}`);
+        }
+        const data: any = await resp.json();
+        return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
     }
+
+    if (provider === 'z_ai') {
+        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: 'glm-4-flash',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userMessage },
+                ],
+                temperature: 0.7,
+                max_tokens: 300,
+            }),
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`Z.ai API error ${resp.status}: ${err.substring(0, 200)}`);
+        }
+        const data: any = await resp.json();
+        return data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
+    }
+
+    if (provider === 'gemini') {
+        const resp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    contents: [{ parts: [{ text: userMessage }] }],
+                    generationConfig: { maxOutputTokens: 300, temperature: 0.7 },
+                }),
+            }
+        );
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`Gemini API error ${resp.status}: ${err.substring(0, 200)}`);
+        }
+        const data: any = await resp.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude generar una respuesta.';
+    }
+
+    if (provider === 'claude') {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 300,
+                system: systemPrompt,
+                messages: [{ role: 'user', content: userMessage }],
+            }),
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`Claude API error ${resp.status}: ${err.substring(0, 200)}`);
+        }
+        const data: any = await resp.json();
+        return data.content?.[0]?.text || 'No pude generar una respuesta.';
+    }
+
+    throw new Error(`Provider not supported: ${provider}`);
 }
 
 // ─────────────────────────────────────────────
