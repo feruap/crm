@@ -219,7 +219,7 @@ export async function createWCOrder(params: CartLinkParams): Promise<CreateOrder
     }
 
     const orderBody: any = {
-      status: 'pending',
+      status: 'checkout-draft',
       line_items: params.productIds.map(p => ({
         product_id: p.wcProductId,
         quantity: p.quantity,
